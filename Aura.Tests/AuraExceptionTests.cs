@@ -170,7 +170,9 @@ public class AuraExceptionTests
                  .WithContext("operation", "generateVideo");
 
         // Assert
-        Assert.Equal(4, exception.Context.Count); // 2 from factory + 2 added
+        // Factory adds 3 context items: providerName, providerType, specificErrorCode
+        // Then we add 2 more: userId, operation
+        Assert.Equal(5, exception.Context.Count);
         Assert.Equal("user-123", exception.Context["userId"]);
         Assert.Equal("generateVideo", exception.Context["operation"]);
     }
