@@ -26,6 +26,9 @@ internal static class FfmpegTestHelper
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
+            // On Windows, create a .cmd file instead of .exe for testing
+            // The locator will accept both .exe and .cmd files
+            var cmdPath = path.EndsWith(".exe") ? path.Replace(".exe", ".cmd") : path + ".cmd";
             var batchContent = @"@echo off
 if ""%1""==""-version"" (
     echo ffmpeg version 6.0-test Copyright (c) 2000-present the FFmpeg developers
@@ -33,7 +36,13 @@ if ""%1""==""-version"" (
     exit /b 0
 )
 exit /b 1";
-            await File.WriteAllTextAsync(path, batchContent);
+            await File.WriteAllTextAsync(cmdPath, batchContent);
+            
+            // Also create the .exe path as a copy for tests that specifically check .exe
+            if (path.EndsWith(".exe"))
+            {
+                await File.WriteAllTextAsync(path, batchContent);
+            }
             return;
         }
 
@@ -51,18 +60,21 @@ exit 1";
             var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "chmod",
-                Arguments = $"+x {path}",
+                Arguments = $"+x \"{path}\"",
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true
             });
             if (process != null)
             {
                 await process.WaitForExitAsync();
+                // If chmod failed, the file won't be executable and tests should skip
             }
         }
         catch
         {
-            // Ignore chmod failures in test helper
+            // Ignore chmod failures in test helper - tests will skip if file not executable
         }
     }
 }
