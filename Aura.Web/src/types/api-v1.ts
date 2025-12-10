@@ -118,6 +118,20 @@ export interface ComposeRequest {
 export interface RenderRequest {
   timelineJson: string;
   presetName: string;
+  settings?: RenderSettingsDto | null;
+}
+
+export interface RenderSettingsDto {
+  width: number;
+  height: number;
+  fps: number;
+  codec: string;
+  container: string;
+  qualityLevel: number;
+  videoBitrateK: number;
+  audioBitrateK: number;
+  enableSceneCut: boolean;
+  burnInCaptions?: boolean;
 }
 
 export interface ApplyProfileRequest {

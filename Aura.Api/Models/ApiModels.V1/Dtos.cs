@@ -74,7 +74,8 @@ public record RenderSettingsDto(
     int QualityLevel,
     int VideoBitrateK,
     int AudioBitrateK,
-    bool EnableSceneCut);
+    bool EnableSceneCut,
+    bool BurnInCaptions = false);
 
 public record RenderJobDto(
     string Id,
