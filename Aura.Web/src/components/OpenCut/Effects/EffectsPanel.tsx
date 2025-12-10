@@ -16,7 +16,7 @@ import {
   Tooltip,
   Button,
 } from '@fluentui/react-components';
-import { Search24Regular, Color24Regular, Add24Regular } from '@fluentui/react-icons';
+import { Search24Regular, Color24Regular, Add24Regular, ArrowRight24Regular } from '@fluentui/react-icons';
 import { useState, useCallback, useMemo } from 'react';
 import type { FC } from 'react';
 import {
@@ -25,6 +25,7 @@ import {
   type EffectDefinition,
 } from '../../../stores/opencutEffects';
 import { useOpenCutTimelineStore } from '../../../stores/opencutTimeline';
+import { useOpenCutToastsStore } from '../../../stores/opencutToasts';
 import { openCutTokens } from '../../../styles/designTokens';
 import type { EffectCategory } from '../../../types/opencut';
 import { EmptyState } from '../EmptyState';
@@ -224,12 +225,12 @@ const EffectThumbnail: FC<{
           <Text className={styles.effectName}>{effect.name}</Text>
         </div>
       </Tooltip>
-      <Tooltip content="Apply to selected clip" relationship="label">
+      <Tooltip content="Insert to Timeline" relationship="label">
         <Button
           className={mergeClasses(styles.addButton, 'add-button')}
           appearance="subtle"
           size="small"
-          icon={<Add24Regular />}
+          icon={<ArrowRight24Regular />}
           onClick={handleApplyClick}
           aria-label={`Apply ${effect.name} to selected clip`}
         />
@@ -246,6 +247,7 @@ export const EffectsPanel: FC<EffectsPanelProps> = ({ className, onEffectSelect 
 
   const effectsStore = useOpenCutEffectsStore();
   const timelineStore = useOpenCutTimelineStore();
+  const toastsStore = useOpenCutToastsStore();
 
   // Filter effects based on search and category
   const filteredEffects = useMemo(() => {
@@ -301,11 +303,14 @@ export const EffectsPanel: FC<EffectsPanelProps> = ({ className, onEffectSelect 
     (effectId: string) => {
       const selectedClips = timelineStore.getSelectedClips();
       if (selectedClips.length > 0) {
-        // Apply to first selected clip
+        const effect = BUILTIN_EFFECTS.find((e) => e.id === effectId);
         effectsStore.applyEffect(effectId, selectedClips[0].id);
+        toastsStore.success('Effect applied', effect ? `${effect.name} added to clip` : undefined);
+      } else {
+        toastsStore.warning('No clip selected', 'Select a clip on the timeline to apply this effect');
       }
     },
-    [effectsStore, timelineStore]
+    [effectsStore, timelineStore, toastsStore]
   );
 
   // Get categories that have effects

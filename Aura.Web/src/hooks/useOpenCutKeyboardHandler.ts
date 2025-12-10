@@ -274,6 +274,9 @@ export function useOpenCutKeyboardHandler(
             timelineStore.duplicateClip(id);
           });
           return true;
+        case 'insertAtPlayhead':
+          onUnhandledAction?.('insertAtPlayhead');
+          return true;
 
         // Selection
         case 'selectAll':

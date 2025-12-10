@@ -280,6 +280,15 @@ export const DEFAULT_KEYBINDINGS: Keybinding[] = [
     enabled: true,
   },
   {
+    id: 'insert-at-playhead',
+    action: 'insertAtPlayhead',
+    key: 'i',
+    modifiers: {},
+    category: 'editing',
+    description: 'Insert selected item at playhead',
+    enabled: true,
+  },
+  {
     id: 'ripple-trim-start',
     action: 'rippleTrimStart',
     key: 'q',

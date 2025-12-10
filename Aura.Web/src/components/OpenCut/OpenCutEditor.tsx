@@ -20,6 +20,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { useOpenCutKeyboardHandler } from '../../hooks/useOpenCutKeyboardHandler';
 import { useOpenCutLayoutStore, LAYOUT_CONSTANTS } from '../../stores/opencutLayout';
 import { useOpenCutProjectStore } from '../../stores/opencutProject';
+import { useOpenCutCaptionsStore } from '../../stores/opencutCaptions';
+import { useOpenCutPlaybackStore } from '../../stores/opencutPlayback';
+import { useOpenCutTimelineStore } from '../../stores/opencutTimeline';
+import { useOpenCutToastsStore } from '../../stores/opencutToasts';
 import { openCutTokens } from '../../styles/designTokens';
 import { CaptionsPanel } from './Captions';
 import { EffectsPanel } from './Effects';
@@ -95,12 +99,89 @@ export function OpenCutEditor() {
   const styles = useStyles();
   const projectStore = useOpenCutProjectStore();
   const layoutStore = useOpenCutLayoutStore();
+  const captionsStore = useOpenCutCaptionsStore();
+  const playbackStore = useOpenCutPlaybackStore();
+  const timelineStore = useOpenCutTimelineStore();
+  const toastsStore = useOpenCutToastsStore();
 
   const [leftPanelTab, setLeftPanelTab] = useState<LeftPanelTab>('media');
 
+  // Handler for inserting selected caption at playhead
+  const handleInsertAtPlayhead = useCallback(() => {
+    const { selectedCaptionId, getCaptionById } = captionsStore;
+    
+    if (selectedCaptionId) {
+      const caption = getCaptionById(selectedCaptionId);
+      if (caption) {
+        const currentTime = playbackStore.currentTime;
+
+        let textTrack = timelineStore.tracks.find((t) => t.type === 'text');
+        if (!textTrack) {
+          const trackId = timelineStore.addTrack('text', 'Captions');
+          textTrack = timelineStore.getTrackById(trackId);
+        }
+
+        if (!textTrack) {
+          toastsStore.error('Failed to create text track');
+          return;
+        }
+
+        timelineStore.addClip({
+          trackId: textTrack.id,
+          type: 'text',
+          name: caption.text.substring(0, 20),
+          mediaId: null,
+          startTime: currentTime,
+          duration: caption.endTime - caption.startTime,
+          inPoint: 0,
+          outPoint: caption.endTime - caption.startTime,
+          transform: {
+            scaleX: 100,
+            scaleY: 100,
+            positionX: 0,
+            positionY: 0,
+            rotation: 0,
+            opacity: 100,
+            anchorX: 50,
+            anchorY: 50,
+          },
+          blendMode: 'normal',
+          text: {
+            content: caption.text,
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontSize: 48,
+            fontWeight: 400,
+            fontStyle: 'normal',
+            textAlign: 'center',
+            color: '#ffffff',
+            strokeColor: '#000000',
+            strokeWidth: 0,
+            shadowColor: 'rgba(0, 0, 0, 0.5)',
+            shadowBlur: 0,
+            shadowOffsetX: 0,
+            shadowOffsetY: 0,
+          },
+          speed: 1,
+          reversed: false,
+          timeRemapEnabled: false,
+          locked: false,
+        });
+
+        toastsStore.success('Caption added to timeline');
+      }
+    }
+  }, [captionsStore, playbackStore, timelineStore, toastsStore]);
+
   // Initialize keyboard shortcuts handler
   // In/out points are returned but will be used by future components
-  const _keyboardState = useOpenCutKeyboardHandler({ enabled: true });
+  const _keyboardState = useOpenCutKeyboardHandler({
+    enabled: true,
+    onUnhandledAction: (action) => {
+      if (action === 'insertAtPlayhead') {
+        handleInsertAtPlayhead();
+      }
+    },
+  });
 
   // Initialize project on mount
   useEffect(() => {
