@@ -292,10 +292,12 @@ export const ideationService = {
         let errorMessage = 'Failed to brainstorm concepts';
         let suggestions: string[] = [];
         let errorCode: string | undefined;
+        let errorType: string | undefined;
         try {
           const errorData = await response.json();
           errorMessage = errorData.message || errorData.error || errorMessage;
           errorCode = errorData.errorCode;
+          errorType = errorData.errorType;
           if (errorData.suggestions && Array.isArray(errorData.suggestions)) {
             suggestions = errorData.suggestions;
           }
@@ -335,17 +337,20 @@ export const ideationService = {
           statusText: response.statusText,
           errorMessage,
           errorCode,
+          errorType,
           suggestions,
         });
 
-        // Create error with suggestions and error code attached
+        // Create error with suggestions, error code, and error type attached
         const error = new Error(errorMessage) as Error & {
-          response?: { data?: { suggestions?: string[]; errorCode?: string } };
+          response?: { data?: { suggestions?: string[]; errorCode?: string; errorType?: string } };
           errorCode?: string;
+          errorType?: string;
         };
         error.errorCode = errorCode;
-        if (suggestions.length > 0 || errorCode) {
-          error.response = { data: { suggestions, errorCode } };
+        error.errorType = errorType;
+        if (suggestions.length > 0 || errorCode || errorType) {
+          error.response = { data: { suggestions, errorCode, errorType } };
         }
         throw error;
       }

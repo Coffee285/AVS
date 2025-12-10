@@ -74,6 +74,10 @@ public class IdeationService
     {
         try
         {
+            // Add 10-second timeout for availability check
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+            
             var providerTypeName = _llmProvider.GetType().Name;
 
             // Check if we're using the RuleBased fallback (no real LLM)
@@ -89,13 +93,13 @@ public class IdeationService
                 // This aligns with Script Generation pattern where provider is used for availability checks
                 if (_ollamaDirectClient != null)
                 {
-                    var isAvailable = await _ollamaDirectClient.IsAvailableAsync(ct).ConfigureAwait(false);
+                    var isAvailable = await _ollamaDirectClient.IsAvailableAsync(linkedCts.Token).ConfigureAwait(false);
                     if (!isAvailable)
                     {
                         return (false, "Ollama is not running. Start it with 'ollama serve' in a terminal.");
                     }
 
-                    var models = await _ollamaDirectClient.ListModelsAsync(ct).ConfigureAwait(false);
+                    var models = await _ollamaDirectClient.ListModelsAsync(linkedCts.Token).ConfigureAwait(false);
                     if (models.Count == 0)
                     {
                         return (false, "No Ollama models installed. Install one with 'ollama pull llama3.1' or 'ollama pull qwen2.5'.");
@@ -112,6 +116,10 @@ public class IdeationService
             }
 
             return (true, null);
+        }
+        catch (OperationCanceledException)
+        {
+            return (false, "Provider availability check timed out after 10 seconds. Ollama may be starting up - please try again.");
         }
         catch (Exception ex)
         {
@@ -418,6 +426,11 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
                     bool isOllamaProvider = providerTypeName.Contains("Ollama", StringComparison.OrdinalIgnoreCase);
                     // Prefer StageAdapter (same path as script generation), then fall back to direct Ollama if allowed.
                     var stageAdapterFailed = false;
+                    
+                    // Add 120-second timeout for LLM call
+                    using var llmTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, llmTimeoutCts.Token);
+                    
                     try
                     {
                         _logger.LogInformation("Using LlmStageAdapter for ideation (primary path)");
@@ -427,7 +440,7 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
                             "Free", // Use Free tier for ideation (works with Ollama)
                             false,  // Allow online providers
                             ideationParams,
-                            ct).ConfigureAwait(false);
+                            linkedCts.Token).ConfigureAwait(false);
 
                         if (!orchestrationResult.IsSuccess || string.IsNullOrWhiteSpace(orchestrationResult.Data))
                         {
@@ -442,6 +455,12 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
                             _logger.LogInformation("Successfully generated ideation response via LlmStageAdapter (Provider: {Provider})",
                                 orchestrationResult.ProviderUsed ?? "Unknown");
                         }
+                    }
+                    catch (OperationCanceledException) when (llmTimeoutCts.IsCancellationRequested)
+                    {
+                        _logger.LogWarning("LLM call timed out after 120 seconds for ideation");
+                        lastException = new TimeoutException("AI provider took too long to respond. Try a smaller/faster model or simplify your topic.");
+                        continue; // Try next attempt
                     }
                     catch (Exception stageEx)
                     {
@@ -805,8 +824,29 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error brainstorming concepts for topic: {Topic}", request.Topic);
-            throw;
+            _logger.LogError(ex, "Ideation failed for topic: {Topic}", request.Topic);
+            
+            // Provide specific error messages based on exception type
+            string userMessage;
+            if (ex is TimeoutException)
+            {
+                userMessage = ex.Message;
+            }
+            else if (ex is HttpRequestException)
+            {
+                userMessage = "Could not connect to AI provider. Check that Ollama is running and accessible.";
+            }
+            else if (ex.Message.Contains("JSON", StringComparison.OrdinalIgnoreCase) || 
+                     ex.Message.Contains("parse", StringComparison.OrdinalIgnoreCase))
+            {
+                userMessage = "AI returned invalid response format. Try a different model or simplify your topic.";
+            }
+            else
+            {
+                userMessage = $"Ideation failed: {ex.Message}";
+            }
+            
+            throw new InvalidOperationException(userMessage, ex);
         }
     }
 
