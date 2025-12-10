@@ -639,16 +639,20 @@ builder.Services.AddSingleton<IConfigureOptions<Aura.Core.Providers.OllamaSettin
         {
             var providerSettings = sp.GetRequiredService<Aura.Core.Configuration.ProviderSettings>();
             options.BaseUrl = providerSettings.GetOllamaUrl();
-            options.Timeout = TimeSpan.FromMinutes(3); // 3 minute timeout for ideation
+            options.Timeout = TimeSpan.FromMinutes(15); // 15 minute timeout (matches Script Generation for consistency)
             options.MaxRetries = 3;
             options.GpuEnabled = providerSettings.GetOllamaGpuEnabled();
             options.NumGpu = providerSettings.GetOllamaNumGpu();
             options.NumCtx = providerSettings.GetOllamaNumCtx();
+            options.HeartbeatIntervalSeconds = 30; // Heartbeat logging every 30 seconds
+            options.AvailabilityCacheSeconds = 30; // Cache availability for 30 seconds
         });
 });
 builder.Services.AddHttpClient<Aura.Core.Providers.IOllamaDirectClient, Aura.Core.Providers.OllamaDirectClient>(client =>
 {
-    client.Timeout = TimeSpan.FromMinutes(5); // Outer timeout (allow for retries)
+    // HttpClient timeout is managed by OllamaDirectClient (15 min + 5 min buffer = 20 min)
+    // This outer timeout should be longer to allow for multiple retries
+    client.Timeout = TimeSpan.FromMinutes(20);
 });
 
 
