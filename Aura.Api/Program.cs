@@ -2339,60 +2339,103 @@ appLifetime.ApplicationStopped.Register(() =>
 
 // Apply database migrations
 // Initialize database with enhanced error handling and recovery
-Log.Information("Initializing database system...");
+Log.Information("=== PROGRAM.CS: Database Initialization Starting ===");
+Log.Information(">>> PROGRAM.CS: Thread ID: {ThreadId}", Environment.CurrentManagedThreadId);
+var dbInitStopwatch = System.Diagnostics.Stopwatch.StartNew();
 try
 {
+    Log.Information(">>> PROGRAM.CS: Step 1 - Resolving DatabaseInitializationService");
+    var resolveStopwatch = System.Diagnostics.Stopwatch.StartNew();
     var dbInitService = app.Services.GetRequiredService<Aura.Core.Services.DatabaseInitializationService>();
-    var initResult = await dbInitService.InitializeAsync().ConfigureAwait(false);
+    resolveStopwatch.Stop();
+    Log.Information(">>> PROGRAM.CS: Step 1 COMPLETE - Service resolved in {Ms}ms", resolveStopwatch.ElapsedMilliseconds);
+    
+    Log.Information(">>> PROGRAM.CS: Step 2 - Calling InitializeAsync with 60 second timeout");
+    var initStopwatch = System.Diagnostics.Stopwatch.StartNew();
+    
+    // Add timeout protection to database initialization (60 seconds)
+    using var dbInitCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+    var initTask = dbInitService.InitializeAsync(dbInitCts.Token);
+    
+    // Check if initialization completes within timeout
+    if (await Task.WhenAny(initTask, Task.Delay(TimeSpan.FromSeconds(60), dbInitCts.Token)).ConfigureAwait(false) != initTask)
+    {
+        initStopwatch.Stop();
+        Log.Error(">>> PROGRAM.CS: DATABASE INITIALIZATION TIMED OUT after {Ms}ms", initStopwatch.ElapsedMilliseconds);
+        Log.Error(">>> PROGRAM.CS: This indicates database operations are hanging");
+        Log.Error(">>> PROGRAM.CS: Application will continue with degraded database functionality");
+        throw new TimeoutException("Database initialization timed out after 60 seconds");
+    }
+    
+    var initResult = await initTask.ConfigureAwait(false);
+    initStopwatch.Stop();
+    Log.Information(">>> PROGRAM.CS: Step 2 COMPLETE - InitializeAsync returned in {Ms}ms", initStopwatch.ElapsedMilliseconds);
 
     if (initResult.Success)
     {
         Log.Information(
-            "Database initialization completed successfully in {Duration}ms. WAL mode: {WalMode}, Integrity: {Integrity}",
+            ">>> PROGRAM.CS: Database initialization SUCCEEDED in {Duration}ms. WAL mode: {WalMode}, Integrity: {Integrity}",
             initResult.DurationMs, initResult.WalModeEnabled, initResult.IntegrityCheck);
 
         if (initResult.RepairAttempted)
         {
-            Log.Warning("Database repair was performed during initialization");
+            Log.Warning(">>> PROGRAM.CS: Database repair was performed during initialization");
         }
 
         // Initialize configuration system with defaults
-        Log.Information("Initializing configuration system");
+        Log.Information(">>> PROGRAM.CS: Step 3 - Initializing configuration system");
+        var configStopwatch = System.Diagnostics.Stopwatch.StartNew();
         var configManager = app.Services.GetRequiredService<Aura.Core.Services.ConfigurationManager>();
         await configManager.InitializeAsync().ConfigureAwait(false);
-        Log.Information("Configuration system initialized");
+        configStopwatch.Stop();
+        Log.Information(">>> PROGRAM.CS: Step 3 COMPLETE - Configuration system initialized in {Ms}ms", configStopwatch.ElapsedMilliseconds);
 
         // Validate configuration persistence after database initialization
-        Log.Information("Validating configuration persistence...");
+        Log.Information(">>> PROGRAM.CS: Step 4 - Validating configuration persistence");
+        var validationStopwatch = System.Diagnostics.Stopwatch.StartNew();
         using var scope = app.Services.CreateScope();
         var settingsService = scope.ServiceProvider.GetRequiredService<Aura.Core.Services.Settings.ISettingsService>();
 
         try
         {
-            // Verify settings can be loaded
+            Log.Information("    >>> Loading user settings");
+            var settingsLoadStopwatch = System.Diagnostics.Stopwatch.StartNew();
             var settings = await settingsService.GetSettingsAsync().ConfigureAwait(false);
+            settingsLoadStopwatch.Stop();
+            Log.Information("    >>> Settings loaded in {Ms}ms", settingsLoadStopwatch.ElapsedMilliseconds);
+            
             if (settings == null)
             {
-                Log.Warning("No user settings found, initializing defaults");
+                Log.Warning("    >>> No user settings found, initializing defaults");
+                var resetStopwatch = System.Diagnostics.Stopwatch.StartNew();
                 await settingsService.ResetToDefaultsAsync().ConfigureAwait(false);
-                Log.Information("Default user settings created successfully");
+                resetStopwatch.Stop();
+                Log.Information("    >>> Default user settings created successfully in {Ms}ms", resetStopwatch.ElapsedMilliseconds);
             }
             else
             {
-                Log.Information("User settings loaded and validated successfully");
+                Log.Information("    >>> User settings loaded and validated successfully");
             }
+            
+            validationStopwatch.Stop();
+            Log.Information(">>> PROGRAM.CS: Step 4 COMPLETE - Configuration validated in {Ms}ms", validationStopwatch.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to validate configuration persistence");
-            Log.Warning("Configuration validation failed, but application will continue");
+            validationStopwatch.Stop();
+            Log.Error(ex, ">>> PROGRAM.CS: Failed to validate configuration persistence after {Ms}ms", validationStopwatch.ElapsedMilliseconds);
+            Log.Warning(">>> PROGRAM.CS: Configuration validation failed, but application will continue");
         }
+        
+        dbInitStopwatch.Stop();
+        Log.Information("=== PROGRAM.CS: Database Initialization COMPLETE - Total time: {Ms}ms ===", dbInitStopwatch.ElapsedMilliseconds);
     }
     else
     {
+        dbInitStopwatch.Stop();
         Log.Error(
-            "Database initialization failed: {Error}. Path writable: {PathWritable}, Exists: {Exists}",
-            initResult.Error, initResult.PathWritable, initResult.DatabaseExists);
+            ">>> PROGRAM.CS: Database initialization FAILED after {Ms}ms: {Error}. Path writable: {PathWritable}, Exists: {Exists}",
+            dbInitStopwatch.ElapsedMilliseconds, initResult.Error, initResult.PathWritable, initResult.DatabaseExists);
 
         if (!initResult.PathWritable)
         {
@@ -2404,8 +2447,10 @@ try
 }
 catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1)
 {
+    dbInitStopwatch.Stop();
     // SQLITE_ERROR (1) - typically indicates schema mismatch like "no such column"
-    Log.Error(ex, "Database schema mismatch detected: {Message}", ex.Message);
+    Log.Error(ex, ">>> PROGRAM.CS: Database schema mismatch detected after {Ms}ms: {Message}", 
+        dbInitStopwatch.ElapsedMilliseconds, ex.Message);
     Log.Error("This usually means:");
     Log.Error("  1. Migrations have not been applied");
     Log.Error("  2. The database schema is out of sync with the code");
@@ -2415,12 +2460,13 @@ catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1)
     Log.Error("  1. Delete the database file at: {DbPath}", GetDatabasePath(app));
     Log.Error("  2. Restart the application to rebuild with correct schema");
     Log.Error("");
-    Log.Warning("Application will continue with degraded database functionality");
+    Log.Warning(">>> PROGRAM.CS: Application will continue with degraded database functionality");
 }
 catch (Exception ex)
 {
-    Log.Error(ex, "Critical error during database initialization");
-    Log.Warning("Application will continue with degraded database functionality");
+    dbInitStopwatch.Stop();
+    Log.Error(ex, ">>> PROGRAM.CS: Critical error during database initialization after {Ms}ms", dbInitStopwatch.ElapsedMilliseconds);
+    Log.Warning(">>> PROGRAM.CS: Application will continue with degraded database functionality");
 }
 
 // Helper method to get database path

@@ -42,18 +42,22 @@ public class StartupInitializationService : IHostedService
             TimeoutSeconds = 10, // Reduced from 30s to fail faster
             InitializeFunc = async (sp, ct) =>
             {
+                var logger = sp.GetRequiredService<ILogger<StartupInitializationService>>();
                 try
                 {
+                    logger.LogInformation("        >>> Creating scope for database connectivity check");
                     using var scope = sp.CreateScope();
+                    logger.LogInformation("        >>> Resolving AuraDbContext");
                     var dbContext = scope.ServiceProvider.GetRequiredService<Aura.Core.Data.AuraDbContext>();
-                    await dbContext.Database.CanConnectAsync(ct).ConfigureAwait(false);
-                    return true;
+                    logger.LogInformation("        >>> Calling CanConnectAsync");
+                    var canConnect = await dbContext.Database.CanConnectAsync(ct).ConfigureAwait(false);
+                    logger.LogInformation("        >>> CanConnectAsync returned: {Result}", canConnect);
+                    return canConnect;
                 }
                 catch (Exception ex)
                 {
                     // Log but don't fail - database will be checked by health checks
-                    var logger = sp.GetRequiredService<ILogger<StartupInitializationService>>();
-                    logger.LogWarning(ex, "Database connectivity check failed during startup - will retry via health checks");
+                    logger.LogWarning(ex, "        >>> Database connectivity check failed during startup - will retry via health checks");
                     return false; // Non-critical, so return false but don't throw
                 }
             }
@@ -67,7 +71,11 @@ public class StartupInitializationService : IHostedService
             TimeoutSeconds = 10,
             InitializeFunc = (sp, ct) =>
             {
+                var logger = sp.GetRequiredService<ILogger<StartupInitializationService>>();
+                logger.LogInformation("        >>> Resolving ProviderSettings");
                 var providerSettings = sp.GetRequiredService<Aura.Core.Configuration.ProviderSettings>();
+                
+                logger.LogInformation("        >>> Getting directory paths");
                 var directories = new[]
                 {
                     providerSettings.GetAuraDataDirectory(),
@@ -76,13 +84,21 @@ public class StartupInitializationService : IHostedService
                     providerSettings.GetProjectsDirectory()
                 };
 
+                logger.LogInformation("        >>> Creating directories if they don't exist");
                 foreach (var dir in directories)
                 {
                     if (!System.IO.Directory.Exists(dir))
                     {
+                        logger.LogInformation("        >>> Creating directory: {Dir}", dir);
                         System.IO.Directory.CreateDirectory(dir);
                     }
+                    else
+                    {
+                        logger.LogInformation("        >>> Directory already exists: {Dir}", dir);
+                    }
                 }
+                
+                logger.LogInformation("        >>> All required directories verified");
                 return Task.FromResult(true);
             }
         });
@@ -95,14 +111,19 @@ public class StartupInitializationService : IHostedService
             TimeoutSeconds = 10,
             InitializeFunc = async (sp, ct) =>
             {
+                var logger = sp.GetRequiredService<ILogger<StartupInitializationService>>();
                 try
                 {
+                    logger.LogInformation("        >>> Resolving IFfmpegLocator");
                     var ffmpegLocator = sp.GetRequiredService<Aura.Core.Dependencies.IFfmpegLocator>();
+                    logger.LogInformation("        >>> Calling GetEffectiveFfmpegPathAsync");
                     var ffmpegPath = await ffmpegLocator.GetEffectiveFfmpegPathAsync(null, ct).ConfigureAwait(false);
+                    logger.LogInformation("        >>> FFmpeg path: {Path}", ffmpegPath ?? "(not found)");
                     return !string.IsNullOrEmpty(ffmpegPath);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    logger.LogWarning(ex, "        >>> FFmpeg check failed");
                     return false; // Non-critical, return false but don't fail
                 }
             }
@@ -116,14 +137,18 @@ public class StartupInitializationService : IHostedService
             TimeoutSeconds = 10,
             InitializeFunc = (sp, ct) =>
             {
+                var logger = sp.GetRequiredService<ILogger<StartupInitializationService>>();
                 try
                 {
-                    // Check if key services are available
+                    logger.LogInformation("        >>> Checking if ILlmProvider is available");
                     var llmProvider = sp.GetService<Aura.Core.Providers.ILlmProvider>();
-                    return Task.FromResult(llmProvider != null);
+                    var available = llmProvider != null;
+                    logger.LogInformation("        >>> ILlmProvider available: {Available}", available);
+                    return Task.FromResult(available);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    logger.LogWarning(ex, "        >>> AI Services check failed");
                     return Task.FromResult(false); // Non-critical
                 }
             }
@@ -132,7 +157,10 @@ public class StartupInitializationService : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("=== Service Initialization Starting ===");
+        _logger.LogInformation("=== STARTUP INIT SERVICE: StartAsync ENTRY ===");
+        _logger.LogInformation(">>> STARTUP INIT: Thread ID: {ThreadId}, Process ID: {ProcessId}", 
+            Environment.CurrentManagedThreadId, Environment.ProcessId);
+        
         var overallStopwatch = Stopwatch.StartNew();
         var successCount = 0;
         var failedCritical = false;
@@ -140,7 +168,7 @@ public class StartupInitializationService : IHostedService
         foreach (var step in _initializationSteps)
         {
             var stepStopwatch = Stopwatch.StartNew();
-            _logger.LogInformation("Initializing: {StepName} (Critical: {IsCritical}, Timeout: {Timeout}s)",
+            _logger.LogInformation(">>> STARTUP INIT: Step '{StepName}' STARTING (Critical: {IsCritical}, Timeout: {Timeout}s)",
                 step.Name, step.IsCritical, step.TimeoutSeconds);
 
             try
@@ -153,7 +181,7 @@ public class StartupInitializationService : IHostedService
 
                 if (success)
                 {
-                    _logger.LogInformation("✓ {StepName} initialized successfully in {Duration}ms",
+                    _logger.LogInformation(">>> STARTUP INIT: Step '{StepName}' COMPLETED successfully in {Duration}ms",
                         step.Name, stepStopwatch.ElapsedMilliseconds);
                     successCount++;
                 }
@@ -161,13 +189,13 @@ public class StartupInitializationService : IHostedService
                 {
                     if (step.IsCritical)
                     {
-                        _logger.LogError("✗ CRITICAL: {StepName} failed to initialize (took {Duration}ms)",
+                        _logger.LogError(">>> STARTUP INIT: Step '{StepName}' FAILED (CRITICAL) after {Duration}ms",
                             step.Name, stepStopwatch.ElapsedMilliseconds);
                         failedCritical = true;
                     }
                     else
                     {
-                        _logger.LogWarning("⚠ {StepName} failed to initialize - continuing with graceful degradation (took {Duration}ms)",
+                        _logger.LogWarning(">>> STARTUP INIT: Step '{StepName}' FAILED (non-critical) after {Duration}ms - continuing with graceful degradation",
                             step.Name, stepStopwatch.ElapsedMilliseconds);
                     }
                 }
@@ -175,7 +203,7 @@ public class StartupInitializationService : IHostedService
             catch (OperationCanceledException)
             {
                 stepStopwatch.Stop();
-                _logger.LogError("✗ {StepName} timed out after {Timeout}s (Critical: {IsCritical})",
+                _logger.LogError(">>> STARTUP INIT: Step '{StepName}' TIMED OUT after {Timeout}s (Critical: {IsCritical})",
                     step.Name, step.TimeoutSeconds, step.IsCritical);
                 
                 if (step.IsCritical)
@@ -186,7 +214,7 @@ public class StartupInitializationService : IHostedService
             catch (Exception ex)
             {
                 stepStopwatch.Stop();
-                _logger.LogError(ex, "✗ {StepName} failed with exception (took {Duration}ms, Critical: {IsCritical})",
+                _logger.LogError(ex, ">>> STARTUP INIT: Step '{StepName}' FAILED with exception after {Duration}ms (Critical: {IsCritical})",
                     step.Name, stepStopwatch.ElapsedMilliseconds, step.IsCritical);
                 
                 if (step.IsCritical)
@@ -197,6 +225,7 @@ public class StartupInitializationService : IHostedService
 
             if (failedCritical)
             {
+                _logger.LogWarning(">>> STARTUP INIT: Stopping initialization due to critical failure");
                 break; // Stop initialization on critical failure
             }
         }
@@ -205,9 +234,9 @@ public class StartupInitializationService : IHostedService
 
         if (failedCritical)
         {
-            _logger.LogError("=== Service Initialization FAILED ===");
-            _logger.LogError("Critical services failed to initialize. Application cannot start properly.");
-            _logger.LogError("Total time: {Duration}ms, Successful: {Success}/{Total}",
+            _logger.LogError("=== STARTUP INIT SERVICE: FAILED ===");
+            _logger.LogError(">>> STARTUP INIT: Critical services failed to initialize. Application cannot start properly.");
+            _logger.LogError(">>> STARTUP INIT: Total time: {Duration}ms, Successful: {Success}/{Total}",
                 overallStopwatch.ElapsedMilliseconds, successCount, _initializationSteps.Count);
             
             // Instead of Environment.Exit, throw an exception that can be caught and logged properly
@@ -215,23 +244,25 @@ public class StartupInitializationService : IHostedService
                 .Where((s, i) => i < _initializationSteps.Count && s.IsCritical)
                 .Select(s => s.Name));
             
-            _logger.LogError("Failed critical steps: {Steps}", failedSteps);
-            _logger.LogWarning("Application will continue startup but may be unstable. Please check logs above for details.");
+            _logger.LogError(">>> STARTUP INIT: Failed critical steps: {Steps}", failedSteps);
+            _logger.LogWarning(">>> STARTUP INIT: Application will continue startup but may be unstable. Please check logs above for details.");
             
             // Don't throw or exit - let the application try to start
             // Users can see errors in the UI and troubleshoot
         }
         else
         {
-            _logger.LogInformation("=== Service Initialization COMPLETE ===");
-            _logger.LogInformation("Total time: {Duration}ms, Successful: {Success}/{Total}",
+            _logger.LogInformation("=== STARTUP INIT SERVICE: COMPLETE ===");
+            _logger.LogInformation(">>> STARTUP INIT: Total time: {Duration}ms, Successful: {Success}/{Total}",
                 overallStopwatch.ElapsedMilliseconds, successCount, _initializationSteps.Count);
             
             if (successCount < _initializationSteps.Count)
             {
-                _logger.LogWarning("Some non-critical services failed. Application running in degraded mode.");
+                _logger.LogWarning(">>> STARTUP INIT: Some non-critical services failed. Application running in degraded mode.");
             }
         }
+        
+        _logger.LogInformation("=== STARTUP INIT SERVICE: StartAsync EXIT ===");
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
