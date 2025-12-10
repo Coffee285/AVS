@@ -615,8 +615,14 @@ export const PreviewGeneration: FC<PreviewGenerationProps> = ({
     }
   }, [selectedTtsVoice]);
 
-  // Effect to load providers and styles on mount - properly includes dependencies
+  // Use ref to track if initial load has been done to prevent infinite loops
+  const initialLoadDoneRef = useRef(false);
+
+  // Effect to load providers and styles once on mount to prevent infinite loops
   useEffect(() => {
+    if (initialLoadDoneRef.current) return;
+    initialLoadDoneRef.current = true;
+
     void loadProviders();
     void loadStyles();
     void loadTtsProviders();

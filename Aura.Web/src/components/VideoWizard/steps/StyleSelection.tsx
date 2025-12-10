@@ -110,6 +110,9 @@ export const StyleSelection: FC<StyleSelectionProps> = ({
   const [availableStyles, setAvailableStyles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Use ref to track if initial load has been done to prevent infinite loops
+  const initialLoadDoneRef = useRef(false);
+
   const loadProviders = useCallback(async () => {
     try {
       const response = await visualsClient.getProviders();
@@ -254,7 +257,11 @@ export const StyleSelection: FC<StyleSelectionProps> = ({
     }
   }, [visualsClient, data, onChange]);
 
+  // Only load providers and styles once on mount to prevent infinite loops
   useEffect(() => {
+    if (initialLoadDoneRef.current) return;
+    initialLoadDoneRef.current = true;
+
     loadProviders();
     loadStyles();
   }, [loadProviders, loadStyles]);
