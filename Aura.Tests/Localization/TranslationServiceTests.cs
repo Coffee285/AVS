@@ -66,7 +66,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert
         Assert.Equal("Hola mundo", result.TranslatedText);
@@ -95,7 +95,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert
         Assert.Equal("Hola mundo", result.TranslatedText);
@@ -124,7 +124,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert
         Assert.Equal("Hola mundo", result.TranslatedText);
@@ -153,7 +153,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert
         Assert.Equal("Hola mundo", result.TranslatedText);
@@ -182,7 +182,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert
         Assert.Equal("Hola mundo", result.TranslatedText);
@@ -211,7 +211,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert
         Assert.Equal("Hola mundo", result.TranslatedText);
@@ -240,7 +240,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert
         Assert.Equal("Hola mundo", result.TranslatedText);
@@ -269,7 +269,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert
         Assert.Equal("Hola mundo", result.TranslatedText);
@@ -298,7 +298,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert - newlines should be preserved
         Assert.Contains("Primera línea", result.TranslatedText);
@@ -329,7 +329,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert
         Assert.Equal(string.Empty, result.TranslatedText);
@@ -358,7 +358,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert - should extract the translation field
         Assert.Equal("Hola mundo", result.TranslatedText);
@@ -387,7 +387,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert
         Assert.Equal("Hola mundo", result.TranslatedText);
@@ -416,7 +416,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert
         Assert.Equal("Hola mundo", result.TranslatedText);
@@ -451,7 +451,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        await _service.TranslateAsync(request, CancellationToken.None);
+        await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert - verify the system prompt contains critical output requirements
         Assert.NotNull(capturedSystemPrompt);
@@ -487,7 +487,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        await _service.TranslateAsync(request, CancellationToken.None);
+        await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert - verify the system prompt contains example outputs to guide the model
         Assert.NotNull(capturedSystemPrompt);
@@ -522,7 +522,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert - verify logging was called for structured metadata detection
         _loggerMock.Verify(
@@ -558,7 +558,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        await _service.TranslateAsync(request, CancellationToken.None);
+        await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert - verify warning was logged about long response
         _loggerMock.Verify(
@@ -598,7 +598,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert - Metrics should be populated
         Assert.NotNull(result.Metrics);
@@ -630,7 +630,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert - Should be Excellent grade with no issues
         Assert.NotNull(result.Metrics);
@@ -661,7 +661,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert - The extraction logic should clean the response, so metrics should be clean
         Assert.NotNull(result.Metrics);
@@ -691,7 +691,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert - Should report length ratio issue
         Assert.NotNull(result.Metrics);
@@ -722,7 +722,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert - Should report length ratio issue
         Assert.NotNull(result.Metrics);
@@ -759,7 +759,7 @@ public class TranslationServiceTests
         };
 
         // Act
-        var result = await _service.TranslateAsync(request, CancellationToken.None);
+        var result = await _service.TranslateAsync(request, null, CancellationToken.None);
 
         // Assert
         Assert.NotNull(result.Metrics);

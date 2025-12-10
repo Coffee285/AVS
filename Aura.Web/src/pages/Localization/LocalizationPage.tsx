@@ -221,6 +221,15 @@ export const LocalizationPage: React.FC = () => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const startTimeRef = useRef<number | null>(null);
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+  // Progress state for streaming translation
+  const [progress, setProgress] = useState<{
+    stage: string;
+    currentScene: number;
+    totalScenes: number;
+    percentComplete: number;
+    currentText?: string;
+  } | null>(null);
 
   // LLM selection state with localStorage persistence
   const [llmSelection, setLlmSelection] = useState<LlmSelection>(() => {
@@ -747,11 +756,20 @@ export const LocalizationPage: React.FC = () => {
 
             {loading && loadingMessage && (
               <div className={styles.progressContainer}>
-                <ProgressBar />
+                {progress && progress.percentComplete > 0 ? (
+                  <ProgressBar value={progress.percentComplete / 100} />
+                ) : (
+                  <ProgressBar />
+                )}
                 <Text className={styles.progressText}>
                   {loadingMessage}
                   {elapsedSeconds > 0 && ` (${elapsedSeconds}s elapsed)`}
                 </Text>
+                {progress && progress.currentText && (
+                  <Text className={styles.progressText}>
+                    Current: {progress.currentText}
+                  </Text>
+                )}
                 {llmSelection.provider && (
                   <Text className={styles.providerInfo}>
                     Using: {llmSelection.provider}

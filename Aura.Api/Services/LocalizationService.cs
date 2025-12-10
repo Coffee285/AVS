@@ -150,6 +150,7 @@ public class LocalizationService : ILocalizationService
     /// <inheritdoc />
     public async Task<TranslationResult> TranslateAsync(
         TranslationRequest request,
+        IProgress<LocalizationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation(
@@ -158,7 +159,7 @@ public class LocalizationService : ILocalizationService
             request.TargetLanguage);
 
         return await _translationPipeline.ExecuteAsync(
-            async ct => await _translationService.TranslateAsync(request, ct).ConfigureAwait(false),
+            async ct => await _translationService.TranslateAsync(request, progress, ct).ConfigureAwait(false),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -307,6 +308,7 @@ public interface ILocalizationService
     /// </summary>
     Task<TranslationResult> TranslateAsync(
         TranslationRequest request,
+        IProgress<LocalizationProgress>? progress = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
