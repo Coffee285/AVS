@@ -736,12 +736,13 @@ public class VideoGenerationOrchestrator
             // For audio tasks, we cannot provide a fallback - fail fast with clear error
             if (node.TaskType == GenerationTaskType.AudioGeneration)
             {
+                var errorDetail = failed.ErrorMessage ?? "Unknown error";
                 _logger.LogError("Audio task {TaskId} failed and cannot be recovered. Error: {Error}", 
-                    failed.TaskId, failed.ErrorMessage ?? "Unknown error");
+                    failed.TaskId, errorDetail);
                 
                 // Mark the task result as failed with detailed error
-                _taskResults[node.TaskId] = new TaskResult(node.TaskId, false, null, 
-                    $"Audio generation failed: {failed.ErrorMessage ?? "Unknown error"}. This is a critical error - video cannot be created without audio.");
+                var detailedErrorMessage = $"Audio generation failed: {errorDetail}. This is a critical error - video cannot be created without audio.";
+                _taskResults[node.TaskId] = new TaskResult(node.TaskId, false, null, detailedErrorMessage);
                 
                 // Return false immediately to trigger job failure
                 return false;
