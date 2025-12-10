@@ -129,6 +129,16 @@ const FORMATS = [
   { value: 'gif', label: 'GIF' },
 ];
 
+/**
+ * Get human-readable label for Ken Burns intensity value
+ */
+const getKenBurnsIntensityLabel = (intensity: number): string => {
+  if (intensity === 0) return 'None';
+  if (intensity <= 0.1) return 'Subtle';
+  if (intensity <= 0.2) return 'Medium';
+  return 'Dramatic';
+};
+
 export const ExportSettingsPanel: FC<ExportSettingsProps> = ({ className, onSaveAsPreset }) => {
   const styles = useStyles();
   const { currentSettings, updateCurrentSetting } = useExportStore();
@@ -363,13 +373,7 @@ export const ExportSettingsPanel: FC<ExportSettingsProps> = ({ className, onSave
                 onChange={(_, data) => updateCurrentSetting('kenBurnsIntensity', data.value)}
               />
               <Text className={styles.sliderValue}>
-                {(currentSettings.kenBurnsIntensity ?? 0.1) === 0
-                  ? 'None'
-                  : (currentSettings.kenBurnsIntensity ?? 0.1) <= 0.1
-                    ? 'Subtle'
-                    : (currentSettings.kenBurnsIntensity ?? 0.1) <= 0.2
-                      ? 'Medium'
-                      : 'Dramatic'}
+                {getKenBurnsIntensityLabel(currentSettings.kenBurnsIntensity ?? 0.1)}
               </Text>
             </div>
           </div>
