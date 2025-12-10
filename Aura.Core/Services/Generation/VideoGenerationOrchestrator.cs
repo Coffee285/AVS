@@ -99,8 +99,9 @@ public class VideoGenerationOrchestrator
 
             // Execute batches
             int totalTasks = batches.Sum(b => b.Count);
-            int completedTasks = 0;
-            int failedTasks = 0;
+            int processedTasks = 0; // Total tasks that finished (succeeded or failed)
+            int succeededTasks = 0; // Tasks that completed successfully
+            int failedTasks = 0;    // Tasks that failed or timed out
 
             foreach (var batch in batches)
             {
@@ -155,8 +156,8 @@ public class VideoGenerationOrchestrator
                 }
 
                 progress?.Report(new OrchestrationProgress(
-                    $"Processing batch ({completedTasks}/{totalTasks} tasks completed)",
-                    completedTasks,
+                    $"Processing batch ({processedTasks}/{totalTasks} tasks processed)",
+                    processedTasks,
                     totalTasks,
                     stopwatch.Elapsed));
 
@@ -165,18 +166,27 @@ public class VideoGenerationOrchestrator
                     strategy,
                     taskExecutor,
                     progress,
-                    completedTasks,
+                    processedTasks,
                     totalTasks,
                     stopwatch,
                     ct).ConfigureAwait(false);
 
-                completedTasks += batchResults.Count(r => r.Succeeded);
-                failedTasks += batchResults.Count(r => !r.Succeeded);
+                // Count ALL finished tasks (succeeded + failed) for progress calculation
+                // This ensures progress reaches 100% even if some tasks fail
+                var batchSucceeded = batchResults.Count(r => r.Succeeded);
+                var batchFailed = batchResults.Count(r => !r.Succeeded);
+                processedTasks += batchResults.Count; // All tasks that finished
+                succeededTasks += batchSucceeded;
+                failedTasks += batchFailed;
 
-                // Report progress after batch completion
+                // Report progress after batch completion with clear status
+                var statusMessage = batchFailed > 0
+                    ? $"Batch completed ({processedTasks}/{totalTasks} tasks done, {batchFailed} with fallbacks)"
+                    : $"Batch completed ({processedTasks}/{totalTasks} tasks done)";
+                
                 progress?.Report(new OrchestrationProgress(
-                    $"Batch completed ({completedTasks}/{totalTasks} tasks done)",
-                    completedTasks,
+                    statusMessage,
+                    processedTasks,
                     totalTasks,
                     stopwatch.Elapsed));
 
@@ -191,7 +201,9 @@ public class VideoGenerationOrchestrator
                         throw new OrchestrationException("Critical task failures could not be recovered");
                     }
 
-                    completedTasks++;
+                    // Recovery succeeded - increment processed tasks
+                    processedTasks++;
+                    succeededTasks++;
                 }
             }
 
@@ -200,7 +212,7 @@ public class VideoGenerationOrchestrator
             var result = new OrchestrationResult(
                 Succeeded: failedTasks == 0,
                 TotalTasks: totalTasks,
-                CompletedTasks: completedTasks,
+                CompletedTasks: succeededTasks, // Use succeeded count for final result
                 FailedTasks: failedTasks,
                 ExecutionTime: stopwatch.Elapsed,
                 Strategy: strategy,
@@ -214,15 +226,16 @@ public class VideoGenerationOrchestrator
                 result.QualityScore);
 
             _logger.LogInformation(
-                "Orchestration completed: {Status}, {Completed}/{Total} tasks, Time: {Time}",
-                result.Succeeded ? "Success" : "Failed",
-                completedTasks,
+                "Orchestration completed: {Status}, {Succeeded}/{Total} tasks succeeded ({Failed} failed), Time: {Time}",
+                result.Succeeded ? "Success" : "Partial Success",
+                succeededTasks,
                 totalTasks,
+                failedTasks,
                 stopwatch.Elapsed);
 
             progress?.Report(new OrchestrationProgress(
                 "Orchestration completed",
-                completedTasks,
+                processedTasks, // Report all processed tasks for 100% completion
                 totalTasks,
                 stopwatch.Elapsed));
 
