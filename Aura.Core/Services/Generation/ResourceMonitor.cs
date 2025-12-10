@@ -89,35 +89,57 @@ public class ResourceMonitor
         var snapshot = GetCurrentSnapshot();
 
         // Resource cost is normalized 0-1, where 1.0 = full system capacity
-        // Don't start heavy tasks if resources are constrained
+        // Be more lenient to avoid resource starvation deadlocks
         if (estimatedResourceCost > 0.7)
         {
-            return snapshot.CpuUsagePercent < 60 && snapshot.MemoryUsagePercent < 70;
+            // Heavy tasks: allow if CPU < 80% and Memory < 85%
+            return snapshot.CpuUsagePercent < 80 && snapshot.MemoryUsagePercent < 85;
         }
         else if (estimatedResourceCost > 0.4)
         {
-            return snapshot.CpuUsagePercent < 75 && snapshot.MemoryUsagePercent < 80;
+            // Medium tasks: allow if CPU < 90% and Memory < 90%
+            return snapshot.CpuUsagePercent < 90 && snapshot.MemoryUsagePercent < 90;
         }
         else
         {
-            return snapshot.CpuUsagePercent < 90 && snapshot.MemoryUsagePercent < 90;
+            // Light tasks: allow if not critically constrained
+            return snapshot.CpuUsagePercent < 95 && snapshot.MemoryUsagePercent < 95;
         }
     }
 
     /// <summary>
-    /// Waits until resources become available for a task with the given cost
+    /// Waits until resources become available for a task with the given cost.
+    /// Includes failsafe to prevent indefinite waiting - after max attempts, proceeds anyway.
     /// </summary>
     public async Task WaitForResourcesAsync(double estimatedResourceCost, CancellationToken ct)
     {
+        const int maxAttempts = 20; // ~50 seconds max wait with exponential backoff
         int attempts = 0;
+        
         while (!CanStartTask(estimatedResourceCost) && !ct.IsCancellationRequested)
         {
             attempts++;
+            
+            // Failsafe: After max attempts, proceed anyway to prevent indefinite hangs
+            if (attempts >= maxAttempts)
+            {
+                _logger.LogWarning(
+                    "Resource wait exceeded {MaxAttempts} attempts ({TotalSeconds}s), proceeding anyway to prevent deadlock. " +
+                    "CPU: {Cpu}%, Memory: {Memory}%, ResourceCost: {Cost}",
+                    maxAttempts,
+                    maxAttempts * 2.5, // Approximate total wait time
+                    GetCurrentSnapshot().CpuUsagePercent,
+                    GetCurrentSnapshot().MemoryUsagePercent,
+                    estimatedResourceCost);
+                break;
+            }
+            
             int delayMs = Math.Min(5000, 500 * attempts); // Exponential backoff up to 5 seconds
 
             _logger.LogDebug(
-                "Waiting for resources to become available (attempt {Attempt}, delay {Delay}ms)",
+                "Waiting for resources to become available (attempt {Attempt}/{MaxAttempts}, delay {Delay}ms)",
                 attempts,
+                maxAttempts,
                 delayMs);
 
             await Task.Delay(delayMs, ct).ConfigureAwait(false);
