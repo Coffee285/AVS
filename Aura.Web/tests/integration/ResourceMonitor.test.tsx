@@ -315,4 +315,126 @@ describe('ResourceMonitor', () => {
       );
     });
   });
+
+  describe('intelligent throttling', () => {
+    it('uses exponential backoff on consecutive failures', async () => {
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      
+      // Make all requests fail
+      mockGet.mockRejectedValue(new Error('Network error'));
+
+      render(<ResourceMonitor compact />);
+
+      // Wait for multiple failure attempts
+      await waitFor(
+        () => {
+          // Should see failure warnings
+          expect(consoleWarnSpy).toHaveBeenCalledWith(
+            '[ResourceMonitor] Failed to fetch metrics:',
+            'Network error'
+          );
+        },
+        { timeout: 5000 }
+      );
+
+      // Give time for circuit breaker to engage
+      await waitFor(
+        () => {
+          const circuitBreakerWarnings = consoleWarnSpy.mock.calls.filter(
+            (call) =>
+              call[0] &&
+              typeof call[0] === 'string' &&
+              call[0].includes('Circuit breaker opened')
+          );
+          expect(circuitBreakerWarnings.length).toBeGreaterThan(0);
+        },
+        { timeout: 10000 }
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('pauses polling when critical operation is active', async () => {
+      const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      mockGet.mockResolvedValue(validMetricsResponse);
+
+      // Set session storage flag to simulate critical operation
+      sessionStorage.setItem('active-export-job', 'true');
+
+      render(<ResourceMonitor compact />);
+
+      // Wait and verify polling is paused
+      await waitFor(
+        () => {
+          const pauseMessages = consoleInfoSpy.mock.calls.filter(
+            (call) =>
+              call[0] &&
+              typeof call[0] === 'string' &&
+              call[0].includes('Critical operation detected')
+          );
+          expect(pauseMessages.length).toBeGreaterThan(0);
+        },
+        { timeout: 5000 }
+      );
+
+      // Clean up
+      sessionStorage.removeItem('active-export-job');
+      consoleInfoSpy.mockRestore();
+    });
+
+    it('resumes normal polling after critical operation completes', async () => {
+      mockGet.mockResolvedValue(validMetricsResponse);
+
+      // Start with critical operation active
+      sessionStorage.setItem('active-export-job', 'true');
+
+      render(<ResourceMonitor compact />);
+
+      // Wait a bit
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Clear the flag to simulate operation completion
+      sessionStorage.removeItem('active-export-job');
+
+      // Verify metrics are fetched after resuming
+      await waitFor(
+        () => {
+          expect(mockGet).toHaveBeenCalled();
+        },
+        { timeout: 5000 }
+      );
+    });
+
+    it('resets backoff interval on successful request', async () => {
+      // First few requests fail
+      let callCount = 0;
+      mockGet.mockImplementation(() => {
+        callCount++;
+        if (callCount <= 2) {
+          return Promise.reject(new Error('Network error'));
+        }
+        return Promise.resolve(validMetricsResponse);
+      });
+
+      render(<ResourceMonitor compact />);
+
+      // Wait for successful request
+      await waitFor(
+        () => {
+          expect(screen.getByText('46%')).toBeInTheDocument();
+        },
+        { timeout: 15000 }
+      );
+
+      // After success, polling should reset to normal interval
+      // We can't directly test the interval, but we can verify 
+      // that subsequent requests happen reasonably quickly
+      const callsBeforeSuccess = mockGet.mock.calls.length;
+      
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      
+      // Should have made additional calls at normal 2s interval
+      expect(mockGet.mock.calls.length).toBeGreaterThan(callsBeforeSuccess);
+    });
+  });
 });

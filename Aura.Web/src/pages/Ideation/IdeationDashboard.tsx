@@ -276,6 +276,9 @@ export const IdeationDashboard: React.FC = () => {
       setError(null);
       setFallbackMetadata(null);
       setOriginalTopic(topic);
+      
+      // Signal to ResourceMonitor that a critical LLM operation is active
+      sessionStorage.setItem('active-export-job', 'true');
 
       const normalizedOptions: BrainstormOptions = {
         ...options,
@@ -395,6 +398,8 @@ export const IdeationDashboard: React.FC = () => {
         setError(fullError);
       } finally {
         setLoading(false);
+        // Clear flag to allow ResourceMonitor to resume normal polling
+        sessionStorage.removeItem('active-export-job');
       }
     },
     [ideaCount]
