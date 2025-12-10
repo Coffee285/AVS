@@ -36,7 +36,10 @@ export type MenuEventChannel =
   | 'menu:runDiagnostics'
   | 'menu:openGettingStarted'
   | 'menu:showKeyboardShortcuts'
-  | 'menu:checkForUpdates';
+  | 'menu:checkForUpdates'
+  | 'menu:zoomIn'
+  | 'menu:zoomOut'
+  | 'menu:resetZoom';
 
 /**
  * Standard menu event handler with no parameters
@@ -150,6 +153,15 @@ export interface MenuAPI {
 
   /** Triggered when user selects Help > Check for Updates */
   onCheckForUpdates: (callback: MenuEventHandler) => MenuEventUnsubscribe;
+
+  /** Triggered when user selects View > Zoom In or presses Ctrl+Plus */
+  onZoomIn: (callback: MenuEventHandler) => MenuEventUnsubscribe;
+
+  /** Triggered when user selects View > Zoom Out or presses Ctrl+- */
+  onZoomOut: (callback: MenuEventHandler) => MenuEventUnsubscribe;
+
+  /** Triggered when user selects View > Reset Zoom or presses Ctrl+0 */
+  onResetZoom: (callback: MenuEventHandler) => MenuEventUnsubscribe;
 }
 
 export interface AuraEnvInfo {
