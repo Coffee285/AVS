@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Aura.Core.AI.Cache;
 using Aura.Core.Configuration;
 using Aura.Core.Orchestration;
+using Aura.Core.Orchestrator;
 using Aura.Core.Providers;
 using Aura.Core.Services.Conversation;
 using Aura.Core.Services.Ideation;
@@ -64,7 +65,12 @@ public class IdeationTranslationClientCallTests
         var logger = NullLogger<LlmStageAdapter>.Instance;
         var providers = new Dictionary<string, ILlmProvider>();
         var providerMixerLogger = NullLogger<ProviderMixer>.Instance;
-        var providerMixer = new ProviderMixer(providerMixerLogger);
+        var providerMixingConfig = new Aura.Core.Models.ProviderMixingConfig
+        {
+            LogProviderSelection = true,
+            AutoFallback = true
+        };
+        var providerMixer = new ProviderMixer(providerMixerLogger, providerMixingConfig);
         return new LlmStageAdapter(
             logger,
             providers,
