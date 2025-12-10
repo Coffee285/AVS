@@ -217,7 +217,7 @@ public partial class JobRunner
     /// <param name="currentPercent">The current progress percentage</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>True if recovery was attempted, false otherwise</returns>
-    private async Task<bool> AttemptJobRecoveryAsync(string jobId, string currentStage, int currentPercent, CancellationToken ct)
+    private Task<bool> AttemptJobRecoveryAsync(string jobId, string currentStage, int currentPercent, CancellationToken ct)
     {
         _logger.LogWarning("Attempting recovery for stuck job {JobId} at {Stage}/{Percent}%", 
             jobId, currentStage, currentPercent);
@@ -239,12 +239,12 @@ public partial class JobRunner
                     _logger.LogInformation("Recovery: Force-transitioned job {JobId} from {OldStage} to Rendering", 
                         jobId, currentStage);
                     
-                    return true;
+                    return Task.FromResult(true);
                 }
             }
         }
         
-        return await Task.FromResult(false);
+        return Task.FromResult(false);
     }
 
     /// <summary>
@@ -1470,12 +1470,12 @@ public partial class JobRunner
                 {
                     stage = "Rendering";
                     percent = 70;
-                    formattedMessage = "All " + total + " assets ready. Starting video render...";
+                    formattedMessage = $"All {total} assets ready. Starting video render...";
                     _logger.LogInformation("Batch complete, transitioning to FFmpeg render stage at 70%");
                 }
                 else if ((double)completed / total >= 0.9)
                 {
-                    formattedMessage = "Almost ready (" + completed + "/" + total + " assets). Preparing render...";
+                    formattedMessage = $"Almost ready ({completed}/{total} assets). Preparing render...";
                 }
                 else
                 {
