@@ -1236,6 +1236,24 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
     [timelineStore]
   );
 
+  const handleClipDoubleClick = useCallback(
+    (clipId: string, e: ReactMouseEvent) => {
+      e.stopPropagation();
+      const clip = getClipById(clipId);
+      if (!clip) return;
+
+      // Select the clip
+      timelineStore.selectClip(clipId, false);
+
+      // For text clips, focus on properties panel for editing
+      // For other clips, properties panel will show selected clip details
+      if (clip.type === 'text') {
+        console.log('Text clip double-clicked - properties panel should focus text content');
+      }
+    },
+    [timelineStore, getClipById]
+  );
+
   const handleTrackClick = useCallback(
     (trackId: string) => {
       timelineStore.selectTrack(trackId);
@@ -1704,6 +1722,7 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
           width: Math.max(clipWidth, 30),
         }}
         onClick={(e) => handleClipClick(clip.id, e)}
+        onDoubleClick={(e) => handleClipDoubleClick(clip.id, e)}
         onMouseDown={(e) => handleClipDragStart(clip.id, e)}
         onContextMenu={(e) => handleContextMenu(e, 'clip', clip.id, clip.trackId)}
         initial={{ opacity: 0, scale: 0.95 }}
