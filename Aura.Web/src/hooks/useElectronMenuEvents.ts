@@ -7,10 +7,10 @@
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { zoomIn, zoomOut, resetZoom } from '../constants/zoom';
 import { loggingService } from '../services/loggingService';
 import { MENU_EVENT_ROUTES } from '../services/routeRegistry';
 import type { MenuAPI, OpenRecentProjectData } from '../types/electron-menu';
-import { zoomIn, zoomOut, resetZoom, getCurrentZoom } from '../constants/zoom';
 
 /**
  * React hook that sets up listeners for all Electron menu events
