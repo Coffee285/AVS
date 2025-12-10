@@ -650,9 +650,13 @@ builder.Services.AddSingleton<IConfigureOptions<Aura.Core.Providers.OllamaSettin
 });
 builder.Services.AddHttpClient<Aura.Core.Providers.IOllamaDirectClient, Aura.Core.Providers.OllamaDirectClient>(client =>
 {
-    // HttpClient timeout is managed by OllamaDirectClient (15 min + 5 min buffer = 20 min)
+    // HttpClient timeout is managed by OllamaDirectClient
     // This outer timeout should be longer to allow for multiple retries
-    client.Timeout = TimeSpan.FromMinutes(20);
+    // Use timeout + buffer (300s from OllamaHttpClientHelper.TimeoutBufferSeconds)
+    const int TimeoutBufferSeconds = 300; // 5 minutes
+    var operationTimeout = 15 * 60; // 15 minutes in seconds
+    var timeoutWithBuffer = TimeSpan.FromSeconds(operationTimeout + TimeoutBufferSeconds);
+    client.Timeout = timeoutWithBuffer;
 });
 
 

@@ -76,10 +76,29 @@ public class OllamaDirectClient : IOllamaDirectClient
         // Configure HttpClient from settings
         _httpClient.BaseAddress = new Uri(_settings.BaseUrl);
         
-        // CRITICAL: Set HttpClient timeout to match operation timeout + buffer
-        // This prevents HttpClient from timing out before our operation timeout
-        var timeoutWithBuffer = _settings.Timeout + TimeSpan.FromMinutes(5);
-        _httpClient.Timeout = timeoutWithBuffer;
+        // CRITICAL: Ensure HttpClient timeout is properly synchronized with operation timeout
+        // Add buffer for network latency (matches OllamaHttpClientHelper.TimeoutBufferSeconds = 300)
+        const int TimeoutBufferSeconds = 300; // 5 minutes
+        var requiredTimeout = TimeSpan.FromSeconds(_settings.Timeout.TotalSeconds + TimeoutBufferSeconds);
+        
+        // If HttpClient has infinite timeout, it's already configured for long-running requests
+        if (_httpClient.Timeout != Timeout.InfiniteTimeSpan && _httpClient.Timeout < requiredTimeout)
+        {
+            try
+            {
+                _httpClient.Timeout = requiredTimeout;
+                _logger.LogInformation(
+                    "Configured HttpClient timeout to {Timeout}s for Ollama operations",
+                    requiredTimeout.TotalSeconds);
+            }
+            catch (InvalidOperationException)
+            {
+                // HttpClient already in use - log warning but continue
+                _logger.LogWarning(
+                    "HttpClient already in use, cannot modify timeout. Using existing timeout: {Timeout}s",
+                    _httpClient.Timeout.TotalSeconds);
+            }
+        }
         
         _logger.LogInformation(
             "OllamaDirectClient configured: BaseUrl={BaseUrl}, Timeout={Timeout}s, MaxRetries={MaxRetries}",
