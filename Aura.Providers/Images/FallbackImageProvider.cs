@@ -57,73 +57,76 @@ public class FallbackImageProvider : IImageProvider
         
         _logger.LogDebug("FetchOrGenerateAsync for scene {SceneIndex}: {Query}", scene.Index, truncatedQuery);
 
-        // Try primary providers first
+        Exception? lastPrimaryException = null;
+
+        // Try primary providers first with per-provider timeout
         foreach (var provider in _primaryProviders)
         {
             try
             {
                 _logger.LogDebug("Trying primary provider {ProviderType}", provider.GetType().Name);
                 
-                var results = await provider.SearchAsync(query ?? "scene", 1, ct).ConfigureAwait(false);
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+                
+                var results = await provider.SearchAsync(query ?? "scene", 1, linkedCts.Token).ConfigureAwait(false);
                 
                 if (results != null && results.Count > 0)
                 {
                     _logger.LogInformation(
                         "Primary provider {ProviderType} returned {Count} assets for scene {SceneIndex}",
-                        provider.GetType().Name,
-                        results.Count,
-                        scene.Index);
+                        provider.GetType().Name, results.Count, scene.Index);
                     return results;
                 }
                 
-                _logger.LogDebug(
-                    "Primary provider {ProviderType} returned no results, trying next provider",
-                    provider.GetType().Name);
+                _logger.LogDebug("Primary provider {ProviderType} returned no results, trying next", provider.GetType().Name);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                _logger.LogWarning("Primary provider {ProviderType} timed out for scene {SceneIndex}", 
+                    provider.GetType().Name, scene.Index);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(
-                    ex,
-                    "Primary provider {ProviderType} failed for scene {SceneIndex}, trying next provider",
-                    provider.GetType().Name,
-                    scene.Index);
+                lastPrimaryException = ex;
+                _logger.LogWarning(ex, "Primary provider {ProviderType} failed for scene {SceneIndex}", 
+                    provider.GetType().Name, scene.Index);
             }
         }
 
-        // All primary providers failed or returned empty, use placeholder fallback
+        // All primary providers failed, use placeholder fallback
         _logger.LogInformation(
-            "All {Count} primary providers failed or returned empty for scene {SceneIndex}, using PlaceholderImageProvider fallback",
-            _primaryProviders.Count,
-            scene.Index);
+            "All {Count} primary providers failed for scene {SceneIndex}, using PlaceholderImageProvider",
+            _primaryProviders.Count, scene.Index);
 
         try
         {
             var placeholderResults = await _placeholderProvider.SearchAsync(
-                query ?? "placeholder",
-                1,
-                ct).ConfigureAwait(false);
+                query ?? "placeholder", 1, ct).ConfigureAwait(false);
 
             if (placeholderResults != null && placeholderResults.Count > 0)
             {
                 _logger.LogInformation(
                     "PlaceholderImageProvider generated {Count} fallback assets for scene {SceneIndex}",
-                    placeholderResults.Count,
-                    scene.Index);
+                    placeholderResults.Count, scene.Index);
                 return placeholderResults;
             }
+            
+            // Placeholder returned empty - this should not happen but handle it
+            throw new InvalidOperationException(
+                "PlaceholderImageProvider returned empty results for scene " + scene.Index);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(
-                ex,
-                "PlaceholderImageProvider failed for scene {SceneIndex}",
-                scene.Index);
+            _logger.LogError(ex, "PlaceholderImageProvider failed for scene {SceneIndex}", scene.Index);
+            
+            // CRITICAL FIX: Throw instead of returning empty array
+            // This ensures the pipeline fails fast with a clear error
+            throw new InvalidOperationException(
+                "All image providers including PlaceholderImageProvider failed for scene " + scene.Index + 
+                ". The video cannot be rendered without visual assets. " +
+                "Check disk space and SkiaSharp installation.",
+                ex);
         }
-
-        // Even placeholder failed (should be rare), return empty list
-        _logger.LogWarning(
-            "All providers including PlaceholderImageProvider failed for scene {SceneIndex}",
-            scene.Index);
-        return Array.Empty<Asset>();
     }
 }

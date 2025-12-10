@@ -104,8 +104,24 @@ public class PlaceholderProvider : BaseVisualProvider
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to generate placeholder PNG image");
-            return Task.FromResult<string?>(null);
+            Logger.LogError(ex, "Failed to generate placeholder PNG image for prompt: {Prompt}", prompt);
+            
+            // Check for common failure reasons and provide helpful error
+            if (ex is UnauthorizedAccessException || ex.Message.Contains("access"))
+            {
+                throw new InvalidOperationException(
+                    "Cannot write placeholder image - check write permissions to temp directory: " + 
+                    Path.GetTempPath(), ex);
+            }
+            
+            if (ex.Message.Contains("SkiaSharp") || ex.Message.Contains("libSkia"))
+            {
+                throw new InvalidOperationException(
+                    "SkiaSharp native library not found. Reinstall the application or install SkiaSharp dependencies.", ex);
+            }
+            
+            throw new InvalidOperationException(
+                "Failed to generate placeholder image. Check disk space and system resources.", ex);
         }
     }
 
