@@ -156,10 +156,13 @@ const useStyles = makeStyles({
     padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalS}`,
     borderRadius: openCutTokens.radius.sm,
     backgroundColor: tokens.colorNeutralBackground3,
-    cursor: 'pointer',
+    cursor: 'grab',
     transition: 'background-color 150ms ease-out',
     ':hover': {
       backgroundColor: tokens.colorNeutralBackground1Hover,
+    },
+    ':active': {
+      cursor: 'grabbing',
     },
   },
   captionItemSelected: {
@@ -305,6 +308,24 @@ export const CaptionsPanel: FC<CaptionsPanelProps> = ({ className }) => {
       playbackStore.seek(startTime);
     },
     [selectCaption, playbackStore]
+  );
+
+  const handleCaptionDragStart = useCallback(
+    (
+      e: React.DragEvent,
+      caption: { id: string; text: string; startTime: number; endTime: number }
+    ) => {
+      const dragData = {
+        type: 'caption',
+        captionId: caption.id,
+        text: caption.text,
+        duration: caption.endTime - caption.startTime,
+      };
+
+      e.dataTransfer.setData('application/x-opencut-caption', JSON.stringify(dragData));
+      e.dataTransfer.effectAllowed = 'copy';
+    },
+    []
   );
 
   return (
@@ -529,6 +550,8 @@ export const CaptionsPanel: FC<CaptionsPanelProps> = ({ className }) => {
                       selectedCaptionId === caption.id && styles.captionItemSelected
                     )}
                     onClick={() => handleCaptionClick(caption.id, caption.startTime)}
+                    draggable={true}
+                    onDragStart={(e) => handleCaptionDragStart(e, caption)}
                     layout
                   >
                     <span className={styles.captionTime}>

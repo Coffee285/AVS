@@ -496,6 +496,25 @@ const WAVEFORM_PIXELS_PER_SAMPLE = 2;
 /** Minimum time shift threshold in seconds to trigger ripple preview */
 const MIN_TIME_SHIFT_THRESHOLD = 0.01;
 
+/** Maximum characters for clip name before truncation */
+const MAX_CLIP_NAME_LENGTH = 20;
+
+/** Default text styling for caption-based text clips */
+const DEFAULT_CAPTION_TEXT_STYLE = {
+  fontFamily: 'Inter, system-ui, sans-serif',
+  fontSize: 48,
+  fontWeight: 400,
+  fontStyle: 'normal' as const,
+  textAlign: 'center' as const,
+  color: '#ffffff',
+  strokeColor: '#000000',
+  strokeWidth: 0,
+  shadowColor: 'rgba(0, 0, 0, 0.5)',
+  shadowBlur: 0,
+  shadowOffsetX: 0,
+  shadowOffsetY: 0,
+};
+
 type ContextMenuTarget =
   | { type: 'clip'; clipId: string; trackId: string; time?: number }
   | { type: 'track'; trackId: string; time?: number }
@@ -1370,9 +1389,11 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
       e.preventDefault();
       e.stopPropagation();
 
-      // Check if dragging media from media panel
-      const mediaId = e.dataTransfer.types.includes('application/x-opencut-media');
-      if (!mediaId) return;
+      // Check if dragging media from media panel or caption from captions panel
+      const hasMedia = e.dataTransfer.types.includes('application/x-opencut-media');
+      const hasCaption = e.dataTransfer.types.includes('application/x-opencut-caption');
+
+      if (!hasMedia && !hasCaption) return;
 
       e.dataTransfer.dropEffect = 'copy';
       setIsDraggingMedia(true);
@@ -1422,17 +1443,9 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
       e.stopPropagation();
 
       const mediaId = e.dataTransfer.getData('application/x-opencut-media');
-      if (!mediaId) {
-        setIsDraggingMedia(false);
-        setDragOverTrackId(null);
-        setDropIndicatorPosition(null);
-        return;
-      }
+      const captionData = e.dataTransfer.getData('application/x-opencut-caption');
 
-      // Get media file from store
-      const mediaFile = mediaStore.getMediaById(mediaId);
-      if (!mediaFile) {
-        console.error('Media file not found:', mediaId);
+      if (!mediaId && !captionData) {
         setIsDraggingMedia(false);
         setDragOverTrackId(null);
         setDropIndicatorPosition(null);
@@ -1451,6 +1464,83 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
         if (snapPoint !== null) {
           dropTime = snapPoint;
         }
+      }
+
+      // Handle caption drop
+      if (captionData) {
+        try {
+          const caption = JSON.parse(captionData);
+          const track = getTrackById(trackId);
+
+          let targetTrackId = trackId;
+
+          // If dropped on a non-text track, create a new text track
+          if (track?.type !== 'text') {
+            // Find existing text tracks
+            const textTracks = tracks.filter((t) => t.type === 'text');
+
+            if (textTracks.length === 0) {
+              // No text tracks exist, create one with unique name
+              targetTrackId = timelineStore.addTrack('text');
+            } else {
+              // Use the first text track
+              targetTrackId = textTracks[0].id;
+            }
+          }
+
+          // Create text clip from caption
+          const clipName =
+            caption.text.substring(0, MAX_CLIP_NAME_LENGTH) +
+            (caption.text.length > MAX_CLIP_NAME_LENGTH ? '...' : '');
+
+          timelineStore.addClip({
+            trackId: targetTrackId,
+            type: 'text',
+            name: clipName,
+            mediaId: null,
+            startTime: dropTime,
+            duration: caption.duration,
+            inPoint: 0,
+            outPoint: caption.duration,
+            transform: {
+              scaleX: 100,
+              scaleY: 100,
+              positionX: 0,
+              positionY: 0,
+              rotation: 0,
+              opacity: 100,
+              anchorX: 50,
+              anchorY: 50,
+            },
+            blendMode: 'normal',
+            text: {
+              content: caption.text,
+              ...DEFAULT_CAPTION_TEXT_STYLE,
+            },
+            speed: 1,
+            reversed: false,
+            timeRemapEnabled: false,
+            locked: false,
+          });
+        } catch (error: unknown) {
+          const errorObj = error instanceof Error ? error : new Error(String(error));
+          console.error('Failed to parse caption data:', errorObj.message);
+        }
+
+        setIsDraggingMedia(false);
+        setDragOverTrackId(null);
+        setDropIndicatorPosition(null);
+        return;
+      }
+
+      // Handle media drop
+      const mediaFile = mediaStore.getMediaById(mediaId);
+      if (!mediaFile) {
+        console.error('Media file not found:', mediaId);
+        setIsDraggingMedia(false);
+        setDragOverTrackId(null);
+        setDropIndicatorPosition(null);
+        return;
       }
 
       // Add clip to timeline
@@ -1486,7 +1576,16 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
       setDragOverTrackId(null);
       setDropIndicatorPosition(null);
     },
-    [pixelsPerSecond, snapEnabled, snapToClips, findNearestSnapPoint, mediaStore, timelineStore]
+    [
+      pixelsPerSecond,
+      snapEnabled,
+      snapToClips,
+      findNearestSnapPoint,
+      mediaStore,
+      timelineStore,
+      getTrackById,
+      tracks,
+    ]
   );
 
   // Calculate ripple preview data during drag
