@@ -18,6 +18,9 @@ public class DatabaseInitializationService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<DatabaseInitializationService> _logger;
     private readonly string _databasePath;
+    
+    // Configuration constants
+    private const int IntegrityCheckTimeoutSeconds = 30;
 
     public DatabaseInitializationService(
         IServiceScopeFactory scopeFactory,
@@ -276,7 +279,7 @@ public class DatabaseInitializationService
 
             using var command = connection.CreateCommand();
             command.CommandText = "PRAGMA integrity_check;";
-            command.CommandTimeout = 30; // 30 second timeout for integrity check
+            command.CommandTimeout = IntegrityCheckTimeoutSeconds;
             
             var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
             stopwatch.Stop();

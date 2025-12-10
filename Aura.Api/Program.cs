@@ -58,6 +58,9 @@ using StockProviderDto = Aura.Api.Models.ApiModels.V1.StockProviderDto;
 using StockProvidersResponse = Aura.Api.Models.ApiModels.V1.StockProvidersResponse;
 using QuotaStatusResponse = Aura.Api.Models.ApiModels.V1.QuotaStatusResponse;
 
+// Startup timeout configuration constants
+const int DatabaseInitializationTimeoutSeconds = 60;
+
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
     Args = args,
@@ -2350,21 +2353,21 @@ try
     resolveStopwatch.Stop();
     Log.Information(">>> PROGRAM.CS: Step 1 COMPLETE - Service resolved in {Ms}ms", resolveStopwatch.ElapsedMilliseconds);
     
-    Log.Information(">>> PROGRAM.CS: Step 2 - Calling InitializeAsync with 60 second timeout");
+    Log.Information(">>> PROGRAM.CS: Step 2 - Calling InitializeAsync with {Timeout} second timeout", DatabaseInitializationTimeoutSeconds);
     var initStopwatch = System.Diagnostics.Stopwatch.StartNew();
     
-    // Add timeout protection to database initialization (60 seconds)
-    using var dbInitCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+    // Add timeout protection to database initialization
+    using var dbInitCts = new CancellationTokenSource(TimeSpan.FromSeconds(DatabaseInitializationTimeoutSeconds));
     var initTask = dbInitService.InitializeAsync(dbInitCts.Token);
     
     // Check if initialization completes within timeout
-    if (await Task.WhenAny(initTask, Task.Delay(TimeSpan.FromSeconds(60), dbInitCts.Token)).ConfigureAwait(false) != initTask)
+    if (await Task.WhenAny(initTask, Task.Delay(TimeSpan.FromSeconds(DatabaseInitializationTimeoutSeconds), dbInitCts.Token)).ConfigureAwait(false) != initTask)
     {
         initStopwatch.Stop();
         Log.Error(">>> PROGRAM.CS: DATABASE INITIALIZATION TIMED OUT after {Ms}ms", initStopwatch.ElapsedMilliseconds);
         Log.Error(">>> PROGRAM.CS: This indicates database operations are hanging");
         Log.Error(">>> PROGRAM.CS: Application will continue with degraded database functionality");
-        throw new TimeoutException("Database initialization timed out after 60 seconds");
+        throw new TimeoutException($"Database initialization timed out after {DatabaseInitializationTimeoutSeconds} seconds");
     }
     
     var initResult = await initTask.ConfigureAwait(false);

@@ -17,6 +17,9 @@ public class StartupInitializationService : IHostedService
     private readonly ILogger<StartupInitializationService> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly List<InitializationStep> _initializationSteps;
+    
+    // Timeout configuration constants
+    private const int DefaultStepTimeoutSeconds = 10;
 
     public StartupInitializationService(
         ILogger<StartupInitializationService> logger,
@@ -39,7 +42,7 @@ public class StartupInitializationService : IHostedService
         {
             Name = "Database Connectivity",
             IsCritical = false, // Changed to non-critical - app can start without DB, will retry
-            TimeoutSeconds = 10, // Reduced from 30s to fail faster
+            TimeoutSeconds = DefaultStepTimeoutSeconds,
             InitializeFunc = async (sp, ct) =>
             {
                 var logger = sp.GetRequiredService<ILogger<StartupInitializationService>>();
@@ -68,7 +71,7 @@ public class StartupInitializationService : IHostedService
         {
             Name = "Required Directories",
             IsCritical = true,
-            TimeoutSeconds = 10,
+            TimeoutSeconds = DefaultStepTimeoutSeconds,
             InitializeFunc = (sp, ct) =>
             {
                 var logger = sp.GetRequiredService<ILogger<StartupInitializationService>>();
@@ -108,7 +111,7 @@ public class StartupInitializationService : IHostedService
         {
             Name = "FFmpeg Availability",
             IsCritical = false, // Not critical - can run without FFmpeg for some operations
-            TimeoutSeconds = 10,
+            TimeoutSeconds = DefaultStepTimeoutSeconds,
             InitializeFunc = async (sp, ct) =>
             {
                 var logger = sp.GetRequiredService<ILogger<StartupInitializationService>>();
@@ -134,7 +137,7 @@ public class StartupInitializationService : IHostedService
         {
             Name = "AI Services",
             IsCritical = false,
-            TimeoutSeconds = 10,
+            TimeoutSeconds = DefaultStepTimeoutSeconds,
             InitializeFunc = (sp, ct) =>
             {
                 var logger = sp.GetRequiredService<ILogger<StartupInitializationService>>();
