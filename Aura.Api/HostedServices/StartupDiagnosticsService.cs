@@ -22,21 +22,27 @@ public class StartupDiagnosticsService : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("=== Aura API Starting ===");
-        _logger.LogInformation("Environment: {Environment}", _environment.EnvironmentName);
-        _logger.LogInformation("Content Root: {ContentRoot}", _environment.ContentRootPath);
-        _logger.LogInformation("Web Root: {WebRoot}", _environment.WebRootPath);
-        _logger.LogInformation("URLs: {Urls}", _configuration["ASPNETCORE_URLS"] ?? "Not configured");
-        _logger.LogInformation(".NET Version: {Version}", Environment.Version);
-        _logger.LogInformation("OS: {OS}", Environment.OSVersion);
-        _logger.LogInformation("Machine: {Machine}", Environment.MachineName);
-        _logger.LogInformation("Processors: {Processors}", Environment.ProcessorCount);
-        _logger.LogInformation("Working Set: {WorkingSet:N0} bytes", Environment.WorkingSet);
+        var startupStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        
+        _logger.LogInformation("=== STARTUP DIAGNOSTICS SERVICE: StartAsync ENTRY ===");
+        _logger.LogInformation(">>> DIAGNOSTICS: Environment: {Environment}", _environment.EnvironmentName);
+        _logger.LogInformation(">>> DIAGNOSTICS: Content Root: {ContentRoot}", _environment.ContentRootPath);
+        _logger.LogInformation(">>> DIAGNOSTICS: Web Root: {WebRoot}", _environment.WebRootPath);
+        _logger.LogInformation(">>> DIAGNOSTICS: URLs: {Urls}", _configuration["ASPNETCORE_URLS"] ?? "Not configured");
+        _logger.LogInformation(">>> DIAGNOSTICS: .NET Version: {Version}", Environment.Version);
+        _logger.LogInformation(">>> DIAGNOSTICS: OS: {OS}", Environment.OSVersion);
+        _logger.LogInformation(">>> DIAGNOSTICS: Machine: {Machine}", Environment.MachineName);
+        _logger.LogInformation(">>> DIAGNOSTICS: Processors: {Processors}", Environment.ProcessorCount);
+        _logger.LogInformation(">>> DIAGNOSTICS: Working Set: {WorkingSet:N0} bytes", Environment.WorkingSet);
+        _logger.LogInformation(">>> DIAGNOSTICS: Thread ID: {ThreadId}, Process ID: {ProcessId}", 
+            Environment.CurrentManagedThreadId, Environment.ProcessId);
         
         // Check for critical dependencies
+        _logger.LogInformation(">>> DIAGNOSTICS: Checking FFmpeg availability");
         var ffmpegPath = _configuration["FFmpeg:BinaryPath"] ?? "ffmpeg";
         try
         {
+            var ffmpegStopwatch = System.Diagnostics.Stopwatch.StartNew();
             using var process = Process.Start(new ProcessStartInfo
             {
                 FileName = ffmpegPath,
@@ -49,22 +55,33 @@ public class StartupDiagnosticsService : IHostedService
             if (process != null)
             {
                 process.WaitForExit(FfmpegCheckTimeoutMs);
+                ffmpegStopwatch.Stop();
+                
                 if (process.ExitCode == 0)
                 {
-                    _logger.LogInformation("FFmpeg: Available at {Path}", ffmpegPath);
+                    _logger.LogInformation(">>> DIAGNOSTICS: FFmpeg available at {Path} (checked in {Ms}ms)", 
+                        ffmpegPath, ffmpegStopwatch.ElapsedMilliseconds);
                 }
                 else
                 {
-                    _logger.LogWarning("FFmpeg: Found but returned non-zero exit code");
+                    _logger.LogWarning(">>> DIAGNOSTICS: FFmpeg found but returned non-zero exit code (checked in {Ms}ms)", 
+                        ffmpegStopwatch.ElapsedMilliseconds);
                 }
             }
+            else
+            {
+                _logger.LogWarning(">>> DIAGNOSTICS: Failed to start FFmpeg process");
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            _logger.LogWarning("FFmpeg: Not found or not accessible at {Path}", ffmpegPath);
+            _logger.LogWarning(ex, ">>> DIAGNOSTICS: FFmpeg not found or not accessible at {Path}", ffmpegPath);
         }
         
-        _logger.LogInformation("=== Startup Diagnostics Complete ===");
+        startupStopwatch.Stop();
+        _logger.LogInformation("=== STARTUP DIAGNOSTICS SERVICE: StartAsync EXIT - Total time: {Ms}ms ===", 
+            startupStopwatch.ElapsedMilliseconds);
+        
         return Task.CompletedTask;
     }
 

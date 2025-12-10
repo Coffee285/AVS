@@ -62,11 +62,22 @@ public class OllamaDetectionService : IHostedService, IDisposable
     /// </summary>
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("OllamaDetectionService starting background detection");
+        _logger.LogInformation("=== OLLAMA DETECTION SERVICE: StartAsync ENTRY ===");
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        _logger.LogInformation(">>> OLLAMA DETECT: Starting background detection (fire-and-forget)");
 
         // Initial detection (fire and forget to not block startup, but save task for WaitForInitialDetectionAsync)
-        _initialDetectionTask = Task.Run(async () => await RefreshDetectionAsync(CancellationToken.None).ConfigureAwait(false), cancellationToken);
+        _initialDetectionTask = Task.Run(async () => 
+        {
+            _logger.LogInformation(">>> OLLAMA DETECT: Background task started");
+            await RefreshDetectionAsync(CancellationToken.None).ConfigureAwait(false);
+            _logger.LogInformation(">>> OLLAMA DETECT: Initial refresh complete");
+        }, cancellationToken);
 
+        _logger.LogInformation(">>> OLLAMA DETECT: Setting up periodic refresh timer (interval: {Interval}s)", 
+            _refreshInterval.TotalSeconds);
+        
         // Setup periodic refresh every 15 seconds to detect status changes quickly
         _refreshTimer = new Timer(
             async _ => await RefreshDetectionAsync(CancellationToken.None).ConfigureAwait(false),
@@ -74,6 +85,10 @@ public class OllamaDetectionService : IHostedService, IDisposable
             _refreshInterval,
             _refreshInterval);
 
+        stopwatch.Stop();
+        _logger.LogInformation("=== OLLAMA DETECTION SERVICE: StartAsync EXIT - {Ms}ms (non-blocking) ===", 
+            stopwatch.ElapsedMilliseconds);
+            
         return Task.CompletedTask;
     }
 
