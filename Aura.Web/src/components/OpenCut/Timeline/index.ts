@@ -13,3 +13,4 @@ export {
   type RippleClipPreview,
   type RippleDirection,
 } from './RipplePreview';
+export { TimelineContextMenu, type TimelineContextMenuProps } from './TimelineContextMenu';
