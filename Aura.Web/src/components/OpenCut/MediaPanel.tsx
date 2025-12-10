@@ -11,34 +11,34 @@
  */
 
 import {
-    Button,
-    Dropdown,
-    Input,
-    Menu,
-    MenuDivider,
-    MenuItem,
-    MenuList,
-    MenuPopover,
-    MenuTrigger,
-    Option,
-    Text,
-    Tooltip,
-    makeStyles,
-    mergeClasses,
-    tokens,
+  Button,
+  Dropdown,
+  Input,
+  Menu,
+  MenuDivider,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+  Option,
+  Text,
+  Tooltip,
+  makeStyles,
+  mergeClasses,
+  tokens,
 } from '@fluentui/react-components';
 import {
-    Add24Regular,
-    Delete24Regular,
-    Folder24Regular,
-    Grid24Regular,
-    Image24Regular,
-    Info24Regular,
-    MoreHorizontal24Regular,
-    MusicNote224Regular,
-    Search24Regular,
-    TextBulletListSquare24Regular,
-    Video24Regular,
+  Add24Regular,
+  Delete24Regular,
+  Folder24Regular,
+  Grid24Regular,
+  Image24Regular,
+  Info24Regular,
+  MoreHorizontal24Regular,
+  MusicNote224Regular,
+  Search24Regular,
+  TextBulletListSquare24Regular,
+  Video24Regular,
 } from '@fluentui/react-icons';
 import type { DragEvent, FC, MouseEvent as ReactMouseEvent } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -149,7 +149,7 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    cursor: 'grab',
+    cursor: openCutTokens.cursors.grab,
     border: `1px solid transparent`,
     transition: `all ${openCutTokens.animation.duration.fast} ${openCutTokens.animation.easing.easeOut}`,
     overflow: 'hidden',
@@ -165,7 +165,7 @@ const useStyles = makeStyles({
       outlineOffset: '2px',
     },
     ':active': {
-      cursor: 'grabbing',
+      cursor: openCutTokens.cursors.grabbing,
     },
   },
   mediaItemSelected: {
@@ -176,6 +176,7 @@ const useStyles = makeStyles({
   mediaItemDragging: {
     opacity: 0.5,
     transform: 'scale(0.95)',
+    cursor: openCutTokens.cursors.grabbing,
   },
   mediaListItem: {
     display: 'flex',
@@ -183,10 +184,13 @@ const useStyles = makeStyles({
     gap: openCutTokens.spacing.sm,
     padding: openCutTokens.spacing.sm,
     borderRadius: tokens.borderRadiusMedium,
-    cursor: 'grab',
+    cursor: openCutTokens.cursors.grab,
     transition: `all ${openCutTokens.animation.duration.fast} ${openCutTokens.animation.easing.easeOut}`,
     ':hover': {
       backgroundColor: tokens.colorNeutralBackground3,
+    },
+    ':active': {
+      cursor: openCutTokens.cursors.grabbing,
     },
   },
   mediaListItemSelected: {
@@ -288,6 +292,7 @@ const useStyles = makeStyles({
     border: `2px dashed ${tokens.colorBrandStroke1}`,
     backgroundColor: tokens.colorBrandBackground2,
     transform: 'scale(1.01)',
+    cursor: openCutTokens.cursors.copy,
   },
   dropZoneIcon: {
     color: tokens.colorNeutralForeground3,
@@ -441,15 +446,12 @@ export const MediaPanel: FC<MediaPanelProps> = ({ className }) => {
     setContextMenuPosition(null);
   }, []);
 
-  const handleContextMenu = useCallback(
-    (media: OpenCutMediaFile, e: ReactMouseEvent) => {
-      e.preventDefault();
-      setContextMenuOpen(true);
-      setContextMenuMedia(media);
-      setContextMenuPosition({ x: e.clientX, y: e.clientY });
-    },
-    []
-  );
+  const handleContextMenu = useCallback((media: OpenCutMediaFile, e: ReactMouseEvent) => {
+    e.preventDefault();
+    setContextMenuOpen(true);
+    setContextMenuMedia(media);
+    setContextMenuPosition({ x: e.clientX, y: e.clientY });
+  }, []);
 
   const handleDeleteMedia = useCallback(
     (mediaId: string) => {
