@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Aura.Core.Captions;
 using Aura.Core.Dependencies;
 using Aura.Core.Errors;
 using Aura.Core.Models;
@@ -945,7 +946,8 @@ public class FfmpegVideoComposer : IVideoComposer
                 narrationInputIndex,
                 musicInputIndex,
                 burnInSubtitles,
-                timeline.SubtitlesPath);
+                timeline.SubtitlesPath,
+                spec.CaptionStyle);
 
             if (!string.IsNullOrEmpty(filterGraph))
             {
@@ -1102,7 +1104,7 @@ public class FfmpegVideoComposer : IVideoComposer
     /// Builds a complex filter graph for visual composition with Ken Burns effects and fade transitions.
     /// Applies subtle Ken Burns effect (1.0 to 1.1 zoom) to static images by default.
     /// Applies fade transitions (0.5s) between scenes.
-    /// Optionally burns in subtitles if enabled.
+    /// Optionally burns in subtitles if enabled with configurable styling.
     /// </summary>
     private string BuildVisualCompositionFilter(
         List<VisualAssetInfo> assets,
@@ -1113,7 +1115,8 @@ public class FfmpegVideoComposer : IVideoComposer
         int narrationInputIndex,
         int musicInputIndex,
         bool burnInSubtitles,
-        string? subtitlesPath)
+        string? subtitlesPath,
+        CaptionRenderStyle? captionStyle)
     {
         if (assets.Count == 0)
         {
@@ -1216,21 +1219,16 @@ public class FfmpegVideoComposer : IVideoComposer
         {
             _logger.LogInformation("Adding subtitle burn-in filter for: {Path}", subtitlesPath);
             
-            // Escape path for FFmpeg (handle Windows backslashes, colons, and quotes)
-            var escapedPath = subtitlesPath
-                .Replace("\\", "\\\\")
-                .Replace(":", "\\:")
-                .Replace("'", "\\'");
+            // Use provided caption style or fall back to professional defaults
+            var style = captionStyle ?? new CaptionRenderStyle();
             
-            // Build subtitle filter with professional styling
-            var subtitleFilter = "subtitles='" + escapedPath + "':force_style='" +
-                "FontName=Arial," +
-                "FontSize=24," +
-                "PrimaryColour=&HFFFFFF&," +
-                "OutlineColour=&H000000&," +
-                "Outline=2," +
-                "BorderStyle=3," +
-                "Alignment=2'";
+            // Use CaptionBuilder to generate the filter with proper styling
+            var captionBuilder = new CaptionBuilder(
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<CaptionBuilder>.Instance);
+            var subtitleFilter = captionBuilder.BuildBurnInFilter(subtitlesPath, style);
+            
+            _logger.LogDebug("Subtitle filter with style - Font: {Font}, Size: {Size}, Alignment: {Align}", 
+                style.FontName, style.FontSize, style.Alignment);
             
             // Apply subtitle filter to video output
             // If we have a single asset, input is [vout], otherwise it's the last transition output

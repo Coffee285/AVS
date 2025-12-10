@@ -132,6 +132,7 @@ export interface RenderSettingsDto {
   audioBitrateK: number;
   enableSceneCut: boolean;
   burnInCaptions?: boolean;
+  captionStyle?: SubtitleFontConfigDto | null;
 }
 
 export interface ApplyProfileRequest {
@@ -1734,6 +1735,8 @@ export interface SubtitleFontConfigDto {
   outlineWidth: number;
   alignment: string;
   isRTL: boolean;
+  borderStyle?: number;
+  rtlFontFallback?: string | null;
 }
 
 /**

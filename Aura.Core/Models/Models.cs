@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Aura.Core.Captions;
 using Aura.Core.Models.Audience;
 using Aura.Core.Models.RAG;
 
@@ -134,7 +135,8 @@ public record RenderSpec(
     bool EnableSceneCut = true,
     ScriptRefinementConfig? RefinementConfig = null,
     string? JobId = null,
-    bool BurnInCaptions = false);
+    bool BurnInCaptions = false,
+    CaptionRenderStyle? CaptionStyle = null);
 
 public record RenderProgress(float Percentage, TimeSpan Elapsed, TimeSpan Remaining, string CurrentStage);
 

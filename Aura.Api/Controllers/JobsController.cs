@@ -1,4 +1,5 @@
 using Aura.Core.Artifacts;
+using Aura.Core.Captions;
 using Aura.Core.Configuration;
 using Aura.Core.Models;
 using Aura.Core.Orchestrator;
@@ -180,7 +181,9 @@ public class JobsController : ControllerBase
                 Fps: request.RenderSpec.Fps,
                 Codec: request.RenderSpec.Codec,
                 QualityLevel: request.RenderSpec.QualityLevel,
-                EnableSceneCut: request.RenderSpec.EnableSceneCut
+                EnableSceneCut: request.RenderSpec.EnableSceneCut,
+                BurnInCaptions: request.RenderSpec.BurnInCaptions,
+                CaptionStyle: request.RenderSpec.CaptionStyle
             );
 
             IImageProvider? imageProviderOverride = null;
@@ -1836,6 +1839,33 @@ public class JobsController : ControllerBase
             "dramatic" => Core.Models.PauseStyle.Dramatic,
             _ => Core.Models.PauseStyle.Natural
         };
+    }
+
+    /// <summary>
+    /// Maps SubtitleFontConfigDto to CaptionRenderStyle
+    /// </summary>
+    private static CaptionRenderStyle MapCaptionStyle(SubtitleFontConfigDto dto)
+    {
+        // Map ASS alignment values (1-9 numpad layout) from string alignment
+        int alignment = dto.Alignment.ToLowerInvariant() switch
+        {
+            "left" => 1,     // bottom-left
+            "center" => 2,   // bottom-center
+            "right" => 3,    // bottom-right
+            _ => 2           // default to bottom-center
+        };
+
+        return new CaptionRenderStyle(
+            FontName: dto.FontFamily,
+            FontSize: dto.FontSize,
+            PrimaryColor: dto.PrimaryColor,
+            OutlineColor: dto.OutlineColor,
+            OutlineWidth: dto.OutlineWidth,
+            BorderStyle: dto.BorderStyle,
+            Alignment: alignment,
+            IsRightToLeft: dto.IsRTL,
+            RtlFontFallback: dto.RtlFontFallback
+        );
     }
 }
 
