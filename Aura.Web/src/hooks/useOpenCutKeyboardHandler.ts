@@ -19,6 +19,8 @@ export interface UseOpenCutKeyboardHandlerOptions {
   enabled?: boolean;
   /** Callback for unhandled actions */
   onUnhandledAction?: (action: string) => void;
+  /** Callback for showing keyboard shortcuts overlay */
+  onShowKeyboardShortcuts?: () => void;
 }
 
 /**
@@ -70,7 +72,7 @@ function isInputFocused(): boolean {
 export function useOpenCutKeyboardHandler(
   options: UseOpenCutKeyboardHandlerOptions = {}
 ): InOutPoints {
-  const { enabled = true, onUnhandledAction } = options;
+  const { enabled = true, onUnhandledAction, onShowKeyboardShortcuts } = options;
 
   const keybindingsStore = useOpenCutKeybindingsStore();
   const playbackStore = useOpenCutPlaybackStore();
@@ -370,6 +372,24 @@ export function useOpenCutKeyboardHandler(
       // Don't intercept if typing in an input
       if (isInputFocused()) return;
 
+      // Handle keyboard shortcuts overlay (? or Cmd/Ctrl + /)
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const cmdOrCtrl = isMac ? event.metaKey : event.ctrlKey;
+      
+      if (event.key === '?' && !event.shiftKey && onShowKeyboardShortcuts) {
+        event.preventDefault();
+        event.stopPropagation();
+        onShowKeyboardShortcuts();
+        return;
+      }
+      
+      if (event.key === '/' && cmdOrCtrl && onShowKeyboardShortcuts) {
+        event.preventDefault();
+        event.stopPropagation();
+        onShowKeyboardShortcuts();
+        return;
+      }
+
       // Get key and modifiers
       const key = event.key;
       const modifiers = getModifiersFromEvent(event);
@@ -386,7 +406,7 @@ export function useOpenCutKeyboardHandler(
         executeAction(keybinding.action);
       }
     },
-    [enabled, keybindingsStore, executeAction]
+    [enabled, keybindingsStore, executeAction, onShowKeyboardShortcuts]
   );
 
   // Set up event listener
