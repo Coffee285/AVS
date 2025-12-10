@@ -1,4 +1,5 @@
 using Aura.Core.Artifacts;
+using Aura.Core.Captions;
 using Aura.Core.Configuration;
 using Aura.Core.Models;
 using Aura.Core.Orchestrator;
@@ -180,7 +181,9 @@ public class JobsController : ControllerBase
                 Fps: request.RenderSpec.Fps,
                 Codec: request.RenderSpec.Codec,
                 QualityLevel: request.RenderSpec.QualityLevel,
-                EnableSceneCut: request.RenderSpec.EnableSceneCut
+                EnableSceneCut: request.RenderSpec.EnableSceneCut,
+                BurnInCaptions: request.RenderSpec.BurnInCaptions,
+                CaptionStyle: request.RenderSpec.CaptionStyle
             );
 
             IImageProvider? imageProviderOverride = null;

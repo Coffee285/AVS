@@ -75,7 +75,8 @@ public record RenderSettingsDto(
     int VideoBitrateK,
     int AudioBitrateK,
     bool EnableSceneCut,
-    bool BurnInCaptions = false);
+    bool BurnInCaptions = false,
+    SubtitleFontConfigDto? CaptionStyle = null);
 
 public record RenderJobDto(
     string Id,
@@ -1255,7 +1256,7 @@ public record RecommendedVoiceDto(
     string Quality);
 
 /// <summary>
-/// Font configuration for subtitles
+/// Font configuration for subtitles with full styling support
 /// </summary>
 public record SubtitleFontConfigDto(
     string FontFamily,
@@ -1264,7 +1265,9 @@ public record SubtitleFontConfigDto(
     string OutlineColor,
     int OutlineWidth,
     string Alignment,
-    bool IsRTL);
+    bool IsRTL,
+    int BorderStyle = 3,
+    string? RtlFontFallback = null);
 
 /// <summary>
 /// Request to generate subtitles with custom font
