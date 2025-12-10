@@ -32,6 +32,7 @@ import {
 } from '@fluentui/react-icons';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { zoomIn, zoomOut, resetZoom } from '../../constants/zoom';
 import { useWorkspaceLayoutStore } from '../../state/workspaceLayout';
 import { WorkspaceLayoutSwitcher } from '../EditorLayout/WorkspaceLayoutSwitcher';
 import { WorkspaceManager } from '../video-editor/WorkspaceManager';
@@ -184,6 +185,18 @@ export function MenuBar({
     document.execCommand('paste');
   };
 
+  const handleZoomIn = () => {
+    zoomIn();
+  };
+
+  const handleZoomOut = () => {
+    zoomOut();
+  };
+
+  const handleResetZoom = () => {
+    resetZoom();
+  };
+
   return (
     <div className={styles.menuBar}>
       {/* File Menu */}
@@ -307,9 +320,18 @@ export function MenuBar({
               History Panel
             </MenuItem>
             <MenuDivider />
-            <MenuItem>Zoom In</MenuItem>
-            <MenuItem>Zoom Out</MenuItem>
-            <MenuItem>Fit to Window</MenuItem>
+            <MenuItem onClick={handleZoomIn}>
+              Zoom In
+              <span className={styles.shortcut}>Ctrl++</span>
+            </MenuItem>
+            <MenuItem onClick={handleZoomOut}>
+              Zoom Out
+              <span className={styles.shortcut}>Ctrl+-</span>
+            </MenuItem>
+            <MenuItem onClick={handleResetZoom}>
+              Reset Zoom
+              <span className={styles.shortcut}>Ctrl+0</span>
+            </MenuItem>
           </MenuList>
         </MenuPopover>
       </Menu>

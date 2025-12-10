@@ -74,35 +74,36 @@ console.info('[Main] Protocol:', window.location.protocol);
 console.info('[Main] User Agent:', navigator.userAgent);
 
 // ===== DEFAULT ZOOM INITIALIZATION =====
-// Respect system/browser scaling and avoid hard‑shrinking the UI.
-// We still support a persisted user preference, but the baseline is now 100%.
+// Default to 140% zoom for better space utilization
+// Migrate users from old 120% default to new 140% default
 const initializeDefaultZoom = (): void => {
-  const ZOOM_KEY = 'aura-zoom-level';
-  const LEGACY_DEFAULT_ZOOM = 0.9; // Old hard-coded default we want to migrate away from
+  const ZOOM_KEY = 'aura-ui-zoom';
+  const OLD_DEFAULT_ZOOM = '120'; // Old default we want to migrate away from
+  const NEW_DEFAULT_ZOOM = '140'; // New optimal default
 
   const savedZoom = localStorage.getItem(ZOOM_KEY);
 
   // Use type assertion for the non-standard (but widely supported) zoom CSS property
   const htmlStyle = document.documentElement.style as CSSStyleDeclaration & { zoom: string };
 
-  // If no preference or legacy 90% default, reset to 100%
-  if (savedZoom === null || savedZoom === String(LEGACY_DEFAULT_ZOOM)) {
-    htmlStyle.zoom = '1';
-    localStorage.setItem(ZOOM_KEY, '1');
-    console.info('[Main] Applied default zoom level: 100%');
+  // If no preference or old 120% default, upgrade to 140%
+  if (savedZoom === null || savedZoom === OLD_DEFAULT_ZOOM) {
+    htmlStyle.setProperty('--aura-base-font-size', `${NEW_DEFAULT_ZOOM}%`);
+    localStorage.setItem(ZOOM_KEY, NEW_DEFAULT_ZOOM);
+    console.info('[Main] Applied default zoom level: 140%');
     return;
   }
 
   // Apply a valid saved preference
-  const zoomLevel = parseFloat(savedZoom);
-  if (!isNaN(zoomLevel) && zoomLevel > 0 && zoomLevel <= 2) {
-    htmlStyle.zoom = String(zoomLevel);
-    console.info(`[Main] Applied saved zoom level: ${zoomLevel * 100}%`);
+  const zoomLevel = parseInt(savedZoom, 10);
+  if (!isNaN(zoomLevel) && zoomLevel >= 80 && zoomLevel <= 180) {
+    htmlStyle.setProperty('--aura-base-font-size', `${zoomLevel}%`);
+    console.info(`[Main] Applied saved zoom level: ${zoomLevel}%`);
   } else {
-    // Fallback to 100% if stored value is invalid
-    htmlStyle.zoom = '1';
-    localStorage.setItem(ZOOM_KEY, '1');
-    console.warn('[Main] Invalid saved zoom level detected, reset to 100%');
+    // Fallback to 140% if stored value is invalid
+    htmlStyle.setProperty('--aura-base-font-size', `${NEW_DEFAULT_ZOOM}%`);
+    localStorage.setItem(ZOOM_KEY, NEW_DEFAULT_ZOOM);
+    console.warn('[Main] Invalid saved zoom level detected, reset to 140%');
   }
 };
 

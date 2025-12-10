@@ -3,6 +3,7 @@ import React, { ReactNode, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useTheme } from '../App';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
+import { useZoomShortcuts } from '../hooks/useZoomShortcuts';
 import { gaps, pageLayout, spacing } from '../themes/layout';
 import { SkipLinks } from './Accessibility/SkipLinks';
 import { Breadcrumbs } from './Breadcrumbs';
@@ -10,7 +11,6 @@ import { NotificationCenter } from './dashboard/NotificationCenter';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ProviderHealthIndicator } from './Header';
 import { GlobalLlmSelector } from './LLMMenu/GlobalLlmSelector';
-import { ZoomControls } from './ZoomControls';
 import { MobileBottomNav } from './MobileBottomNav';
 import { MobileFAB } from './MobileFAB';
 import { ResultsTray } from './ResultsTray';
@@ -153,6 +153,9 @@ export function Layout({
   const { isDarkMode, toggleTheme } = useTheme();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  // Enable global zoom keyboard shortcuts
+  useZoomShortcuts();
+
   // Swipe gesture support
   const swipeRef = useSwipeGesture({
     onSwipeRight: () => {
@@ -208,7 +211,6 @@ export function Layout({
           <div className={styles.topBar} role="banner" aria-label="Top bar">
             <UndoRedoButtons />
             <div className={styles.topBarActions}>
-              <ZoomControls />
               <ProviderHealthIndicator />
               <GlobalLlmSelector />
               <NotificationCenter />
