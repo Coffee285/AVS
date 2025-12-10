@@ -308,6 +308,13 @@ export const CaptionsPanel: FC<CaptionsPanelProps> = ({ className }) => {
   );
 
   const handleCaptionClick = useCallback(
+    (captionId: string) => {
+      selectCaption(captionId);
+    },
+    [selectCaption]
+  );
+
+  const handleCaptionDoubleClick = useCallback(
     (captionId: string, startTime: number) => {
       selectCaption(captionId);
       playbackStore.seek(startTime);
@@ -393,7 +400,6 @@ export const CaptionsPanel: FC<CaptionsPanelProps> = ({ className }) => {
     },
     [playbackStore, timelineStore, toastsStore]
   );
-
 
   return (
     <div className={mergeClasses(styles.root, className)}>
@@ -616,9 +622,14 @@ export const CaptionsPanel: FC<CaptionsPanelProps> = ({ className }) => {
                       styles.captionItem,
                       selectedCaptionId === caption.id && styles.captionItemSelected
                     )}
-                    onClick={() => handleCaptionClick(caption.id, caption.startTime)}
+                    onClick={() => handleCaptionClick(caption.id)}
+                    onDoubleClick={() => handleCaptionDoubleClick(caption.id, caption.startTime)}
                     draggable={true}
-                    onDragStart={(e) => handleCaptionDragStart(e, caption)}
+                    onDragStart={(e) => {
+                      if ('dataTransfer' in e) {
+                        handleCaptionDragStart(e as unknown as React.DragEvent, caption);
+                      }
+                    }}
                     layout
                   >
                     <span className={styles.captionTime}>

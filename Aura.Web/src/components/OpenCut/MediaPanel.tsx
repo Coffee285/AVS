@@ -516,6 +516,7 @@ export const MediaPanel: FC<MediaPanelProps> = ({ className }) => {
           key={file.id}
           className={mergeClasses(styles.mediaListItem, isSelected && styles.mediaListItemSelected)}
           onClick={() => mediaStore.selectMedia(file.id)}
+          onDoubleClick={() => handleAddToTimeline(file)}
           onContextMenu={(e) => handleContextMenu(file, e)}
           draggable
           onDragStart={(e) => handleMediaDragStart(file.id, e)}
