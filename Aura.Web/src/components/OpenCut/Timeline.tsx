@@ -496,6 +496,25 @@ const WAVEFORM_PIXELS_PER_SAMPLE = 2;
 /** Minimum time shift threshold in seconds to trigger ripple preview */
 const MIN_TIME_SHIFT_THRESHOLD = 0.01;
 
+/** Maximum characters for clip name before truncation */
+const MAX_CLIP_NAME_LENGTH = 20;
+
+/** Default text styling for caption-based text clips */
+const DEFAULT_CAPTION_TEXT_STYLE = {
+  fontFamily: 'Inter, system-ui, sans-serif',
+  fontSize: 48,
+  fontWeight: 400,
+  fontStyle: 'normal' as const,
+  textAlign: 'center' as const,
+  color: '#ffffff',
+  strokeColor: '#000000',
+  strokeWidth: 0,
+  shadowColor: 'rgba(0, 0, 0, 0.5)',
+  shadowBlur: 0,
+  shadowOffsetX: 0,
+  shadowOffsetY: 0,
+};
+
 type ContextMenuTarget =
   | { type: 'clip'; clipId: string; trackId: string; time?: number }
   | { type: 'track'; trackId: string; time?: number }
@@ -1461,8 +1480,8 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
             const textTracks = tracks.filter((t) => t.type === 'text');
 
             if (textTracks.length === 0) {
-              // No text tracks exist, create one
-              targetTrackId = timelineStore.addTrack('text', 'Text 1');
+              // No text tracks exist, create one with unique name
+              targetTrackId = timelineStore.addTrack('text');
             } else {
               // Use the first text track
               targetTrackId = textTracks[0].id;
@@ -1470,10 +1489,14 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
           }
 
           // Create text clip from caption
+          const clipName =
+            caption.text.substring(0, MAX_CLIP_NAME_LENGTH) +
+            (caption.text.length > MAX_CLIP_NAME_LENGTH ? '...' : '');
+
           timelineStore.addClip({
             trackId: targetTrackId,
             type: 'text',
-            name: caption.text.substring(0, 20) + (caption.text.length > 20 ? '...' : ''),
+            name: clipName,
             mediaId: null,
             startTime: dropTime,
             duration: caption.duration,
@@ -1492,18 +1515,7 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
             blendMode: 'normal',
             text: {
               content: caption.text,
-              fontFamily: 'Inter, system-ui, sans-serif',
-              fontSize: 48,
-              fontWeight: 400,
-              fontStyle: 'normal',
-              textAlign: 'center',
-              color: '#ffffff',
-              strokeColor: '#000000',
-              strokeWidth: 0,
-              shadowColor: 'rgba(0, 0, 0, 0.5)',
-              shadowBlur: 0,
-              shadowOffsetX: 0,
-              shadowOffsetY: 0,
+              ...DEFAULT_CAPTION_TEXT_STYLE,
             },
             speed: 1,
             reversed: false,

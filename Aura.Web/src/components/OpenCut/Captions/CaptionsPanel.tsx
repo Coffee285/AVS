@@ -311,21 +311,22 @@ export const CaptionsPanel: FC<CaptionsPanelProps> = ({ className }) => {
   );
 
   const handleCaptionDragStart = useCallback(
-    (e: React.DragEvent, caption: { id: string; text: string; startTime: number; endTime: number }) => {
-      if (!selectedTrackId) return;
-      
+    (
+      e: React.DragEvent,
+      caption: { id: string; text: string; startTime: number; endTime: number }
+    ) => {
       const dragData = {
         type: 'caption',
         captionId: caption.id,
         text: caption.text,
         duration: caption.endTime - caption.startTime,
-        trackId: selectedTrackId,
+        trackId: caption.trackId,
       };
-      
+
       e.dataTransfer.setData('application/x-opencut-caption', JSON.stringify(dragData));
       e.dataTransfer.effectAllowed = 'copy';
     },
-    [selectedTrackId]
+    []
   );
 
   return (
