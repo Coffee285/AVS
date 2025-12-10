@@ -460,9 +460,14 @@ public class VideoGenerationOrchestrator
                 }
                 finally
                 {
+                    // CRITICAL: Always release resources in finally block to prevent deadlocks
                     if (limiterAcquired)
                     {
                         _concurrencyLimiter.Release();
+                    }
+                    if (resourcesAcquired)
+                    {
+                        _resourceMonitor.ReleaseResources(node.EstimatedResourceCost);
                     }
                 }
             }

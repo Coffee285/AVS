@@ -40,13 +40,17 @@ public class PixabayStockProvider : IStockProvider
 
         _logger.LogInformation("Searching Pixabay for: {Query} (count: {Count})", query, count);
 
+        // Add request-level timeout to prevent hanging on slow/stuck requests
+        using var requestTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        requestTimeoutCts.CancelAfter(TimeSpan.FromSeconds(15)); // 15 second per-request timeout
+
         try
         {
             var url = $"https://pixabay.com/api/?key={_apiKey}&q={Uri.EscapeDataString(query)}&per_page={Math.Min(count, 200)}&image_type=photo";
-            var response = await _httpClient.GetAsync(url, ct).ConfigureAwait(false);
+            var response = await _httpClient.GetAsync(url, requestTimeoutCts.Token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            var json = await response.Content.ReadAsStringAsync(requestTimeoutCts.Token).ConfigureAwait(false);
             var doc = JsonDocument.Parse(json);
 
             var assets = new List<Asset>();
@@ -84,6 +88,11 @@ public class PixabayStockProvider : IStockProvider
 
             _logger.LogInformation("Found {Count} images on Pixabay", assets.Count);
             return assets;
+        }
+        catch (OperationCanceledException) when (requestTimeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            _logger.LogWarning("Pixabay API request timed out after 15 seconds for query: {Query}", query);
+            return Array.Empty<Asset>();
         }
         catch (Exception ex)
         {
