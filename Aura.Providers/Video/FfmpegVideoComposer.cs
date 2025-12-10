@@ -219,10 +219,10 @@ public class FfmpegVideoComposer : IVideoComposer
         logWriter?.WriteLine(new string('-', 80));
 
         // Track FFmpeg activity for watchdog timer
-        // FIX: Use volatile for thread-safe reads/writes from timer callback
-        volatile long lastActivityTicks = DateTime.UtcNow.Ticks;
-        volatile float lastProgressPercent = 0f;
-        volatile string? lastStderrLine = null;
+        // Use Interlocked operations for thread-safe access from timer callback
+        long lastActivityTicks = DateTime.UtcNow.Ticks;
+        int lastProgressPercentInt = 0; // Store as int (percent * 100) for Interlocked support
+        string? lastStderrLine = null; // Read-only from timer, written from error handler
 
         // Watchdog timer to detect FFmpeg hanging (no output for 90 seconds)
         var watchdogTimer = new System.Timers.Timer(10000); // Check every 10 seconds
@@ -233,12 +233,13 @@ public class FfmpegVideoComposer : IVideoComposer
                 // Thread-safe read of last activity
                 var lastActivity = new DateTime(System.Threading.Interlocked.Read(ref lastActivityTicks));
                 var inactivityDuration = DateTime.UtcNow - lastActivity;
+                var progressPercent = System.Threading.Interlocked.CompareExchange(ref lastProgressPercentInt, 0, 0) / 100f;
 
                 if (inactivityDuration.TotalSeconds > 30 && inactivityDuration.TotalSeconds < 90)
                 {
                     _logger.LogWarning(
                         "DIAGNOSTIC: FFmpeg no output for {Sec}s at {Prog}%. Memory: {Mem}MB",
-                        (int)inactivityDuration.TotalSeconds, lastProgressPercent,
+                        (int)inactivityDuration.TotalSeconds, progressPercent,
                         process.WorkingSet64 / 1024 / 1024);
                 }
 
@@ -246,7 +247,7 @@ public class FfmpegVideoComposer : IVideoComposer
                 {
                     _logger.LogError(
                         "WATCHDOG: No output for {Sec}s at {Prog}%. Last line: {Line}",
-                        (int)inactivityDuration.TotalSeconds, lastProgressPercent,
+                        (int)inactivityDuration.TotalSeconds, progressPercent,
                         lastStderrLine ?? "N/A");
 
                     try
@@ -271,10 +272,11 @@ public class FfmpegVideoComposer : IVideoComposer
             {
                 try
                 {
+                    var progressPercent = System.Threading.Interlocked.CompareExchange(ref lastProgressPercentInt, 0, 0) / 100f;
                     _logger.LogInformation(
                         "FFmpeg HEARTBEAT: JobId={JobId}, Progress={Progress}%, Elapsed={Elapsed}s, " +
                         "ProcessId={Pid}, Memory={MemoryMB}MB, CPU={CpuSeconds}s",
-                        jobId, lastProgressPercent, (DateTime.UtcNow - startTime).TotalSeconds,
+                        jobId, progressPercent, (DateTime.UtcNow - startTime).TotalSeconds,
                         process.Id,
                         process.WorkingSet64 / 1024 / 1024,
                         process.TotalProcessorTime.TotalSeconds);
@@ -332,7 +334,9 @@ public class FfmpegVideoComposer : IVideoComposer
                             // Calculate progress percentage
                             float percentage = (float)(currentTime.TotalSeconds / totalDuration.TotalSeconds * 100);
                             percentage = Math.Clamp(percentage, 0, 100);
-                            lastProgressPercent = percentage; // Track for watchdog
+                            
+                            // Track for watchdog (thread-safe update)
+                            System.Threading.Interlocked.Exchange(ref lastProgressPercentInt, (int)(percentage * 100));
 
                             // Calculate time remaining
                             var elapsed = now - startTime;
