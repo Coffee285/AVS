@@ -157,9 +157,24 @@ public class FfmpegVideoComposer : IVideoComposer
             _outputDirectory,
             $"AuraVideoStudio_{DateTime.Now:yyyyMMddHHmmss}.{spec.Container}");
 
+        // Determine if we should burn in subtitles
+        bool burnInSubtitles = spec.BurnInCaptions && 
+            !string.IsNullOrEmpty(timeline.SubtitlesPath) && 
+            File.Exists(timeline.SubtitlesPath);
+
+        if (spec.BurnInCaptions && string.IsNullOrEmpty(timeline.SubtitlesPath))
+        {
+            _logger.LogWarning("BurnInCaptions requested but no subtitles path provided (JobId={JobId})", jobId);
+        }
+        else if (spec.BurnInCaptions && !File.Exists(timeline.SubtitlesPath))
+        {
+            _logger.LogWarning("BurnInCaptions requested but subtitle file not found: {Path} (JobId={JobId})", 
+                timeline.SubtitlesPath, jobId);
+        }
+
         // Build the FFmpeg command with hardware acceleration support
         progress.Report(new RenderProgress(ProgressBuildingCommand, TimeSpan.Zero, TimeSpan.Zero, "Building FFmpeg command..."));
-        string ffmpegCommand = await BuildFfmpegCommandAsync(timeline, spec, outputFilePath, ffmpegPath, ct).ConfigureAwait(false);
+        string ffmpegCommand = await BuildFfmpegCommandAsync(timeline, spec, outputFilePath, ffmpegPath, burnInSubtitles, ct).ConfigureAwait(false);
 
         _logger.LogInformation("FFmpeg command (JobId={JobId}): {FFmpegPath} {Command}",
             jobId, ffmpegPath, ffmpegCommand);
@@ -794,7 +809,7 @@ public class FfmpegVideoComposer : IVideoComposer
     /// Build FFmpeg command using FFmpegCommandBuilder with hardware acceleration support.
     /// Applies Ken Burns effects to static images and fade transitions between scenes by default.
     /// </summary>
-    private async Task<string> BuildFfmpegCommandAsync(Timeline timeline, RenderSpec spec, string outputPath, string ffmpegPath, CancellationToken ct)
+    private async Task<string> BuildFfmpegCommandAsync(Timeline timeline, RenderSpec spec, string outputPath, string ffmpegPath, bool burnInSubtitles, CancellationToken ct)
     {
         _logger.LogInformation("Building FFmpeg command for render spec: {Codec} @ {Width}x{Height}, {Fps}fps, {VideoBitrate}kbps",
             spec.Codec, spec.Res.Width, spec.Res.Height, spec.Fps, spec.VideoBitrateK);
@@ -928,12 +943,19 @@ public class FfmpegVideoComposer : IVideoComposer
                 spec.Res.Height,
                 spec.Fps,
                 narrationInputIndex,
-                musicInputIndex);
+                musicInputIndex,
+                burnInSubtitles,
+                timeline.SubtitlesPath);
 
             if (!string.IsNullOrEmpty(filterGraph))
             {
                 builder.AddFilter(filterGraph);
                 _logger.LogInformation("Applied Ken Burns effects and fade transitions to {Count} visual assets", visualAssets.Count);
+                
+                if (burnInSubtitles)
+                {
+                    _logger.LogInformation("Subtitle burn-in enabled for: {Path}", timeline.SubtitlesPath);
+                }
             }
         }
         else
@@ -1080,6 +1102,7 @@ public class FfmpegVideoComposer : IVideoComposer
     /// Builds a complex filter graph for visual composition with Ken Burns effects and fade transitions.
     /// Applies subtle Ken Burns effect (1.0 to 1.1 zoom) to static images by default.
     /// Applies fade transitions (0.5s) between scenes.
+    /// Optionally burns in subtitles if enabled.
     /// </summary>
     private string BuildVisualCompositionFilter(
         List<VisualAssetInfo> assets,
@@ -1088,7 +1111,9 @@ public class FfmpegVideoComposer : IVideoComposer
         int height,
         int fps,
         int narrationInputIndex,
-        int musicInputIndex)
+        int musicInputIndex,
+        bool burnInSubtitles,
+        string? subtitlesPath)
     {
         if (assets.Count == 0)
         {
@@ -1184,6 +1209,35 @@ public class FfmpegVideoComposer : IVideoComposer
 
                 filterParts.Add($"[{inputLabel1}][{inputLabel2}]{fadeTransition}[{outputLabel}]");
             }
+        }
+
+        // Phase 2.5: Add subtitle burn-in if requested
+        if (burnInSubtitles && !string.IsNullOrEmpty(subtitlesPath) && File.Exists(subtitlesPath))
+        {
+            _logger.LogInformation("Adding subtitle burn-in filter for: {Path}", subtitlesPath);
+            
+            // Escape path for FFmpeg (handle Windows backslashes, colons, and quotes)
+            var escapedPath = subtitlesPath
+                .Replace("\\", "\\\\")
+                .Replace(":", "\\:")
+                .Replace("'", "\\'");
+            
+            // Build subtitle filter with professional styling
+            var subtitleFilter = "subtitles='" + escapedPath + "':force_style='" +
+                "FontName=Arial," +
+                "FontSize=24," +
+                "PrimaryColour=&HFFFFFF&," +
+                "OutlineColour=&H000000&," +
+                "Outline=2," +
+                "BorderStyle=3," +
+                "Alignment=2'";
+            
+            // Apply subtitle filter to video output
+            // If we have a single asset, input is [vout], otherwise it's the last transition output
+            filterParts.Add($"[vout]{subtitleFilter}[vout_sub]");
+            
+            // Update the final video output label from [vout] to [vout_sub]
+            // Audio mixing in Phase 3 will reference the correct output
         }
 
         // Phase 3: Audio mixing (AFTER video chain is complete)

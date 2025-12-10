@@ -112,7 +112,13 @@ public record SpeechRecognitionResult(
     TimeSpan Duration,
     string Language,
     double AverageConfidence,
-    string Summary);
+    string Summary)
+{
+    /// <summary>
+    /// Alias for Captions to match problem statement's expected interface
+    /// </summary>
+    public IReadOnlyList<Caption> Segments => Captions;
+};
 
 /// <summary>
 /// Video stabilization result
