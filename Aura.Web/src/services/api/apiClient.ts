@@ -262,6 +262,34 @@ class RequestQueue {
 }
 
 /**
+ * Request throttler to prevent resource exhaustion from too many concurrent requests
+ */
+class RequestThrottler {
+  private activeRequests = 0;
+  private readonly maxConcurrent = 4;
+  private queue: Array<() => void> = [];
+  
+  async throttle<T>(request: () => Promise<T>): Promise<T> {
+    if (this.activeRequests >= this.maxConcurrent) {
+      await new Promise<void>(resolve => {
+        this.queue.push(resolve);
+      });
+    }
+    
+    this.activeRequests++;
+    try {
+      return await request();
+    } finally {
+      this.activeRequests--;
+      const next = this.queue.shift();
+      if (next) next();
+    }
+  }
+}
+
+export const requestThrottler = new RequestThrottler();
+
+/**
  * Extended Axios config with custom options
  */
 export interface ExtendedAxiosRequestConfig extends AxiosRequestConfig {

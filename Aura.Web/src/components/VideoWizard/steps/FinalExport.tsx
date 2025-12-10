@@ -373,6 +373,17 @@ function checkJobCompletion(jobData: JobStatusData): boolean {
 const SSE_CONNECTION_TIMEOUT_MS = 30000; // Timeout for SSE connection establishment
 const JOB_TIMEOUT_MS = 10 * 60 * 1000; // Overall job timeout (10 minutes)
 
+/**
+ * Adaptive polling interval based on elapsed time and progress.
+ * Reduces polling frequency as time passes to prevent resource exhaustion.
+ */
+const getPollingInterval = (elapsedSeconds: number, currentPercent: number): number => {
+  if (currentPercent >= 95) return 1000; // Poll every second near completion
+  if (elapsedSeconds < 60) return 2000; // 2 seconds for first minute
+  if (elapsedSeconds < 180) return 4000; // 4 seconds for first 3 minutes
+  return 8000; // 8 seconds after 3 minutes
+};
+
 const QUALITY_OPTIONS = [
   { label: 'Draft (480p)', value: 'low', bitrate: 1500 },
   { label: 'Standard (720p)', value: 'medium', bitrate: 2500 },
