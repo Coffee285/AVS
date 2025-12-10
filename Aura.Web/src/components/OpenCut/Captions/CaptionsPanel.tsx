@@ -320,7 +320,6 @@ export const CaptionsPanel: FC<CaptionsPanelProps> = ({ className }) => {
         captionId: caption.id,
         text: caption.text,
         duration: caption.endTime - caption.startTime,
-        trackId: caption.trackId,
       };
 
       e.dataTransfer.setData('application/x-opencut-caption', JSON.stringify(dragData));
