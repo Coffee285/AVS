@@ -1947,6 +1947,9 @@ public class VideoOrchestrator
                         throw new InvalidOperationException($"Narration file not found at: {narrationPath}");
                     }
 
+                    // Validate that all scenes have visual assets before render
+                    ValidateSceneAssets(parsedScenes, sceneAssets);
+
                     var timeline = new Providers.Timeline(
                         Scenes: parsedScenes,
                         SceneAssets: sceneAssets,
@@ -2174,5 +2177,40 @@ public class VideoOrchestrator
         // Otherwise, determine stage based on progress percentage
         // This prevents premature transition to PostProcess when batch tasks are incomplete
         return DetermineStageFromProgress(progressPercent);
+    }
+
+    /// <summary>
+    /// Validates that all scenes have visual assets before starting render.
+    /// Throws InvalidOperationException if any scene is missing assets.
+    /// </summary>
+    private void ValidateSceneAssets(List<Scene> scenes, Dictionary<int, IReadOnlyList<Asset>> sceneAssets)
+    {
+        var sceneCount = scenes.Count;
+        
+        if (sceneCount == 0)
+        {
+            throw new InvalidOperationException("No scenes found - cannot render video without scenes");
+        }
+        
+        var missingScenes = new List<int>();
+        
+        for (int i = 0; i < sceneCount; i++)
+        {
+            if (!sceneAssets.ContainsKey(i) || sceneAssets[i] == null)
+            {
+                missingScenes.Add(i);
+            }
+        }
+        
+        if (missingScenes.Count > 0)
+        {
+            var missingList = string.Join(", ", missingScenes);
+            throw new InvalidOperationException(
+                "Cannot start render: Missing visual assets for scenes: " + missingList + 
+                ". Total scenes: " + sceneCount + ", Assets found: " + sceneAssets.Count);
+        }
+        
+        _logger.LogInformation("Validated {AssetCount} scene assets for {SceneCount} scenes", 
+            sceneAssets.Count, sceneCount);
     }
 }

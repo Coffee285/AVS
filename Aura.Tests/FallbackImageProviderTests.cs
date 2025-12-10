@@ -237,4 +237,65 @@ public class FallbackImageProviderTests
         // Assert
         Assert.NotNull(provider);
     }
+
+    [Fact]
+    public async Task FallbackImageProvider_Should_Throw_When_Placeholder_Returns_Empty()
+    {
+        // Arrange
+        var mockPrimaryProvider = new Mock<IStockProvider>();
+        mockPrimaryProvider
+            .Setup(p => p.SearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Primary provider failed"));
+
+        var mockPlaceholderProvider = new Mock<PlaceholderImageProvider>(
+            NullLogger<PlaceholderImageProvider>.Instance);
+        mockPlaceholderProvider
+            .Setup(p => p.SearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Asset>());
+
+        var primaryProviders = new List<IStockProvider> { mockPrimaryProvider.Object };
+        var fallbackProvider = new FallbackImageProvider(
+            _loggerMock.Object, 
+            primaryProviders, 
+            mockPlaceholderProvider.Object);
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fallbackProvider.FetchOrGenerateAsync(_testScene, _testSpec));
+
+        Assert.Contains("PlaceholderImageProvider returned empty results", exception.Message);
+        Assert.Contains("scene 0", exception.Message);
+    }
+
+    [Fact]
+    public async Task FallbackImageProvider_Should_Throw_When_Placeholder_Fails()
+    {
+        // Arrange
+        var mockPrimaryProvider = new Mock<IStockProvider>();
+        mockPrimaryProvider
+            .Setup(p => p.SearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Primary provider failed"));
+
+        var mockPlaceholderProvider = new Mock<PlaceholderImageProvider>(
+            NullLogger<PlaceholderImageProvider>.Instance);
+        mockPlaceholderProvider
+            .Setup(p => p.SearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("SkiaSharp library not found"));
+
+        var primaryProviders = new List<IStockProvider> { mockPrimaryProvider.Object };
+        var fallbackProvider = new FallbackImageProvider(
+            _loggerMock.Object, 
+            primaryProviders, 
+            mockPlaceholderProvider.Object);
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fallbackProvider.FetchOrGenerateAsync(_testScene, _testSpec));
+
+        Assert.Contains("All image providers including PlaceholderImageProvider failed", exception.Message);
+        Assert.Contains("scene 0", exception.Message);
+        Assert.Contains("cannot be rendered without visual assets", exception.Message);
+        Assert.NotNull(exception.InnerException);
+        Assert.Contains("SkiaSharp", exception.InnerException.Message);
+    }
 }
