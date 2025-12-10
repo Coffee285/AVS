@@ -1373,7 +1373,7 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
       // Check if dragging media from media panel or caption from captions panel
       const hasMedia = e.dataTransfer.types.includes('application/x-opencut-media');
       const hasCaption = e.dataTransfer.types.includes('application/x-opencut-caption');
-      
+
       if (!hasMedia && !hasCaption) return;
 
       e.dataTransfer.dropEffect = 'copy';
@@ -1425,7 +1425,7 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
 
       const mediaId = e.dataTransfer.getData('application/x-opencut-media');
       const captionData = e.dataTransfer.getData('application/x-opencut-caption');
-      
+
       if (!mediaId && !captionData) {
         setIsDraggingMedia(false);
         setDragOverTrackId(null);
@@ -1452,19 +1452,26 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
         try {
           const caption = JSON.parse(captionData);
           const track = getTrackById(trackId);
-          
-          // Only allow dropping on text tracks
+
+          let targetTrackId = trackId;
+
+          // If dropped on a non-text track, create a new text track
           if (track?.type !== 'text') {
-            console.warn('Captions can only be dropped on text tracks');
-            setIsDraggingMedia(false);
-            setDragOverTrackId(null);
-            setDropIndicatorPosition(null);
-            return;
+            // Find existing text tracks
+            const textTracks = tracks.filter((t) => t.type === 'text');
+
+            if (textTracks.length === 0) {
+              // No text tracks exist, create one
+              targetTrackId = timelineStore.addTrack('text', 'Text 1');
+            } else {
+              // Use the first text track
+              targetTrackId = textTracks[0].id;
+            }
           }
 
           // Create text clip from caption
           timelineStore.addClip({
-            trackId,
+            trackId: targetTrackId,
             type: 'text',
             name: caption.text.substring(0, 20) + (caption.text.length > 20 ? '...' : ''),
             mediaId: null,
@@ -1507,7 +1514,7 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
           const errorObj = error instanceof Error ? error : new Error(String(error));
           console.error('Failed to parse caption data:', errorObj.message);
         }
-        
+
         setIsDraggingMedia(false);
         setDragOverTrackId(null);
         setDropIndicatorPosition(null);
@@ -1557,7 +1564,16 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
       setDragOverTrackId(null);
       setDropIndicatorPosition(null);
     },
-    [pixelsPerSecond, snapEnabled, snapToClips, findNearestSnapPoint, mediaStore, timelineStore, getTrackById]
+    [
+      pixelsPerSecond,
+      snapEnabled,
+      snapToClips,
+      findNearestSnapPoint,
+      mediaStore,
+      timelineStore,
+      getTrackById,
+      tracks,
+    ]
   );
 
   // Calculate ripple preview data during drag
