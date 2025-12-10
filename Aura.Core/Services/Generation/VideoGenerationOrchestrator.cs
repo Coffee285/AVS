@@ -220,8 +220,15 @@ public class VideoGenerationOrchestrator
 
                     if (!await AttemptRecoveryAsync(batchResults, graph, strategy, taskExecutor, ct).ConfigureAwait(false))
                     {
-                        _logger.LogError("Recovery failed, aborting orchestration");
-                        throw new OrchestrationException("Critical task failures could not be recovered");
+                        // Build detailed error message with all failed task info
+                        var failedTaskDetails = batchResults
+                            .Where(r => !r.Succeeded)
+                            .Select(r => $"{r.TaskId}: {r.ErrorMessage ?? "Unknown error"}")
+                            .ToList();
+                        
+                        var errorMessage = $"Critical task failures could not be recovered. Failed tasks: {string.Join("; ", failedTaskDetails)}";
+                        _logger.LogError(errorMessage);
+                        throw new OrchestrationException(errorMessage);
                     }
 
                     // Recovery succeeded - increment processed tasks
@@ -666,8 +673,12 @@ public class VideoGenerationOrchestrator
 
         if (criticalFailures.Count > 0)
         {
-            _logger.LogError("Critical task failures detected: {Tasks}",
-                string.Join(", ", criticalFailures.Select(f => $"{f.TaskId}: {f.ErrorMessage}")));
+            // Log each critical failure with detailed information for debugging
+            foreach (var failure in criticalFailures)
+            {
+                _logger.LogError("CRITICAL FAILURE in task '{TaskId}': {Error}. Job will be marked as failed.",
+                    failure.TaskId, failure.ErrorMessage ?? "Unknown error");
+            }
             return true;
         }
 
@@ -722,7 +733,21 @@ public class VideoGenerationOrchestrator
                 continue;
             }
 
-            // For critical tasks, attempt actual retry
+            // For audio tasks, we cannot provide a fallback - fail fast with clear error
+            if (node.TaskType == GenerationTaskType.AudioGeneration)
+            {
+                _logger.LogError("Audio task {TaskId} failed and cannot be recovered. Error: {Error}", 
+                    failed.TaskId, failed.ErrorMessage ?? "Unknown error");
+                
+                // Mark the task result as failed with detailed error
+                _taskResults[node.TaskId] = new TaskResult(node.TaskId, false, null, 
+                    $"Audio generation failed: {failed.ErrorMessage ?? "Unknown error"}. This is a critical error - video cannot be created without audio.");
+                
+                // Return false immediately to trigger job failure
+                return false;
+            }
+
+            // For other critical tasks (script, composition), attempt actual retry
             try
             {
                 _logger.LogInformation("Retrying critical task: {TaskId}", failed.TaskId);

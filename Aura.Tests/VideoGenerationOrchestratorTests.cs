@@ -537,4 +537,51 @@ public class VideoGenerationOrchestratorTests
         Assert.Equal(TimeSpan.FromMinutes(45), options.BatchTimeout);
         Assert.Equal(120, options.StuckDetectionThresholdSeconds);
     }
+
+    [Fact]
+    public async Task OrchestrateGenerationAsync_WithAudioTaskFailure_ShouldFailJobImmediately()
+    {
+        // Arrange
+        var monitor = new ResourceMonitor(_monitorLogger);
+        var selector = new StrategySelector(_selectorLogger);
+        var orchestrator = new VideoGenerationOrchestrator(_orchestratorLogger, monitor, selector);
+
+        var brief = new Brief("Test Video", null, null, "Professional", "English", Aspect.Widescreen16x9);
+        var planSpec = new PlanSpec(TimeSpan.FromMinutes(1), Pacing.Conversational, Density.Balanced, "Modern");
+        var systemProfile = new SystemProfile
+        {
+            Tier = HardwareTier.B,
+            LogicalCores = 4,
+            PhysicalCores = 2,
+            RamGB = 8,
+            OfflineOnly = false
+        };
+
+        Func<GenerationNode, CancellationToken, Task<object>> mockExecutor = async (node, ct) =>
+        {
+            await Task.Delay(5, ct).ConfigureAwait(false);
+            
+            // Simulate audio task failure
+            if (node.TaskId == "audio")
+            {
+                throw new InvalidOperationException("TTS provider failed: Connection timeout");
+            }
+            
+            return $"Result_{node.TaskId}";
+        };
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<OrchestrationException>(async () =>
+            await orchestrator.OrchestrateGenerationAsync(
+                brief,
+                planSpec,
+                systemProfile,
+                mockExecutor,
+                null,
+                CancellationToken.None).ConfigureAwait(false));
+
+        // Verify the exception contains information about the audio failure
+        Assert.Contains("Critical task failures", exception.Message);
+        Assert.Contains("audio", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }
