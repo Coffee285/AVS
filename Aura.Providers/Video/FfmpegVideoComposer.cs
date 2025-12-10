@@ -219,9 +219,10 @@ public class FfmpegVideoComposer : IVideoComposer
         logWriter?.WriteLine(new string('-', 80));
 
         // Track FFmpeg activity for watchdog timer
-        DateTime lastFfmpegActivity = DateTime.UtcNow;
-        float lastProgressPercent = 0f;
-        string? lastStderrLine = null;
+        // FIX: Use volatile for thread-safe reads/writes from timer callback
+        volatile long lastActivityTicks = DateTime.UtcNow.Ticks;
+        volatile float lastProgressPercent = 0f;
+        volatile string? lastStderrLine = null;
 
         // Watchdog timer to detect FFmpeg hanging (no output for 90 seconds)
         var watchdogTimer = new System.Timers.Timer(10000); // Check every 10 seconds
@@ -229,7 +230,9 @@ public class FfmpegVideoComposer : IVideoComposer
         {
             if (!process.HasExited)
             {
-                var inactivityDuration = DateTime.UtcNow - lastFfmpegActivity;
+                // Thread-safe read of last activity
+                var lastActivity = new DateTime(System.Threading.Interlocked.Read(ref lastActivityTicks));
+                var inactivityDuration = DateTime.UtcNow - lastActivity;
 
                 if (inactivityDuration.TotalSeconds > 30 && inactivityDuration.TotalSeconds < 90)
                 {
@@ -289,8 +292,8 @@ public class FfmpegVideoComposer : IVideoComposer
         {
             if (string.IsNullOrEmpty(args.Data)) return;
 
-            // Reset watchdog timer on any stderr output
-            lastFfmpegActivity = DateTime.UtcNow;
+            // Reset watchdog timer on any stderr output (thread-safe update)
+            System.Threading.Interlocked.Exchange(ref lastActivityTicks, DateTime.UtcNow.Ticks);
             lastStderrLine = args.Data;
 
             // Capture for error reporting

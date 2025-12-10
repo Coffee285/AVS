@@ -85,21 +85,33 @@ public class IdeationService
             // If Ollama provider, verify it's running
             if (providerTypeName.Contains("Ollama", StringComparison.OrdinalIgnoreCase))
             {
-                if (_ollamaDirectClient == null)
+                // FIX: Check availability through _llmProvider when _ollamaDirectClient is null
+                // This aligns with Script Generation pattern where provider is used for availability checks
+                if (_ollamaDirectClient != null)
                 {
-                    return (false, "Ollama client not configured. Please check your Ollama installation.");
-                }
+                    var isAvailable = await _ollamaDirectClient.IsAvailableAsync(ct).ConfigureAwait(false);
+                    if (!isAvailable)
+                    {
+                        return (false, "Ollama is not running. Start it with 'ollama serve' in a terminal.");
+                    }
 
-                var isAvailable = await _ollamaDirectClient.IsAvailableAsync(ct).ConfigureAwait(false);
-                if (!isAvailable)
-                {
-                    return (false, "Ollama is not running. Start it with 'ollama serve' in a terminal.");
+                    var models = await _ollamaDirectClient.ListModelsAsync(ct).ConfigureAwait(false);
+                    if (models.Count == 0)
+                    {
+                        return (false, "No Ollama models installed. Install one with 'ollama pull llama3.1' or 'ollama pull qwen2.5'.");
+                    }
                 }
-
-                var models = await _ollamaDirectClient.ListModelsAsync(ct).ConfigureAwait(false);
-                if (models.Count == 0)
+                else
                 {
-                    return (false, "No Ollama models installed. Install one with 'ollama pull llama3.1' or 'ollama pull qwen2.5'.");
+                    // Fallback: Check provider capabilities when direct client not available
+                    _logger.LogInformation("IOllamaDirectClient is null, checking provider capabilities for ideation availability");
+                    var capabilities = _llmProvider.GetCapabilities();
+                    if (!capabilities.SupportsIdeation)
+                    {
+                        return (false, "Current LLM provider does not support ideation. Please ensure Ollama is running and configured.");
+                    }
+                    // Provider claims support - assume available (will fail gracefully if not)
+                    _logger.LogInformation("Provider {Provider} claims ideation support, proceeding", capabilities.ProviderName);
                 }
             }
 
