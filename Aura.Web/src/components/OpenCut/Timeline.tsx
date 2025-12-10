@@ -72,6 +72,7 @@ import {
   RipplePreview,
   SnapIndicator,
   TimelineToolbar,
+  TimelineContextMenu,
   type RippleClipPreview,
   type RippleDirection,
 } from './Timeline/index';
@@ -977,213 +978,6 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
     [getClipById, pixelsPerSecond]
   );
 
-  const handleContextMenuAction = useCallback(
-    (action: string) => {
-      if (!contextMenuTarget) return;
-
-      const contextClip =
-        contextMenuTarget.type === 'clip' && contextMenuTarget.clipId
-          ? getClipById(contextMenuTarget.clipId)
-          : undefined;
-      const contextTrack = contextMenuTarget.trackId
-        ? getTrackById(contextMenuTarget.trackId)
-        : undefined;
-      const contextTime = contextMenuTarget.time ?? currentTime;
-
-      switch (action) {
-        case 'split':
-          if (contextClip) {
-            timelineStore.splitClip(contextClip.id, currentTime);
-          }
-          break;
-        case 'delete':
-          if (contextClip) {
-            timelineStore.removeClip(contextClip.id);
-          }
-          break;
-        case 'duplicate':
-          if (contextClip) {
-            timelineStore.duplicateClip(contextClip.id);
-          }
-          break;
-        case 'ripple-delete':
-          if (contextClip) {
-            rippleDelete(contextClip.id);
-          }
-          break;
-        case 'trim-start-ripple':
-          if (contextClip) {
-            const targetTime = Math.min(
-              contextTime,
-              contextClip.startTime + contextClip.duration - MIN_TIME_SHIFT_THRESHOLD
-            );
-            rippleTrimStart(contextClip.id, Math.max(0, targetTime));
-          }
-          break;
-        case 'trim-end-ripple':
-          if (contextClip) {
-            const targetTime = Math.max(
-              contextClip.startTime + MIN_TIME_SHIFT_THRESHOLD,
-              Math.min(
-                contextTime,
-                contextClip.startTime + contextClip.duration + MIN_TIME_SHIFT_THRESHOLD
-              )
-            );
-            rippleTrimEnd(contextClip.id, targetTime);
-          }
-          break;
-        case 'add-marker':
-          markersStore.addMarker(contextTime);
-          break;
-        case 'apply-transition-start':
-          if (contextClip) {
-            transitionsStore.applyTransition('cross-dissolve', contextClip.id, 'start');
-          }
-          break;
-        case 'apply-transition-end':
-          if (contextClip) {
-            transitionsStore.applyTransition('cross-dissolve', contextClip.id, 'end');
-          }
-          break;
-        case 'remove-transitions':
-          if (contextClip) {
-            transitionsStore.removeTransitionsForClip(contextClip.id);
-          }
-          break;
-        case 'speed-0.5':
-          if (contextClip) {
-            setClipSpeed(contextClip.id, 0.5);
-          }
-          break;
-        case 'speed-1':
-          if (contextClip) {
-            setClipSpeed(contextClip.id, 1);
-          }
-          break;
-        case 'speed-2':
-          if (contextClip) {
-            setClipSpeed(contextClip.id, 2);
-          }
-          break;
-        case 'reverse':
-          if (contextClip) {
-            toggleClipReverse(contextClip.id);
-          }
-          break;
-        case 'freeze-frame':
-          if (contextClip) {
-            const freezeAt = Math.max(
-              contextClip.startTime,
-              Math.min(contextTime, contextClip.startTime + contextClip.duration)
-            );
-            const sourceTime = contextClip.inPoint + (freezeAt - contextClip.startTime);
-            setFreezeFrame(contextClip.id, sourceTime);
-          }
-          break;
-        case 'toggle-time-remap':
-          if (contextClip) {
-            enableTimeRemap(contextClip.id, !contextClip.timeRemapEnabled);
-          }
-          break;
-        case 'toggle-clip-mute':
-          if (contextClip?.audio) {
-            updateClipAudio(contextClip.id, { muted: !contextClip.audio.muted });
-          }
-          break;
-        case 'fade-in-short':
-          if (contextClip?.audio) {
-            updateClipAudio(contextClip.id, { fadeInDuration: 0.5 });
-          }
-          break;
-        case 'fade-out-short':
-          if (contextClip?.audio) {
-            updateClipAudio(contextClip.id, { fadeOutDuration: 0.5 });
-          }
-          break;
-        case 'select-track':
-          if (contextTrack) {
-            timelineStore.selectTrack(contextTrack.id);
-          }
-          break;
-        case 'select-track-clips':
-          if (contextTrack) {
-            selectAllClipsOnTrack(contextTrack.id);
-          }
-          break;
-        case 'close-gaps-track':
-          if (contextTrack) {
-            closeAllGaps(contextTrack.id);
-          }
-          break;
-        case 'insert-gap-1s':
-          if (contextTrack) {
-            rippleInsert(contextTrack.id, Math.max(0, contextTime), 1);
-          }
-          break;
-        case 'toggle-snap':
-          setSnapEnabled(!snapEnabled);
-          break;
-        case 'toggle-snap-to-clips':
-          setSnapToClips(!snapToClips);
-          break;
-        case 'toggle-magnetic':
-          setMagneticTimeline(!magneticTimelineEnabled);
-          break;
-        case 'fit-to-window': {
-          const width = containerRef.current?.getBoundingClientRect().width ?? 0;
-          const totalDuration = getTotalDuration();
-          if (width > 0) {
-            timelineStore.fitToWindow(width, totalDuration);
-          }
-          break;
-        }
-        case 'add-track-video':
-          handleAddTrack('video');
-          break;
-        case 'add-track-audio':
-          handleAddTrack('audio');
-          break;
-        case 'add-track-image':
-          handleAddTrack('image');
-          break;
-        case 'add-track-text':
-          handleAddTrack('text');
-          break;
-      }
-
-      handleCloseContextMenu();
-    },
-    [
-      contextMenuTarget,
-      getClipById,
-      getTrackById,
-      currentTime,
-      timelineStore,
-      rippleDelete,
-      rippleTrimStart,
-      rippleTrimEnd,
-      markersStore,
-      transitionsStore,
-      setClipSpeed,
-      toggleClipReverse,
-      setFreezeFrame,
-      enableTimeRemap,
-      updateClipAudio,
-      selectAllClipsOnTrack,
-      closeAllGaps,
-      rippleInsert,
-      setSnapEnabled,
-      setSnapToClips,
-      setMagneticTimeline,
-      snapEnabled,
-      snapToClips,
-      magneticTimelineEnabled,
-      getTotalDuration,
-      handleAddTrack,
-      handleCloseContextMenu,
-    ]
-  );
-
   // Close context menu when clicking outside
   useEffect(() => {
     if (!contextMenuOpen) return;
@@ -1790,10 +1584,6 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
   };
 
   const sortedTracks = useMemo(() => [...tracks].sort((a, b) => a.order - b.order), [tracks]);
-  const contextClip =
-    contextMenuTarget?.type === 'clip' && contextMenuTarget.clipId
-      ? getClipById(contextMenuTarget.clipId)
-      : undefined;
 
   return (
     <div
@@ -2158,187 +1948,27 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
 
       {/* Context Menu */}
       {contextMenuOpen && contextMenuTarget && (
-        <Menu
+        <TimelineContextMenu
+          type={
+            contextMenuTarget.type === 'timeline'
+              ? 'empty'
+              : contextMenuTarget.type === 'clip'
+                ? 'clip'
+                : 'track'
+          }
+          position={contextMenuPosition}
+          targetId={contextMenuTarget.type === 'clip' ? contextMenuTarget.clipId : undefined}
+          trackId={
+            contextMenuTarget.type === 'track'
+              ? contextMenuTarget.trackId
+              : contextMenuTarget.type === 'clip'
+                ? contextMenuTarget.trackId
+                : undefined
+          }
+          time={contextMenuTarget.time}
           open={contextMenuOpen}
-          onOpenChange={(e, data) => {
-            if (!data.open) {
-              handleCloseContextMenu();
-            }
-          }}
-        >
-          <MenuTrigger disableButtonEnhancement>
-            <div
-              style={{
-                position: 'fixed',
-                left: contextMenuPosition.x,
-                top: contextMenuPosition.y,
-                width: 1,
-                height: 1,
-                pointerEvents: 'none',
-              }}
-            />
-          </MenuTrigger>
-          <MenuPopover>
-            <MenuList>
-              {contextMenuTarget.type === 'clip' && (
-                <>
-                  <MenuItem
-                    icon={<Cut24Regular />}
-                    onClick={() => handleContextMenuAction('split')}
-                  >
-                    Split at Playhead
-                  </MenuItem>
-                  <MenuItem
-                    icon={<Delete24Regular />}
-                    onClick={() => handleContextMenuAction('ripple-delete')}
-                  >
-                    Ripple Delete
-                  </MenuItem>
-                  <MenuItem
-                    icon={<Delete24Regular />}
-                    onClick={() => handleContextMenuAction('delete')}
-                  >
-                    Delete
-                  </MenuItem>
-                  <MenuItem
-                    icon={<Copy24Regular />}
-                    onClick={() => handleContextMenuAction('duplicate')}
-                  >
-                    Duplicate
-                  </MenuItem>
-                  <Divider />
-                  <MenuItem
-                    icon={<Cut24Regular />}
-                    onClick={() => handleContextMenuAction('trim-start-ripple')}
-                    disabled={!contextMenuTarget.time}
-                  >
-                    Ripple Trim Start to Cursor
-                  </MenuItem>
-                  <MenuItem
-                    icon={<Cut24Regular />}
-                    onClick={() => handleContextMenuAction('trim-end-ripple')}
-                    disabled={!contextMenuTarget.time}
-                  >
-                    Ripple Trim End to Cursor
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('add-marker')}>
-                    Add Marker at Cursor
-                  </MenuItem>
-                  <Divider />
-                  <MenuItem onClick={() => handleContextMenuAction('apply-transition-start')}>
-                    Apply Cross Dissolve (Start)
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('apply-transition-end')}>
-                    Apply Cross Dissolve (End)
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('remove-transitions')}>
-                    Remove Transitions
-                  </MenuItem>
-                  <Divider />
-                  <MenuItem onClick={() => handleContextMenuAction('speed-0.5')}>
-                    Speed 50%
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('speed-1')}>Speed 100%</MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('speed-2')}>Speed 200%</MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('reverse')}>
-                    Reverse Clip
-                  </MenuItem>
-                  <MenuItem
-                    onClick={() => handleContextMenuAction('freeze-frame')}
-                    disabled={!contextMenuTarget.time}
-                  >
-                    Add Freeze Frame at Cursor
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('toggle-time-remap')}>
-                    {contextClip?.timeRemapEnabled
-                      ? 'Disable Time Remapping'
-                      : 'Enable Time Remapping'}
-                  </MenuItem>
-                  {contextClip?.audio && (
-                    <>
-                      <Divider />
-                      <MenuItem onClick={() => handleContextMenuAction('toggle-clip-mute')}>
-                        {contextClip.audio.muted ? 'Unmute Clip Audio' : 'Mute Clip Audio'}
-                      </MenuItem>
-                      <MenuItem onClick={() => handleContextMenuAction('fade-in-short')}>
-                        Fade In 0.5s
-                      </MenuItem>
-                      <MenuItem onClick={() => handleContextMenuAction('fade-out-short')}>
-                        Fade Out 0.5s
-                      </MenuItem>
-                    </>
-                  )}
-                  <Divider />
-                  <MenuItem onClick={() => handleContextMenuAction('select-track')}>
-                    Select Track
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('select-track-clips')}>
-                    Select All Clips on Track
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('close-gaps-track')}>
-                    Close Gaps on Track
-                  </MenuItem>
-                </>
-              )}
-              {(contextMenuTarget.type === 'track' || contextMenuTarget.type === 'timeline') && (
-                <>
-                  <MenuItem onClick={() => handleContextMenuAction('add-marker')}>
-                    Add Marker {contextMenuTarget.time !== undefined ? 'at Cursor' : ''}
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('select-track-clips')}>
-                    Select All Clips on Track
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('close-gaps-track')}>
-                    Close Gaps on Track
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('insert-gap-1s')}>
-                    Insert 1s Gap (Ripple)
-                  </MenuItem>
-                  <Divider />
-                  <MenuItem onClick={() => handleContextMenuAction('toggle-snap')}>
-                    {snapEnabled ? 'Disable Snap' : 'Enable Snap'}
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('toggle-snap-to-clips')}>
-                    {snapToClips ? 'Disable Clip Snapping' : 'Enable Clip Snapping'}
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('toggle-magnetic')}>
-                    {magneticTimelineEnabled
-                      ? 'Disable Magnetic Timeline'
-                      : 'Enable Magnetic Timeline'}
-                  </MenuItem>
-                  <MenuItem onClick={() => handleContextMenuAction('fit-to-window')}>
-                    Zoom to Fit
-                  </MenuItem>
-                  <Divider />
-                  <MenuItem
-                    icon={<Video24Regular />}
-                    onClick={() => handleContextMenuAction('add-track-video')}
-                  >
-                    Add Video Track
-                  </MenuItem>
-                  <MenuItem
-                    icon={<MusicNote224Regular />}
-                    onClick={() => handleContextMenuAction('add-track-audio')}
-                  >
-                    Add Audio Track
-                  </MenuItem>
-                  <MenuItem
-                    icon={<Image24Regular />}
-                    onClick={() => handleContextMenuAction('add-track-image')}
-                  >
-                    Add Image Track
-                  </MenuItem>
-                  <MenuItem
-                    icon={<TextT24Regular />}
-                    onClick={() => handleContextMenuAction('add-track-text')}
-                  >
-                    Add Text Track
-                  </MenuItem>
-                </>
-              )}
-            </MenuList>
-          </MenuPopover>
-        </Menu>
+          onClose={handleCloseContextMenu}
+        />
       )}
     </div>
   );
