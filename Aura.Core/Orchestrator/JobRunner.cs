@@ -210,6 +210,44 @@ public partial class JobRunner
     }
 
     /// <summary>
+    /// Attempts to recover a stuck job by force-transitioning to the next stage.
+    /// </summary>
+    /// <param name="jobId">The ID of the job to recover</param>
+    /// <param name="currentStage">The current stage where the job is stuck</param>
+    /// <param name="currentPercent">The current progress percentage</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>True if recovery was attempted, false otherwise</returns>
+    private Task<bool> AttemptJobRecoveryAsync(string jobId, string currentStage, int currentPercent, CancellationToken ct)
+    {
+        _logger.LogWarning("Attempting recovery for stuck job {JobId} at {Stage}/{Percent}%", 
+            jobId, currentStage, currentPercent);
+        
+        if ((currentStage == "Visuals" || currentStage == "Assets") && currentPercent >= 50)
+        {
+            lock (_trackingLock)
+            {
+                if (_jobProgressTracking.TryGetValue(jobId, out var tracking))
+                {
+                    _jobProgressTracking[jobId] = tracking with
+                    {
+                        LastStage = "Rendering",
+                        LastPercent = 70,
+                        LastProgressTime = DateTime.UtcNow,
+                        StuckWarningEmitted = false
+                    };
+                    
+                    _logger.LogInformation("Recovery: Force-transitioned job {JobId} from {OldStage} to Rendering", 
+                        jobId, currentStage);
+                    
+                    return Task.FromResult(true);
+                }
+            }
+        }
+        
+        return Task.FromResult(false);
+    }
+
+    /// <summary>
     /// Lists all recent jobs.
     /// </summary>
     public List<Job> ListJobs(int limit = 50)
@@ -526,35 +564,50 @@ public partial class JobRunner
                         continue;
                     }
 
-                    var ffmpegLog = TryReadFfmpegLog(jobId);
-                    var message = $"Job appears stuck for {stuckDuration.TotalSeconds:F0}s at {lastPercent}% ({lastStage ?? "Unknown"}).";
-                    _logger.LogError("[Job {JobId}] {Message}", jobId, message);
-
-                    var failure = new JobFailure
+                    // Attempt recovery before failing the job
+                    if (stuckDuration.TotalSeconds > 60)
                     {
-                        Stage = lastStage ?? job.Stage,
-                        Message = message,
-                        CorrelationId = job.CorrelationId ?? string.Empty,
-                        FailedAt = DateTime.UtcNow,
-                        ErrorCode = "E305-JOB_STALLED",
-                        StderrSnippet = ffmpegLog,
-                        SuggestedActions = new[]
+                        var recovered = await AttemptJobRecoveryAsync(jobId, lastStage ?? "Unknown", lastPercent, stuckMonitorCts.Token).ConfigureAwait(false);
+                        
+                        if (recovered)
                         {
-                            "Retry the render with different settings (e.g., software encoding)",
-                            "Verify FFmpeg is accessible and not blocked by antivirus",
-                            "Check GPU/CPU utilization to ensure the process is not paused"
+                            continue;
                         }
-                    };
+                        
+                        // For rendering stage, give more time before failing
+                        if (lastStage == "Rendering" && stuckDuration.TotalSeconds > 120)
+                        {
+                            var message = $"Video render timed out after {(int)stuckDuration.TotalSeconds}s at {lastPercent}%";
+                            _logger.LogError("[Job {JobId}] {Message}", jobId, message);
 
-                    job = UpdateJob(
-                        job,
-                        status: JobStatus.Failed,
-                        progressMessage: message,
-                        errorMessage: message,
-                        failureDetails: failure,
-                        finishedAt: DateTime.UtcNow);
+                            var ffmpegLog = TryReadFfmpegLog(jobId);
+                            var failure = new JobFailure
+                            {
+                                Stage = lastStage ?? job.Stage,
+                                Message = message,
+                                CorrelationId = job.CorrelationId ?? string.Empty,
+                                FailedAt = DateTime.UtcNow,
+                                ErrorCode = "E305-JOB_STALLED",
+                                StderrSnippet = ffmpegLog,
+                                SuggestedActions = new[]
+                                {
+                                    "Retry the render with different settings (e.g., software encoding)",
+                                    "Verify FFmpeg is accessible and not blocked by antivirus",
+                                    "Check GPU/CPU utilization to ensure the process is not paused"
+                                }
+                            };
 
-                    stuckMonitorCts.Cancel();
+                            job = UpdateJob(
+                                job,
+                                status: JobStatus.Failed,
+                                progressMessage: message,
+                                errorMessage: message,
+                                failureDetails: failure,
+                                finishedAt: DateTime.UtcNow);
+
+                            stuckMonitorCts.Cancel();
+                        }
+                    }
                 }
             }, stuckMonitorCts.Token);
 
@@ -1409,15 +1462,20 @@ public partial class JobRunner
                 int.TryParse(match.Groups[2].Value, out int total) &&
                 total > 0)
             {
-                // Map task progress (0/N to N/N) to overall progress (5-95%)
-                percent = 5 + (int)((double)completed / total * 90);
+                // Map batch progress to 5-70% range (leave 70-100% for FFmpeg render)
+                percent = 5 + (int)((double)completed / total * 65);
 
-                // When all batch tasks are complete, transition to PostProcess stage
+                // When batch is complete, explicitly transition to render stage
                 if (completed == total)
                 {
-                    stage = "PostProcess";
-                    percent = 95;
-                    formattedMessage = "All tasks completed, finalizing";
+                    stage = "Rendering";
+                    percent = 70;
+                    formattedMessage = $"All {total} assets ready. Starting video render...";
+                    _logger.LogInformation("Batch complete, transitioning to FFmpeg render stage at 70%");
+                }
+                else if ((double)completed / total >= 0.9)
+                {
+                    formattedMessage = $"Almost ready ({completed}/{total} assets). Preparing render...";
                 }
                 else
                 {
