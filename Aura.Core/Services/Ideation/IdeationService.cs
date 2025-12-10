@@ -103,15 +103,11 @@ public class IdeationService
                 }
                 else
                 {
-                    // Fallback: Check provider capabilities when direct client not available
-                    _logger.LogInformation("IOllamaDirectClient is null, checking provider capabilities for ideation availability");
+                    // Fallback: Trust provider capabilities when direct client not available
+                    // Will fail gracefully during actual generation if provider truly unavailable
+                    _logger.LogInformation("IOllamaDirectClient is null, trusting provider configuration for ideation availability");
                     var capabilities = _llmProvider.GetCapabilities();
-                    if (!capabilities.SupportsIdeation)
-                    {
-                        return (false, "Current LLM provider does not support ideation. Please ensure Ollama is running and configured.");
-                    }
-                    // Provider claims support - assume available (will fail gracefully if not)
-                    _logger.LogInformation("Provider {Provider} claims ideation support, proceeding", capabilities.ProviderName);
+                    _logger.LogInformation("Provider {Provider} configured, assuming ideation support", capabilities.ProviderName);
                 }
             }
 
