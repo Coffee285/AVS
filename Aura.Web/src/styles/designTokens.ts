@@ -249,6 +249,25 @@ export const openCutTokens = {
     /** 700 - Toast notifications */
     toast: 700,
   },
+
+  /**
+   * Interaction styles for user interface elements.
+   * Controls text selection and editing behavior.
+   */
+  interaction: {
+    /** Prevent text selection on UI labels and non-editable content */
+    noSelect: {
+      userSelect: 'none',
+      WebkitUserSelect: 'none',
+      MozUserSelect: 'none',
+      msUserSelect: 'none',
+    },
+    /** Allow text selection in editable areas */
+    editable: {
+      userSelect: 'text',
+      WebkitUserSelect: 'text',
+    },
+  },
 } as const;
 
 /**

@@ -44,6 +44,7 @@ const useStyles = makeStyles({
     fontFamily: openCutTokens.typography.fontFamily.body,
     fontSize: openCutTokens.typography.fontSize.base,
     lineHeight: openCutTokens.typography.lineHeight.normal.toString(),
+    ...openCutTokens.interaction.noSelect,
   },
   mainContent: {
     display: 'flex',
@@ -186,10 +187,7 @@ export function OpenCutEditor() {
         {layoutStore.leftPanelCollapsed ? (
           <CollapsedPanel type="media" onExpand={() => layoutStore.setLeftPanelCollapsed(false)} />
         ) : (
-          <div
-            className={styles.leftPanel}
-            style={{ width: layoutStore.leftPanelWidth }}
-          >
+          <div className={styles.leftPanel} style={{ width: layoutStore.leftPanelWidth }}>
             <div className={styles.leftPanelTabs}>
               <TabList
                 selectedValue={leftPanelTab}
@@ -236,10 +234,7 @@ export function OpenCutEditor() {
             onExpand={() => layoutStore.setRightPanelCollapsed(false)}
           />
         ) : (
-          <div
-            className={styles.rightPanel}
-            style={{ width: layoutStore.rightPanelWidth }}
-          >
+          <div className={styles.rightPanel} style={{ width: layoutStore.rightPanelWidth }}>
             <PropertiesPanel />
           </div>
         )}
