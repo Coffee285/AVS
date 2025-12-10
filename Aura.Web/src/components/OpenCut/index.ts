@@ -4,6 +4,7 @@ export { OpenCutErrorBoundary } from './OpenCutErrorBoundary';
 export { ResizablePanel } from './ResizablePanel';
 export { EmptyState } from './EmptyState';
 export { PlaybackControls } from './PlaybackControls';
+export { KeyboardShortcutsOverlay } from './KeyboardShortcutsOverlay';
 export { MediaPanel } from './MediaPanel';
 export { PropertiesPanel } from './PropertiesPanel';
 export { PreviewPanel } from './PreviewPanel';

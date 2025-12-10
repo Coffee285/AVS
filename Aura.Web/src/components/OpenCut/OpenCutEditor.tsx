@@ -28,6 +28,7 @@ import { openCutTokens } from '../../styles/designTokens';
 import { CaptionsPanel } from './Captions';
 import { EffectsPanel } from './Effects';
 import { CollapsedPanel, PanelDivider } from './Layout';
+import { KeyboardShortcutsOverlay } from './KeyboardShortcutsOverlay';
 import { MediaPanel } from './MediaPanel';
 import { GraphicsPanel } from './MotionGraphics';
 import { PreviewPanel } from './PreviewPanel';
@@ -105,6 +106,7 @@ export function OpenCutEditor() {
   const toastsStore = useOpenCutToastsStore();
 
   const [leftPanelTab, setLeftPanelTab] = useState<LeftPanelTab>('media');
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
 
   // Handler for inserting selected caption at playhead
   const handleInsertAtPlayhead = useCallback(() => {
@@ -180,6 +182,9 @@ export function OpenCutEditor() {
       if (action === 'insertAtPlayhead') {
         handleInsertAtPlayhead();
       }
+    },
+    onShowKeyboardShortcuts: () => {
+      setShowKeyboardShortcuts(true);
     },
   });
 
@@ -261,6 +266,12 @@ export function OpenCutEditor() {
     <div className={styles.root}>
       {/* Toast notifications container */}
       <ToastContainer position="top-right" />
+
+      {/* Keyboard Shortcuts Overlay */}
+      <KeyboardShortcutsOverlay
+        open={showKeyboardShortcuts}
+        onClose={() => setShowKeyboardShortcuts(false)}
+      />
 
       {/* Main Content Area */}
       <div className={styles.mainContent}>
