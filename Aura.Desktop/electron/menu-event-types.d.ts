@@ -26,7 +26,10 @@ export type MenuEventChannel =
   | 'menu:runDiagnostics'
   | 'menu:openGettingStarted'
   | 'menu:showKeyboardShortcuts'
-  | 'menu:checkForUpdates';
+  | 'menu:checkForUpdates'
+  | 'menu:zoomIn'
+  | 'menu:zoomOut'
+  | 'menu:resetZoom';
 
 /**
  * Menu event handler type with no parameters
@@ -68,6 +71,9 @@ export interface MenuAPI {
   onOpenGettingStarted: (callback: MenuEventHandler) => MenuEventUnsubscribe;
   onShowKeyboardShortcuts: (callback: MenuEventHandler) => MenuEventUnsubscribe;
   onCheckForUpdates: (callback: MenuEventHandler) => MenuEventUnsubscribe;
+  onZoomIn: (callback: MenuEventHandler) => MenuEventUnsubscribe;
+  onZoomOut: (callback: MenuEventHandler) => MenuEventUnsubscribe;
+  onResetZoom: (callback: MenuEventHandler) => MenuEventUnsubscribe;
 }
 
 /**
