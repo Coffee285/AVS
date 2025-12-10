@@ -37,12 +37,15 @@ import {
   ChevronDown16Regular,
   Edit24Regular,
   ClosedCaption24Regular,
+  ArrowRight24Regular,
 } from '@fluentui/react-icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useCallback, useRef } from 'react';
 import type { FC, ChangeEvent } from 'react';
 import { useOpenCutCaptionsStore } from '../../../stores/opencutCaptions';
 import { useOpenCutPlaybackStore } from '../../../stores/opencutPlayback';
+import { useOpenCutTimelineStore } from '../../../stores/opencutTimeline';
+import { useOpenCutToastsStore } from '../../../stores/opencutToasts';
 import { openCutTokens, motionVariants } from '../../../styles/designTokens';
 import { CaptionEditor } from './CaptionEditor';
 import { CaptionStyleEditor } from './CaptionStyleEditor';
@@ -214,6 +217,8 @@ export const CaptionsPanel: FC<CaptionsPanelProps> = ({ className }) => {
   const styles = useStyles();
   const captionsStore = useOpenCutCaptionsStore();
   const playbackStore = useOpenCutPlaybackStore();
+  const timelineStore = useOpenCutTimelineStore();
+  const toastsStore = useOpenCutToastsStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importFormat, setImportFormat] = useState<'srt' | 'vtt'>('srt');
   const [isAddingTrack, setIsAddingTrack] = useState(false);
@@ -327,6 +332,68 @@ export const CaptionsPanel: FC<CaptionsPanelProps> = ({ className }) => {
     },
     []
   );
+
+  const handleInsertToTimeline = useCallback(
+    (caption: { id: string; text: string; startTime: number; endTime: number }) => {
+      const currentTime = playbackStore.currentTime;
+
+      let textTrack = timelineStore.tracks.find((t) => t.type === 'text');
+      if (!textTrack) {
+        const trackId = timelineStore.addTrack('text', 'Captions');
+        textTrack = timelineStore.getTrackById(trackId);
+      }
+
+      if (!textTrack) {
+        toastsStore.error('Failed to create text track');
+        return;
+      }
+
+      timelineStore.addClip({
+        trackId: textTrack.id,
+        type: 'text',
+        name: caption.text.substring(0, 20),
+        mediaId: null,
+        startTime: currentTime,
+        duration: caption.endTime - caption.startTime,
+        inPoint: 0,
+        outPoint: caption.endTime - caption.startTime,
+        transform: {
+          scaleX: 100,
+          scaleY: 100,
+          positionX: 0,
+          positionY: 0,
+          rotation: 0,
+          opacity: 100,
+          anchorX: 50,
+          anchorY: 50,
+        },
+        blendMode: 'normal',
+        text: {
+          content: caption.text,
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: 48,
+          fontWeight: 400,
+          fontStyle: 'normal',
+          textAlign: 'center',
+          color: '#ffffff',
+          strokeColor: '#000000',
+          strokeWidth: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.5)',
+          shadowBlur: 0,
+          shadowOffsetX: 0,
+          shadowOffsetY: 0,
+        },
+        speed: 1,
+        reversed: false,
+        timeRemapEnabled: false,
+        locked: false,
+      });
+
+      toastsStore.success('Caption added to timeline');
+    },
+    [playbackStore, timelineStore, toastsStore]
+  );
+
 
   return (
     <div className={mergeClasses(styles.root, className)}>
@@ -559,6 +626,18 @@ export const CaptionsPanel: FC<CaptionsPanelProps> = ({ className }) => {
                     </span>
                     <span className={styles.captionText}>{caption.text}</span>
                     <div style={{ display: 'flex', gap: '2px' }}>
+                      <Tooltip content="Insert to Timeline at Playhead" relationship="label">
+                        <Button
+                          appearance="subtle"
+                          size="small"
+                          icon={<ArrowRight24Regular />}
+                          className={styles.controlButton}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleInsertToTimeline(caption);
+                          }}
+                        />
+                      </Tooltip>
                       <Tooltip content="Edit" relationship="label">
                         <Button
                           appearance="subtle"
