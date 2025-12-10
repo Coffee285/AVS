@@ -936,7 +936,7 @@ public class JobsController : ControllerBase
                     lastLogCount = job.Logs.Count;
                 }
 
-                await Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+                // Flush is now handled per-event in SendSseEventWithId
             }
 
             // Send final event
@@ -1356,6 +1356,9 @@ public class JobsController : ControllerBase
             var message = $"id: {eventId}\nevent: {eventType}\ndata: {json}\n\n";
             var bytes = Encoding.UTF8.GetBytes(message);
             await Response.Body.WriteAsync(bytes, ct).ConfigureAwait(false);
+            // CRITICAL: Flush immediately after each event to ensure client receives it
+            // This prevents buffering issues that can cause events to be delayed or lost
+            await Response.Body.FlushAsync(ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {

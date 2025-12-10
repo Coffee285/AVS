@@ -46,13 +46,18 @@ public class PexelsStockProvider : IStockProvider
 
         _logger.LogInformation("Searching Pexels for: {Query} (count: {Count})", query, count);
 
+        // Add request-level timeout to prevent hanging on slow/stuck requests
+        // 20 seconds allows sufficient time for API response while preventing indefinite hangs
+        using var requestTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        requestTimeoutCts.CancelAfter(TimeSpan.FromSeconds(20));
+
         try
         {
             var url = $"https://api.pexels.com/v1/search?query={Uri.EscapeDataString(query)}&per_page={Math.Min(count, 80)}";
-            var response = await _httpClient.GetAsync(url, ct).ConfigureAwait(false);
+            var response = await _httpClient.GetAsync(url, requestTimeoutCts.Token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            var json = await response.Content.ReadAsStringAsync(requestTimeoutCts.Token).ConfigureAwait(false);
             var doc = JsonDocument.Parse(json);
 
             var assets = new List<Asset>();
@@ -91,6 +96,11 @@ public class PexelsStockProvider : IStockProvider
 
             _logger.LogInformation("Found {Count} images on Pexels", assets.Count);
             return assets;
+        }
+        catch (OperationCanceledException) when (requestTimeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            _logger.LogWarning("Pexels API request timed out after 20 seconds for query: {Query}", query);
+            return Array.Empty<Asset>();
         }
         catch (Exception ex)
         {

@@ -372,6 +372,8 @@ const ScriptReviewComponent: FC<ScriptReviewProps> = ({
   const [regenerateIncludeContext, setRegenerateIncludeContext] = useState(true);
   const [showRegenerateAllDialog, setShowRegenerateAllDialog] = useState(false);
   const [regenerateAllInstructions, setRegenerateAllInstructions] = useState('');
+  // Track provider logging to prevent spam
+  const loggedProviderRef = useRef<string | null>(null);
   // Advanced LLM parameters - use from advancedSettings if available, otherwise local state
   const [llmTemperature, setLlmTemperature] = useState<number | undefined>(
     advancedSettings?.llmParameters?.temperature
@@ -562,12 +564,13 @@ const ScriptReviewComponent: FC<ScriptReviewProps> = ({
           }
         }
       } else {
-        // Only log once when external provider is first set, not on every render
-        if (!providers.length) {
+        // Only log when external provider changes, not on every render
+        if (loggedProviderRef.current !== externalSelectedProvider) {
           console.info(
             '[ScriptReview] Using external provider selection:',
             externalSelectedProvider
           );
+          loggedProviderRef.current = externalSelectedProvider;
         }
         // Set model for external provider
         const provider = response.providers.find((p) => {

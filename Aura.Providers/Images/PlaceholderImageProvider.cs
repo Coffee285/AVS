@@ -45,12 +45,9 @@ public class PlaceholderImageProvider : IStockProvider
         _logger = logger;
         _outputDirectory = outputDirectory ?? Path.Combine(Path.GetTempPath(), "aura-placeholders");
         _random = new Random(42);
-
-        if (!Directory.Exists(_outputDirectory))
-        {
-            Directory.CreateDirectory(_outputDirectory);
-            _logger.LogInformation("Created placeholder image directory: {Directory}", _outputDirectory);
-        }
+        
+        // Directory creation moved to EnsureOutputDirectoryExists() for thread-safety
+        _logger.LogDebug("PlaceholderImageProvider initialized with output directory: {Directory}", _outputDirectory);
     }
 
     public Task<IReadOnlyList<Asset>> SearchAsync(string query, int count, CancellationToken ct)
@@ -61,6 +58,9 @@ public class PlaceholderImageProvider : IStockProvider
 
         try
         {
+            // Ensure output directory exists (thread-safe)
+            EnsureOutputDirectoryExists();
+
             for (int i = 0; i < count; i++)
             {
                 var imagePath = GeneratePlaceholderImage(query, i);
@@ -78,9 +78,40 @@ public class PlaceholderImageProvider : IStockProvider
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating placeholder images for: {Query}", query);
+            
+            // If placeholder generation fails, we need to throw to signal the failure
+            // Don't silently return empty list which would cause confusing errors downstream
+            throw new InvalidOperationException(
+                $"Failed to generate placeholder images for '{query}'. " +
+                "This may indicate disk space, permission, or SkiaSharp installation issues. " +
+                "Check that the temporary directory is writable and SkiaSharp native libraries are installed.",
+                ex);
         }
 
         return Task.FromResult<IReadOnlyList<Asset>>(assets);
+    }
+
+    /// <summary>
+    /// Ensures output directory exists with proper error handling
+    /// </summary>
+    private void EnsureOutputDirectoryExists()
+    {
+        try
+        {
+            if (!Directory.Exists(_outputDirectory))
+            {
+                Directory.CreateDirectory(_outputDirectory);
+                _logger.LogInformation("Created placeholder image directory: {Directory}", _outputDirectory);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create placeholder image directory: {Directory}", _outputDirectory);
+            throw new InvalidOperationException(
+                $"Cannot create placeholder image directory at '{_outputDirectory}'. " +
+                "Check disk space and permissions.",
+                ex);
+        }
     }
 
     private string GeneratePlaceholderImage(string text, int index)
@@ -91,60 +122,147 @@ public class PlaceholderImageProvider : IStockProvider
         var fileName = $"placeholder_{Guid.NewGuid():N}.png";
         var outputPath = Path.Combine(_outputDirectory, fileName);
 
-        var backgroundColor = ColorPalette[index % ColorPalette.Length];
-        var textColor = GetContrastColor(backgroundColor);
-
-        using var surface = SKSurface.Create(new SKImageInfo(width, height));
-        var canvas = surface.Canvas;
-
-        canvas.Clear(backgroundColor);
-
-        var maxTextWidth = text.Length > 50 ? 50 : text.Length;
-        var displayText = text.Length > maxTextWidth ? string.Concat(text.AsSpan(0, maxTextWidth), "...") : text;
-
-        var fontSize = 80f;
-        using var paint = new SKPaint
+        try
         {
-            Color = textColor,
-            IsAntialias = true,
-            Style = SKPaintStyle.Fill,
-            TextAlign = SKTextAlign.Center,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold),
-            TextSize = fontSize
-        };
+            var backgroundColor = ColorPalette[index % ColorPalette.Length];
+            var textColor = GetContrastColor(backgroundColor);
 
-        var textBounds = new SKRect();
-        paint.MeasureText(displayText, ref textBounds);
+            using var surface = SKSurface.Create(new SKImageInfo(width, height));
+            if (surface == null)
+            {
+                throw new InvalidOperationException("Failed to create SkiaSharp surface. SkiaSharp may not be properly installed.");
+            }
 
-        while (textBounds.Width > width - 200 && fontSize > 20)
-        {
-            fontSize -= 5;
-            paint.TextSize = fontSize;
+            var canvas = surface.Canvas;
+            canvas.Clear(backgroundColor);
+
+            var maxTextWidth = text.Length > 50 ? 50 : text.Length;
+            var displayText = text.Length > maxTextWidth ? string.Concat(text.AsSpan(0, maxTextWidth), "...") : text;
+
+            var fontSize = 80f;
+            using var paint = new SKPaint
+            {
+                Color = textColor,
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill,
+                TextAlign = SKTextAlign.Center,
+                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold),
+                TextSize = fontSize
+            };
+
+            var textBounds = new SKRect();
             paint.MeasureText(displayText, ref textBounds);
+
+            while (textBounds.Width > width - 200 && fontSize > 20)
+            {
+                fontSize -= 5;
+                paint.TextSize = fontSize;
+                paint.MeasureText(displayText, ref textBounds);
+            }
+
+            var x = width / 2f;
+            var y = (height - textBounds.Height) / 2f - textBounds.Top;
+
+            using (var shadowPaint = paint.Clone())
+            {
+                shadowPaint.Color = SKColors.Black.WithAlpha(128);
+                canvas.DrawText(displayText, x + 4, y + 4, shadowPaint);
+            }
+
+            canvas.DrawText(displayText, x, y, paint);
+
+            var iconSize = 120f;
+            var iconY = y + textBounds.Height + 80;
+            DrawIcon(canvas, width / 2f, iconY, iconSize, textColor.WithAlpha(180));
+
+            using var image = surface.Snapshot();
+            if (image == null)
+            {
+                throw new InvalidOperationException("Failed to create image snapshot from SkiaSharp surface");
+            }
+            
+            using var data = image.Encode(SKEncodedImageFormat.Png, 90);
+            if (data == null || data.Size == 0)
+            {
+                throw new InvalidOperationException("Failed to encode image data - encoded data is empty");
+            }
+            
+            // Ensure we can write to disk with retry logic for transient failures
+            WriteImageToFile(outputPath, data);
+
+            _logger.LogDebug("Generated placeholder image: {Path}", outputPath);
+            return outputPath;
         }
-
-        var x = width / 2f;
-        var y = (height - textBounds.Height) / 2f - textBounds.Top;
-
-        using (var shadowPaint = paint.Clone())
+        catch (Exception ex)
         {
-            shadowPaint.Color = SKColors.Black.WithAlpha(128);
-            canvas.DrawText(displayText, x + 4, y + 4, shadowPaint);
+            _logger.LogError(ex, "Failed to generate placeholder image at {Path}", outputPath);
+            throw new InvalidOperationException(
+                $"Failed to generate placeholder image '{fileName}'. Error: {ex.Message}",
+                ex);
+        }
+    }
+
+    /// <summary>
+    /// Writes image data to file with retry logic for transient failures
+    /// </summary>
+    private void WriteImageToFile(string outputPath, SKData data)
+    {
+        const int maxRetries = 3;
+        const int retryDelayMs = 100;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                using var stream = File.OpenWrite(outputPath);
+                data.SaveTo(stream);
+                stream.Flush(); // Ensure data is written to disk
+                
+                // Validate that the file was actually written and has content
+                if (!File.Exists(outputPath))
+                {
+                    throw new IOException($"File was not created: {outputPath}");
+                }
+                
+                var fileInfo = new FileInfo(outputPath);
+                if (fileInfo.Length == 0)
+                {
+                    throw new IOException($"File was created but is empty: {outputPath}");
+                }
+                
+                _logger.LogDebug("Successfully wrote placeholder image: {Path} ({Size} bytes)", outputPath, fileInfo.Length);
+                return; // Success
+            }
+            catch (IOException ex) when (attempt < maxRetries)
+            {
+                _logger.LogWarning(ex, "Failed to write placeholder image (attempt {Attempt}/{MaxRetries}): {Path}", 
+                    attempt, maxRetries, outputPath);
+                
+                // Clean up partial file if it exists
+                try
+                {
+                    if (File.Exists(outputPath))
+                    {
+                        File.Delete(outputPath);
+                    }
+                }
+                catch
+                {
+                    // Ignore cleanup errors
+                }
+                
+                Thread.Sleep(retryDelayMs * attempt); // Exponential backoff
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogError(ex, "Permission denied writing placeholder image: {Path}", outputPath);
+                throw new InvalidOperationException(
+                    $"Permission denied writing to '{outputPath}'. Check directory permissions.",
+                    ex);
+            }
         }
 
-        canvas.DrawText(displayText, x, y, paint);
-
-        var iconSize = 120f;
-        var iconY = y + textBounds.Height + 80;
-        DrawIcon(canvas, width / 2f, iconY, iconSize, textColor.WithAlpha(180));
-
-        using var image = surface.Snapshot();
-        using var data = image.Encode(SKEncodedImageFormat.Png, 90);
-        using var stream = File.OpenWrite(outputPath);
-        data.SaveTo(stream);
-
-        _logger.LogDebug("Generated placeholder image: {Path}", outputPath);
-        return outputPath;
+        throw new IOException($"Failed to write placeholder image after {maxRetries} attempts: {outputPath}");
     }
 
     private void DrawIcon(SKCanvas canvas, float centerX, float centerY, float size, SKColor color)
