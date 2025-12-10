@@ -1840,33 +1840,6 @@ public class JobsController : ControllerBase
             _ => Core.Models.PauseStyle.Natural
         };
     }
-
-    /// <summary>
-    /// Maps SubtitleFontConfigDto to CaptionRenderStyle
-    /// </summary>
-    private static CaptionRenderStyle MapCaptionStyle(SubtitleFontConfigDto dto)
-    {
-        // Map ASS alignment values (1-9 numpad layout) from string alignment
-        int alignment = dto.Alignment.ToLowerInvariant() switch
-        {
-            "left" => 1,     // bottom-left
-            "center" => 2,   // bottom-center
-            "right" => 3,    // bottom-right
-            _ => 2           // default to bottom-center
-        };
-
-        return new CaptionRenderStyle(
-            FontName: dto.FontFamily,
-            FontSize: dto.FontSize,
-            PrimaryColor: dto.PrimaryColor,
-            OutlineColor: dto.OutlineColor,
-            OutlineWidth: dto.OutlineWidth,
-            BorderStyle: dto.BorderStyle,
-            Alignment: alignment,
-            IsRightToLeft: dto.IsRTL,
-            RtlFontFallback: dto.RtlFontFallback
-        );
-    }
 }
 
 /// <summary>
