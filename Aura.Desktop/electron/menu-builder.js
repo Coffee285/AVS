@@ -262,6 +262,22 @@ class MenuBuilder {
         },
         { type: 'separator' },
         {
+          label: 'Zoom In',
+          accelerator: 'CmdOrCtrl+Plus',
+          click: () => this._zoomIn()
+        },
+        {
+          label: 'Zoom Out',
+          accelerator: 'CmdOrCtrl+-',
+          click: () => this._zoomOut()
+        },
+        {
+          label: 'Reset Zoom',
+          accelerator: 'CmdOrCtrl+0',
+          click: () => this._resetZoom()
+        },
+        { type: 'separator' },
+        {
           label: 'Toggle Full Screen',
           accelerator: process.platform === 'darwin' ? 'Ctrl+Cmd+F' : 'F11',
           click: () => {
@@ -511,6 +527,18 @@ class MenuBuilder {
 
   _checkForUpdates() {
     this._sendToRenderer('menu:checkForUpdates');
+  }
+
+  _zoomIn() {
+    this._sendToRenderer('menu:zoomIn');
+  }
+
+  _zoomOut() {
+    this._sendToRenderer('menu:zoomOut');
+  }
+
+  _resetZoom() {
+    this._sendToRenderer('menu:resetZoom');
   }
 
   _showAbout() {

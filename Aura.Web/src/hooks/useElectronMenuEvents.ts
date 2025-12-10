@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { loggingService } from '../services/loggingService';
 import { MENU_EVENT_ROUTES } from '../services/routeRegistry';
 import type { MenuAPI, OpenRecentProjectData } from '../types/electron-menu';
+import { zoomIn, zoomOut, resetZoom, getCurrentZoom } from '../constants/zoom';
 
 /**
  * React hook that sets up listeners for all Electron menu events
@@ -205,6 +206,31 @@ export function useElectronMenuEvents() {
         const unsub = menu.onCheckForUpdates(() => {
           loggingService.info('Menu action: Check for Updates');
           window.dispatchEvent(new CustomEvent('app:checkForUpdates'));
+        });
+        unsubscribers.push(unsub);
+      }
+
+      // View Menu - Zoom Controls
+      if (menu.onZoomIn) {
+        const unsub = menu.onZoomIn(() => {
+          const newZoom = zoomIn();
+          loggingService.info('Menu action: Zoom In', { newZoom });
+        });
+        unsubscribers.push(unsub);
+      }
+
+      if (menu.onZoomOut) {
+        const unsub = menu.onZoomOut(() => {
+          const newZoom = zoomOut();
+          loggingService.info('Menu action: Zoom Out', { newZoom });
+        });
+        unsubscribers.push(unsub);
+      }
+
+      if (menu.onResetZoom) {
+        const unsub = menu.onResetZoom(() => {
+          const newZoom = resetZoom();
+          loggingService.info('Menu action: Reset Zoom', { newZoom });
         });
         unsubscribers.push(unsub);
       }

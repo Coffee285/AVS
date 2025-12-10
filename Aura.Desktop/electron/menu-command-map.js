@@ -248,6 +248,37 @@ const MENU_COMMANDS = {
     schema: EmptyPayloadSchema,
     contexts: [CommandContext.GLOBAL],
     description: 'Check for application updates'
+  },
+  
+  // View Menu Commands
+  ZOOM_IN: {
+    id: 'menu:zoomIn',
+    label: 'Zoom In',
+    category: 'View',
+    schema: EmptyPayloadSchema,
+    accelerator: 'CmdOrCtrl+Plus',
+    contexts: [CommandContext.GLOBAL],
+    description: 'Increase UI zoom level by 10%'
+  },
+  
+  ZOOM_OUT: {
+    id: 'menu:zoomOut',
+    label: 'Zoom Out',
+    category: 'View',
+    schema: EmptyPayloadSchema,
+    accelerator: 'CmdOrCtrl+-',
+    contexts: [CommandContext.GLOBAL],
+    description: 'Decrease UI zoom level by 10%'
+  },
+  
+  RESET_ZOOM: {
+    id: 'menu:resetZoom',
+    label: 'Reset Zoom',
+    category: 'View',
+    schema: EmptyPayloadSchema,
+    accelerator: 'CmdOrCtrl+0',
+    contexts: [CommandContext.GLOBAL],
+    description: 'Reset zoom to 100% (actual size)'
   }
 };
 

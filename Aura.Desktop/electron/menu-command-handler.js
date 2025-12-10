@@ -203,7 +203,10 @@ function createValidatedMenuAPI(ipcRenderer) {
     onRunDiagnostics: createCommandListener('menu:runDiagnostics'),
     onOpenGettingStarted: createCommandListener('menu:openGettingStarted'),
     onShowKeyboardShortcuts: createCommandListener('menu:showKeyboardShortcuts'),
-    onCheckForUpdates: createCommandListener('menu:checkForUpdates')
+    onCheckForUpdates: createCommandListener('menu:checkForUpdates'),
+    onZoomIn: createCommandListener('menu:zoomIn'),
+    onZoomOut: createCommandListener('menu:zoomOut'),
+    onResetZoom: createCommandListener('menu:resetZoom')
   };
 }
 

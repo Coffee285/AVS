@@ -29,7 +29,10 @@ const MENU_EVENT_CHANNELS = [
   'menu:runDiagnostics',
   'menu:openGettingStarted',
   'menu:showKeyboardShortcuts',
-  'menu:checkForUpdates'
+  'menu:checkForUpdates',
+  'menu:zoomIn',
+  'menu:zoomOut',
+  'menu:resetZoom'
 ];
 
 /**
