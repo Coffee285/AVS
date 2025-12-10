@@ -18,6 +18,7 @@ import {
   Tooltip,
 } from '@fluentui/react-components';
 import {
+  ArrowClockwise24Regular,
   CheckmarkCircle24Regular,
   Dismiss24Regular,
   DocumentMultiple24Regular,
@@ -410,6 +411,12 @@ export const FinalExport: FC<FinalExportProps> = ({
   const [saveLocation, setSaveLocation] = useState<string>('');
   const [isLoadingSaveLocation, setIsLoadingSaveLocation] = useState(true);
 
+  // Stuck job recovery state
+  const [isJobStuck, setIsJobStuck] = useState(false);
+  const [stuckJobId, setStuckJobId] = useState<string | null>(null);
+  const [stuckProgress, setStuckProgress] = useState<number>(0);
+  const [stuckStage, setStuckStage] = useState<string>('');
+
   // Ref to track EventSource for SSE connection cleanup
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -523,13 +530,54 @@ export const FinalExport: FC<FinalExportProps> = ({
     }
   }, []);
 
+  // Handler to cancel a stuck job
+  const handleCancelStuckJob = useCallback(async () => {
+    if (!stuckJobId) return;
+
+    try {
+      console.info('[FinalExport] Cancelling stuck job:', stuckJobId);
+      await fetch(apiUrl(`/api/jobs/${stuckJobId}/cancel`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      // Reset states
+      setIsJobStuck(false);
+      setStuckJobId(null);
+      setExportStatus('error');
+      setExportStage('Export cancelled due to stuck job');
+    } catch (error) {
+      console.error('[FinalExport] Failed to cancel stuck job:', error);
+      // Still reset UI even if cancel fails
+      setIsJobStuck(false);
+      setStuckJobId(null);
+      setExportStatus('error');
+      setExportStage('Failed to cancel job. Please refresh and try again.');
+    }
+  }, [stuckJobId]);
+
+  // Handler to retry from beginning
+  const handleRetryExport = useCallback(() => {
+    // Reset all state and restart
+    setIsJobStuck(false);
+    setStuckJobId(null);
+    setExportStatus('idle');
+    setExportProgress(0);
+    setExportStage('');
+    console.info('[FinalExport] Retrying export from beginning');
+  }, []);
+
   // eslint-disable-next-line sonarjs/cognitive-complexity
   const startExport = useCallback(async () => {
+    // Reset stuck state when starting new export
+    setIsJobStuck(false);
+    setStuckJobId(null);
+
     setExportStatus('exporting');
     setExportProgress(0);
     setExportResults([]);
     setResolvedPaths({});
-    
+
     // Signal to ResourceMonitor that export is active (for polling throttling)
     sessionStorage.setItem('active-export-job', 'true');
 
@@ -973,15 +1021,22 @@ export const FinalExport: FC<FinalExportProps> = ({
                         }
 
                         // Near-complete jobs can linger while the renderer writes the file.
-                        // Instead of failing early (which caused 72% errors), keep polling until timeout.
+                        // Instead of failing early, give more time but signal stuck state to UI
                         if (jobProgress >= 70) {
                           console.info(
-                            '[FinalExport] Job is past 70% but no output yet; continuing to poll for final file instead of failing early'
+                            '[FinalExport] Job is past 70% but no output yet; flagging as stuck and continuing to poll'
                           );
                           setExportStage(
-                            'Finalizing output file... waiting for the renderer to finish writing the video'
+                            'Video generation appears stuck. You can continue waiting, retry, or cancel below.'
                           );
-                          stuckStartTime = Date.now(); // Give additional time before re-evaluating
+
+                          // Set stuck state so UI can show recovery options
+                          setIsJobStuck(true);
+                          setStuckJobId(pollJobId);
+                          setStuckProgress(jobProgress);
+                          setStuckStage(currentStage);
+
+                          stuckStartTime = Date.now(); // Give additional time before re-checking
                           pollDelay = Math.min(pollDelay * backoffMultiplier, maxPollDelay);
                           continue;
                         }
@@ -994,6 +1049,11 @@ export const FinalExport: FC<FinalExportProps> = ({
                     }
                   } else {
                     stuckStartTime = null; // Reset if progress changed
+                    // Clear stuck state if progress resumed
+                    if (isJobStuck) {
+                      setIsJobStuck(false);
+                      setStuckJobId(null);
+                    }
                   }
                 }
 
@@ -1130,7 +1190,7 @@ export const FinalExport: FC<FinalExportProps> = ({
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
-    
+
     // Clear export flag to allow ResourceMonitor to resume normal polling
     sessionStorage.removeItem('active-export-job');
 
@@ -1435,9 +1495,76 @@ export const FinalExport: FC<FinalExportProps> = ({
           {Math.round(exportProgress)}% complete
         </Text>
       </div>
-      <Button appearance="secondary" icon={<Dismiss24Regular />} onClick={cancelExport}>
-        Cancel Export
-      </Button>
+
+      {isJobStuck && (
+        <Card
+          style={{
+            padding: tokens.spacingVerticalL,
+            backgroundColor: tokens.colorPaletteYellowBackground2,
+            border: `1px solid ${tokens.colorPaletteYellowBorder1}`,
+            marginTop: tokens.spacingVerticalL,
+            width: '100%',
+            maxWidth: '500px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: tokens.spacingHorizontalM,
+            }}
+          >
+            <ErrorCircle24Regular
+              style={{ fontSize: '24px', color: tokens.colorPaletteYellowForeground1 }}
+            />
+            <div style={{ flex: 1 }}>
+              <Title3 style={{ color: tokens.colorPaletteYellowForeground1 }}>
+                Export Appears Stuck
+              </Title3>
+              <Text style={{ marginTop: tokens.spacingVerticalS }}>
+                The video export is stuck at {stuckProgress}% in the &quot;{stuckStage}&quot; stage.
+                You can continue waiting, retry from the beginning, or cancel.
+              </Text>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: tokens.spacingHorizontalM,
+                  marginTop: tokens.spacingVerticalL,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <Tooltip
+                  content="Start the export process over from the beginning"
+                  relationship="label"
+                >
+                  <Button
+                    appearance="primary"
+                    icon={<ArrowClockwise24Regular />}
+                    onClick={handleRetryExport}
+                  >
+                    Retry Export
+                  </Button>
+                </Tooltip>
+                <Tooltip content="Cancel the stuck job and return to settings" relationship="label">
+                  <Button
+                    appearance="secondary"
+                    icon={<Dismiss24Regular />}
+                    onClick={handleCancelStuckJob}
+                  >
+                    Cancel Job
+                  </Button>
+                </Tooltip>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {!isJobStuck && (
+        <Button appearance="secondary" icon={<Dismiss24Regular />} onClick={cancelExport}>
+          Cancel Export
+        </Button>
+      )}
     </div>
   );
 

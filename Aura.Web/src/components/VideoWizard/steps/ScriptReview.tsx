@@ -562,7 +562,13 @@ const ScriptReviewComponent: FC<ScriptReviewProps> = ({
           }
         }
       } else {
-        console.info('[ScriptReview] Using external provider selection:', externalSelectedProvider);
+        // Only log once when external provider is first set, not on every render
+        if (!providers.length) {
+          console.info(
+            '[ScriptReview] Using external provider selection:',
+            externalSelectedProvider
+          );
+        }
         // Set model for external provider
         const provider = response.providers.find((p) => {
           const normalizeProviderName = (name: string) => {
@@ -578,7 +584,7 @@ const ScriptReviewComponent: FC<ScriptReviewProps> = ({
     } catch (error) {
       console.error('Failed to load providers:', error);
     }
-  }, [externalSelectedProvider, setSelectedProvider]);
+  }, [externalSelectedProvider, setSelectedProvider, providers.length]);
 
   useEffect(() => {
     loadProviders();
@@ -688,6 +694,9 @@ const ScriptReviewComponent: FC<ScriptReviewProps> = ({
 
     setIsGenerating(true);
     const startTime = Date.now();
+
+    // Signal critical operation to pause ResourceMonitor polling
+    sessionStorage.setItem('active-export-job', 'true');
 
     try {
       // Safe logging - wrapped to prevent any logging errors from breaking the application
@@ -1004,6 +1013,8 @@ const ScriptReviewComponent: FC<ScriptReviewProps> = ({
       }
     } finally {
       setIsGenerating(false);
+      // Clear critical operation signal to resume ResourceMonitor polling
+      sessionStorage.removeItem('active-export-job');
       // Safe logging
       try {
         console.log('[ScriptReview] Script generation finished, isGenerating set to false', {

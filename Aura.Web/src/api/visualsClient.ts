@@ -2,9 +2,20 @@
  * Visuals API Client
  *
  * Provides typed API methods for image generation and visual provider management
+ * Includes request caching and deduplication to prevent resource exhaustion
  */
 
 import { typedApiClient, TypedApiClient } from './typedClient';
+
+// Cache configuration
+const CACHE_TTL_MS = 30000; // 30 seconds cache for provider/style data
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+// In-flight request tracking to prevent duplicate concurrent requests
+const pendingRequests = new Map<string, Promise<unknown>>();
 
 export interface VisualProvider {
   name: string;
@@ -105,16 +116,77 @@ export interface ProvidersResponse {
  */
 export class VisualsClient {
   private client: TypedApiClient;
+  private cache: Map<string, CacheEntry<unknown>> = new Map();
 
   constructor(client?: TypedApiClient) {
     this.client = client || typedApiClient;
   }
 
   /**
-   * Get all available visual providers
+   * Check if a cached entry is still valid
+   */
+  private isCacheValid<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
+    if (!entry) return false;
+    return Date.now() - entry.timestamp < CACHE_TTL_MS;
+  }
+
+  /**
+   * Get data from cache if valid
+   */
+  private getFromCache<T>(key: string): T | null {
+    const entry = this.cache.get(key) as CacheEntry<T> | undefined;
+    if (this.isCacheValid(entry)) {
+      return entry.data;
+    }
+    // Clean up expired cache entry
+    this.cache.delete(key);
+    return null;
+  }
+
+  /**
+   * Store data in cache
+   */
+  private setCache<T>(key: string, data: T): void {
+    this.cache.set(key, { data, timestamp: Date.now() });
+  }
+
+  /**
+   * Execute a request with deduplication and caching
+   */
+  private async withCacheAndDedup<T>(cacheKey: string, requestFn: () => Promise<T>): Promise<T> {
+    // Check cache first
+    const cached = this.getFromCache<T>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
+
+    // Check if request is already in flight
+    const pending = pendingRequests.get(cacheKey) as Promise<T> | undefined;
+    if (pending) {
+      return pending;
+    }
+
+    // Execute request and track it
+    const promise = requestFn()
+      .then((result) => {
+        this.setCache(cacheKey, result);
+        return result;
+      })
+      .finally(() => {
+        pendingRequests.delete(cacheKey);
+      });
+
+    pendingRequests.set(cacheKey, promise);
+    return promise;
+  }
+
+  /**
+   * Get all available visual providers (cached and deduplicated)
    */
   async getProviders(): Promise<ProvidersResponse> {
-    return this.client.get<ProvidersResponse>('/api/visuals/providers');
+    return this.withCacheAndDedup('providers', () =>
+      this.client.get<ProvidersResponse>('/api/visuals/providers')
+    );
   }
 
   /**
@@ -207,10 +279,12 @@ export class VisualsClient {
   }
 
   /**
-   * Get available visual styles
+   * Get available visual styles (cached and deduplicated)
    */
   async getStyles(): Promise<StylesResponse> {
-    return this.client.get<StylesResponse>('/api/visuals/styles');
+    return this.withCacheAndDedup('styles', () =>
+      this.client.get<StylesResponse>('/api/visuals/styles')
+    );
   }
 
   /**
