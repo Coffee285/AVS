@@ -307,13 +307,18 @@ public partial class IdeationController : ControllerBase
         {
             _logger.LogError(timeoutEx, "[{CorrelationId}] Timeout during brainstorming for topic: {Topic}", correlationId, request?.Topic ?? "unknown");
             return StatusCode(504, new {
-                error = timeoutEx.Message,
-                correlationId,
+                success = false,
+                error = "AI Provider Timeout",
+                message = timeoutEx.Message,
+                errorType = "TimeoutException",
                 suggestions = new[] {
-                    "The request took too long. Try simplifying your topic",
-                    "Check your network connection",
-                    "Try using a faster LLM model"
-                }
+                    "1. Try a smaller/faster AI model",
+                    "2. Simplify your topic description",
+                    "3. If using Ollama, ensure it has adequate resources (CPU/GPU)",
+                    "4. Check if the model is fully loaded (run 'ollama list')",
+                    "5. Retry the request - it may succeed on the next attempt"
+                },
+                correlationId
             });
         }
         catch (Exception ex)
@@ -342,10 +347,19 @@ public partial class IdeationController : ControllerBase
             suggestions.Add("Simplify your topic description");
 
             return StatusCode(500, new {
-                error = errorMessage,
-                correlationId,
-                type = ex.GetType().Name,
-                suggestions = suggestions.ToArray()
+                success = false,
+                error = "Internal Server Error",
+                message = ex.Message,
+                errorType = ex.GetType().Name,
+                suggestions = new[]
+                {
+                    "1. Check your AI provider configuration in Settings",
+                    "2. Ensure Ollama is running (if using Ollama)",
+                    "3. Try a different/smaller model",
+                    "4. Simplify your topic",
+                    "5. Check the browser console for detailed error information"
+                },
+                correlationId
             });
         }
     }

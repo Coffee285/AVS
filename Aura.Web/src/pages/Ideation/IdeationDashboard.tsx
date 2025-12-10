@@ -311,7 +311,7 @@ export const IdeationDashboard: React.FC = () => {
         console.error('Brainstorm error:', err);
 
         let errorMessage = 'Failed to generate concepts';
-        let errorType: 'connection' | 'parsing' | 'generation' | 'generic' = 'generic';
+        let errorType: 'connection' | 'parsing' | 'generation' | 'timeout' | 'generic' = 'generic';
         let suggestions: string[] = [];
 
         if (err instanceof Error) {
@@ -319,6 +319,18 @@ export const IdeationDashboard: React.FC = () => {
 
           // Categorize error type based on message content
           if (
+            errorMessage.toLowerCase().includes('timeout') ||
+            errorMessage.toLowerCase().includes('too long') ||
+            errorMessage.toLowerCase().includes('timed out')
+          ) {
+            errorType = 'timeout';
+            suggestions = [
+              'Try a smaller or faster AI model',
+              'Simplify your topic description',
+              'If using Ollama, ensure it has adequate resources (CPU/GPU)',
+              'The model may still be loading - wait a moment and try again',
+            ];
+          } else if (
             errorMessage.toLowerCase().includes('cannot connect') ||
             errorMessage.toLowerCase().includes('connection') ||
             errorMessage.toLowerCase().includes('not available') ||
@@ -357,10 +369,11 @@ export const IdeationDashboard: React.FC = () => {
           }
         }
 
-        // Try to extract suggestions from API response
+        // Try to extract suggestions and errorType from API response
         if (typeof err === 'object' && err !== null) {
           const apiError = err as {
-            response?: { data?: { suggestions?: string[]; error?: string } };
+            response?: { data?: { suggestions?: string[]; error?: string; errorType?: string } };
+            errorType?: string;
           };
           if (
             apiError.response?.data?.suggestions &&
@@ -370,6 +383,23 @@ export const IdeationDashboard: React.FC = () => {
           }
           if (apiError.response?.data?.error) {
             errorMessage = apiError.response.data.error;
+          }
+          if (apiError.response?.data?.errorType) {
+            // Map backend error types to frontend categories
+            const backendType = apiError.response.data.errorType.toLowerCase();
+            if (backendType.includes('timeout')) {
+              errorType = 'timeout';
+            } else if (backendType.includes('http')) {
+              errorType = 'connection';
+            }
+          }
+          if (apiError.errorType) {
+            const backendType = apiError.errorType.toLowerCase();
+            if (backendType.includes('timeout')) {
+              errorType = 'timeout';
+            } else if (backendType.includes('http')) {
+              errorType = 'connection';
+            }
           }
         }
 
@@ -385,13 +415,15 @@ export const IdeationDashboard: React.FC = () => {
 
         // Build comprehensive error message with error type indicator
         const errorTypeLabel =
-          errorType === 'connection'
-            ? '🔌 Connection Error'
-            : errorType === 'parsing'
-              ? '📋 Response Format Error'
-              : errorType === 'generation'
-                ? '🤖 AI Generation Error'
-                : '❌ Error';
+          errorType === 'timeout'
+            ? '⏱️ Timeout'
+            : errorType === 'connection'
+              ? '🔌 Connection Error'
+              : errorType === 'parsing'
+                ? '📋 Response Format Error'
+                : errorType === 'generation'
+                  ? '🤖 AI Generation Error'
+                  : '❌ Error';
 
         const fullError = `${errorTypeLabel}\n\n${errorMessage}\n\n💡 Suggestions:\n${suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n')}`;
 
