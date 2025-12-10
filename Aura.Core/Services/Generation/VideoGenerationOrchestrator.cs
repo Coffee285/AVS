@@ -179,10 +179,33 @@ public class VideoGenerationOrchestrator
                 succeededTasks += batchSucceeded;
                 failedTasks += batchFailed;
 
+                // Determine batch type for better status messages
+                var isVisualBatch = batch.All(n => n.TaskType == GenerationTaskType.ImageGeneration);
+                
                 // Report progress after batch completion with clear status
-                var statusMessage = batchFailed > 0
-                    ? $"Batch completed ({processedTasks}/{totalTasks} tasks done, {batchFailed} with fallbacks)"
-                    : $"Batch completed ({processedTasks}/{totalTasks} tasks done)";
+                string statusMessage;
+                if (batchFailed > 0)
+                {
+                    // Provide context about what failed
+                    var failedTaskTypes = batchResults
+                        .Where(r => !r.Succeeded)
+                        .Select(r => r.TaskId)
+                        .Take(3) // Show first 3 failed tasks
+                        .ToList();
+                    
+                    if (isVisualBatch)
+                    {
+                        statusMessage = $"Batch completed ({processedTasks}/{totalTasks} tasks done, {batchFailed} visual tasks using placeholders)";
+                    }
+                    else
+                    {
+                        statusMessage = $"Batch completed ({processedTasks}/{totalTasks} tasks done, {batchFailed} tasks failed: {string.Join(", ", failedTaskTypes)})";
+                    }
+                }
+                else
+                {
+                    statusMessage = $"Batch completed ({processedTasks}/{totalTasks} tasks done)";
+                }
                 
                 progress?.Report(new OrchestrationProgress(
                     statusMessage,

@@ -176,7 +176,16 @@ public class PlaceholderImageProvider : IStockProvider
             DrawIcon(canvas, width / 2f, iconY, iconSize, textColor.WithAlpha(180));
 
             using var image = surface.Snapshot();
+            if (image == null)
+            {
+                throw new InvalidOperationException("Failed to create image snapshot from SkiaSharp surface");
+            }
+            
             using var data = image.Encode(SKEncodedImageFormat.Png, 90);
+            if (data == null || data.Size == 0)
+            {
+                throw new InvalidOperationException("Failed to encode image data - encoded data is empty");
+            }
             
             // Ensure we can write to disk with retry logic for transient failures
             WriteImageToFile(outputPath, data);
@@ -207,12 +216,41 @@ public class PlaceholderImageProvider : IStockProvider
             {
                 using var stream = File.OpenWrite(outputPath);
                 data.SaveTo(stream);
+                stream.Flush(); // Ensure data is written to disk
+                
+                // Validate that the file was actually written and has content
+                if (!File.Exists(outputPath))
+                {
+                    throw new IOException($"File was not created: {outputPath}");
+                }
+                
+                var fileInfo = new FileInfo(outputPath);
+                if (fileInfo.Length == 0)
+                {
+                    throw new IOException($"File was created but is empty: {outputPath}");
+                }
+                
+                _logger.LogDebug("Successfully wrote placeholder image: {Path} ({Size} bytes)", outputPath, fileInfo.Length);
                 return; // Success
             }
             catch (IOException ex) when (attempt < maxRetries)
             {
                 _logger.LogWarning(ex, "Failed to write placeholder image (attempt {Attempt}/{MaxRetries}): {Path}", 
                     attempt, maxRetries, outputPath);
+                
+                // Clean up partial file if it exists
+                try
+                {
+                    if (File.Exists(outputPath))
+                    {
+                        File.Delete(outputPath);
+                    }
+                }
+                catch
+                {
+                    // Ignore cleanup errors
+                }
+                
                 Thread.Sleep(retryDelayMs * attempt); // Exponential backoff
             }
             catch (UnauthorizedAccessException ex)

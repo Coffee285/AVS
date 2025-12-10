@@ -46,8 +46,9 @@ public class UnsplashStockProvider : IStockProvider
         _logger.LogInformation("Searching Unsplash for: {Query} (count: {Count})", query, count);
 
         // Add request-level timeout to prevent hanging on slow/stuck requests
+        // 20 seconds allows sufficient time for API response while preventing indefinite hangs
         using var requestTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        requestTimeoutCts.CancelAfter(TimeSpan.FromSeconds(15)); // 15 second per-request timeout
+        requestTimeoutCts.CancelAfter(TimeSpan.FromSeconds(20));
 
         try
         {
@@ -98,7 +99,7 @@ public class UnsplashStockProvider : IStockProvider
         }
         catch (OperationCanceledException) when (requestTimeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            _logger.LogWarning("Unsplash API request timed out after 15 seconds for query: {Query}", query);
+            _logger.LogWarning("Unsplash API request timed out after 20 seconds for query: {Query}", query);
             return Array.Empty<Asset>();
         }
         catch (Exception ex)
