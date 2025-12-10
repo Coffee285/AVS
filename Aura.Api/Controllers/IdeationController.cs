@@ -47,6 +47,10 @@ public partial class IdeationController : ControllerBase
     {
         var correlationId = HttpContext.TraceIdentifier;
 
+        // Add request-level timeout for ideation to prevent long hangs
+        using var requestTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        requestTimeoutCts.CancelAfter(TimeSpan.FromSeconds(60)); // 60 second timeout for brainstorm
+
         try
         {
             if (string.IsNullOrWhiteSpace(request.Topic))
@@ -66,7 +70,7 @@ public partial class IdeationController : ControllerBase
             {
                 try
                 {
-                    var stats = await _vectorIndex.GetStatisticsAsync(ct).ConfigureAwait(false);
+                    var stats = await _vectorIndex.GetStatisticsAsync(requestTimeoutCts.Token).ConfigureAwait(false);
                     if (stats.TotalDocuments > 0)
                     {
                         _logger.LogInformation(
@@ -102,7 +106,7 @@ public partial class IdeationController : ControllerBase
             }
 
             // Pre-flight check: Verify AI provider is available before attempting ideation
-            var (isAvailable, errorMessage) = await _ideationService.CheckProviderAvailabilityAsync(ct).ConfigureAwait(false);
+            var (isAvailable, errorMessage) = await _ideationService.CheckProviderAvailabilityAsync(requestTimeoutCts.Token).ConfigureAwait(false);
             if (!isAvailable)
             {
                 return StatusCode(503, new
@@ -125,7 +129,7 @@ public partial class IdeationController : ControllerBase
                 LlmParameters = request.LlmParameters
             };
 
-            var response = await _ideationService.BrainstormConceptsAsync(requestWithRag, ct).ConfigureAwait(false);
+            var response = await _ideationService.BrainstormConceptsAsync(requestWithRag, requestTimeoutCts.Token).ConfigureAwait(false);
 
             return Ok(new
             {

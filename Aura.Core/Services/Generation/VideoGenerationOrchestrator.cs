@@ -460,15 +460,14 @@ public class VideoGenerationOrchestrator
                 }
                 finally
                 {
-                    // CRITICAL: Always release resources in finally block to prevent deadlocks
+                    // CRITICAL: Always release semaphore in finally block to prevent deadlocks
                     if (limiterAcquired)
                     {
                         _concurrencyLimiter.Release();
                     }
-                    if (resourcesAcquired)
-                    {
-                        _resourceMonitor.ReleaseResources(node.EstimatedResourceCost);
-                    }
+                    // Note: ResourceMonitor uses passive monitoring, not active tracking,
+                    // so no explicit release is needed. Resources become available automatically
+                    // when tasks complete and system metrics update.
                 }
             }
             catch (TimeoutException tex)
