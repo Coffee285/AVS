@@ -928,7 +928,8 @@ public class FfmpegVideoComposer : IVideoComposer
                 spec.Res.Height,
                 spec.Fps,
                 narrationInputIndex,
-                musicInputIndex);
+                musicInputIndex,
+                spec);
 
             if (!string.IsNullOrEmpty(filterGraph))
             {
@@ -1078,7 +1079,7 @@ public class FfmpegVideoComposer : IVideoComposer
 
     /// <summary>
     /// Builds a complex filter graph for visual composition with Ken Burns effects and fade transitions.
-    /// Applies subtle Ken Burns effect (1.0 to 1.1 zoom) to static images by default.
+    /// Applies Ken Burns effect to static images based on spec settings (EnableKenBurns and KenBurnsIntensity).
     /// Applies fade transitions (0.5s) between scenes.
     /// </summary>
     private string BuildVisualCompositionFilter(
@@ -1088,7 +1089,8 @@ public class FfmpegVideoComposer : IVideoComposer
         int height,
         int fps,
         int narrationInputIndex,
-        int musicInputIndex)
+        int musicInputIndex,
+        RenderSpec spec)
     {
         if (assets.Count == 0)
         {
@@ -1105,17 +1107,33 @@ public class FfmpegVideoComposer : IVideoComposer
 
             if (asset.IsImage)
             {
-                var kenBurnsFilter = EffectBuilder.BuildKenBurns(
-                    duration: durationSeconds,
-                    fps: fps,
-                    zoomStart: DefaultKenBurnsZoomStart,
-                    zoomEnd: DefaultKenBurnsZoomEnd,
-                    panX: 0.0,
-                    panY: 0.0,
-                    width: width,
-                    height: height);
+                if (spec.EnableKenBurns)
+                {
+                    // Calculate zoom end based on intensity (intensity of 0.1 means zoom from 1.0 to 1.1)
+                    var zoomEnd = 1.0 + spec.KenBurnsIntensity;
+                    
+                    var kenBurnsFilter = EffectBuilder.BuildKenBurns(
+                        duration: durationSeconds,
+                        fps: fps,
+                        zoomStart: DefaultKenBurnsZoomStart,
+                        zoomEnd: zoomEnd,
+                        panX: 0.0,
+                        panY: 0.0,
+                        width: width,
+                        height: height);
 
-                filterParts.Add($"[{i}:v]{kenBurnsFilter}[v{i}]");
+                    _logger.LogInformation(
+                        "Applying Ken Burns effect to scene {Index}: duration={Duration}s, zoom={ZoomStart}->{ZoomEnd}",
+                        asset.SceneIndex, durationSeconds, DefaultKenBurnsZoomStart, zoomEnd);
+                    _logger.LogDebug("Ken Burns filter: {Filter}", kenBurnsFilter);
+
+                    filterParts.Add($"[{i}:v]{kenBurnsFilter}[v{i}]");
+                }
+                else
+                {
+                    _logger.LogDebug("Ken Burns disabled for scene {Index}, using static scale", asset.SceneIndex);
+                    filterParts.Add($"[{i}:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v{i}]");
+                }
             }
             else
             {

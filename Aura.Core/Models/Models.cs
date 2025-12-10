@@ -133,7 +133,9 @@ public record RenderSpec(
     int QualityLevel = 75,
     bool EnableSceneCut = true,
     ScriptRefinementConfig? RefinementConfig = null,
-    string? JobId = null);
+    string? JobId = null,
+    bool EnableKenBurns = true,
+    double KenBurnsIntensity = 0.1);
 
 public record RenderProgress(float Percentage, TimeSpan Elapsed, TimeSpan Remaining, string CurrentStage);
 

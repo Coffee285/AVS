@@ -24,6 +24,45 @@ public class EffectBuilderTests
         Assert.Contains($"fps={fps}", result);
     }
 
+    [Theory]
+    [InlineData(0.0, 1.0)] // No zoom (static)
+    [InlineData(0.1, 1.1)] // Subtle zoom
+    [InlineData(0.2, 1.2)] // Medium zoom
+    [InlineData(0.3, 1.3)] // Dramatic zoom
+    public void BuildKenBurns_WithDifferentIntensities_ShouldGenerateCorrectZoomRange(double intensity, double expectedZoomEnd)
+    {
+        // Arrange
+        var duration = 5.0;
+        var fps = 30;
+        var zoomStart = 1.0;
+        var zoomEnd = zoomStart + intensity;
+
+        // Act
+        var result = EffectBuilder.BuildKenBurns(duration, fps, zoomStart, zoomEnd);
+
+        // Assert
+        Assert.Contains("zoompan", result);
+        Assert.Contains($"1.000", result); // zoom start
+        Assert.Contains($"{expectedZoomEnd:F3}", result); // zoom end
+    }
+
+    [Fact]
+    public void BuildKenBurns_WithNoZoom_ShouldStillGenerateValidFilter()
+    {
+        // Arrange - same start and end means no zoom effect
+        var duration = 5.0;
+        var fps = 30;
+        var zoomStart = 1.0;
+        var zoomEnd = 1.0;
+
+        // Act
+        var result = EffectBuilder.BuildKenBurns(duration, fps, zoomStart, zoomEnd);
+
+        // Assert
+        Assert.Contains("zoompan", result);
+        Assert.Contains("1.000", result);
+    }
+
     [Fact]
     public void BuildBlur_WithSigma_ShouldGenerateBlurFilter()
     {
