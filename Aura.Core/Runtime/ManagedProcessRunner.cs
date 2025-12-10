@@ -148,18 +148,8 @@ public class ManagedProcessRunner
                     "Process {Name} (PID: {Pid}) timed out after {Timeout}",
                     process.ProcessName, process.Id, effectiveTimeout);
 
-                // Kill the process tree
-                try
-                {
-                    if (!process.HasExited)
-                    {
-                        process.Kill(entireProcessTree: true);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error killing timed-out process {Pid}", process.Id);
-                }
+                // Kill the process tree using enhanced Windows-compatible termination
+                KillProcessTree(process);
 
                 throw new TimeoutException(
                     $"Process {process.ProcessName} exceeded timeout of {effectiveTimeout}");
@@ -181,18 +171,8 @@ public class ManagedProcessRunner
         {
             _logger.LogInformation("Process {Name} (PID: {Pid}) cancelled", process.ProcessName, process.Id);
 
-            // Kill the process tree on cancellation
-            try
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error killing cancelled process {Pid}", process.Id);
-            }
+            // Kill the process tree using enhanced Windows-compatible termination
+            KillProcessTree(process);
 
             throw;
         }
@@ -202,6 +182,78 @@ public class ManagedProcessRunner
             if (!process.HasExited)
             {
                 _registry.Unregister(process.Id);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Kill a process with Windows-specific fallback handling
+    /// </summary>
+    private void KillProcessTree(Process process)
+    {
+        if (process.HasExited)
+        {
+            return;
+        }
+
+        try
+        {
+            // Try standard .NET process tree kill first
+            process.Kill(entireProcessTree: true);
+            _logger.LogDebug("Successfully killed process tree using Process.Kill() for PID {Pid}", process.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Process.Kill(entireProcessTree: true) failed for PID {Pid}, attempting Windows-specific fallback", process.Id);
+
+            // Windows-specific fallback: Use taskkill command for more reliable termination
+            if (OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    var taskkillProcess = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = "taskkill",
+                            Arguments = $"/T /F /PID {process.Id}",
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true
+                        }
+                    };
+
+                    taskkillProcess.Start();
+                    taskkillProcess.WaitForExit(5000); // 5 second timeout
+
+                    if (taskkillProcess.ExitCode == 0)
+                    {
+                        _logger.LogInformation("Successfully killed process tree using taskkill for PID {Pid}", process.Id);
+                    }
+                    else
+                    {
+                        var stderr = taskkillProcess.StandardError.ReadToEnd();
+                        _logger.LogWarning("taskkill failed for PID {Pid}: {Error}", process.Id, stderr);
+                    }
+                }
+                catch (Exception taskkillEx)
+                {
+                    _logger.LogError(taskkillEx, "taskkill command failed for PID {Pid}", process.Id);
+                }
+            }
+            else
+            {
+                // Non-Windows: Try simple Kill() as final fallback
+                try
+                {
+                    process.Kill();
+                    _logger.LogDebug("Killed process using simple Kill() for PID {Pid}", process.Id);
+                }
+                catch (Exception killEx)
+                {
+                    _logger.LogError(killEx, "All termination attempts failed for PID {Pid}", process.Id);
+                }
             }
         }
     }

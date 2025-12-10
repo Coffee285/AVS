@@ -206,7 +206,8 @@ public class FfmpegVideoComposer : IVideoComposer
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardError = true,
-                RedirectStandardOutput = true
+                RedirectStandardOutput = true,
+                RedirectStandardInput = true  // CRITICAL: Required for graceful termination on Windows
             },
             EnableRaisingEvents = true
         };
@@ -1126,22 +1127,43 @@ public class FfmpegVideoComposer : IVideoComposer
 
             for (int i = 0; i < assets.Count - 1; i++)
             {
+                var currentSceneDuration = assets[i].Duration.TotalSeconds;
+                var nextSceneDuration = assets[i + 1].Duration.TotalSeconds;
+                
                 // FIX: Accumulate offset BEFORE calculating transition
-                currentOffset += assets[i].Duration.TotalSeconds;
+                currentOffset += currentSceneDuration;
+
+                // FIX: Skip transitions for extremely short scenes to prevent invalid FFmpeg filter parameters
+                const double MinSceneDurationForTransition = 0.2; // 200ms minimum
+                if (currentSceneDuration < MinSceneDurationForTransition || nextSceneDuration < MinSceneDurationForTransition)
+                {
+                    _logger.LogWarning(
+                        "Skipping transition between scene {Index} ({Duration1}s) and {NextIndex} ({Duration2}s) - scene(s) too short",
+                        i, currentSceneDuration, i + 1, nextSceneDuration);
+                    
+                    // Use direct concatenation without transition
+                    var skipInputLabel1 = i == 0 ? "v0" : $"vt{i - 1}";
+                    var skipInputLabel2 = $"v{i + 1}";
+                    var skipOutputLabel = i == assets.Count - 2 ? "vout" : $"vt{i}";
+                    
+                    // Simple concat without crossfade
+                    filterParts.Add($"[{skipInputLabel1}][{skipInputLabel2}]concat=n=2:v=1:a=0[{skipOutputLabel}]");
+                    continue;
+                }
 
                 // FIX: Ensure transition offset is never negative
                 var transitionDuration = DefaultFadeTransitionDuration;
                 var safeTransitionOffset = Math.Max(0, currentOffset - transitionDuration);
 
                 // FIX: If scene is too short, reduce transition duration
-                if (assets[i].Duration.TotalSeconds < transitionDuration)
+                if (currentSceneDuration < transitionDuration)
                 {
-                    transitionDuration = Math.Max(0.1, assets[i].Duration.TotalSeconds * 0.5);
+                    transitionDuration = Math.Max(0.1, currentSceneDuration * 0.5);
                     safeTransitionOffset = currentOffset - transitionDuration;
                     _logger.LogWarning(
                         "Scene {Index} duration ({Duration}s) shorter than default transition. " +
                         "Reduced transition to {Adjusted}s",
-                        i, assets[i].Duration.TotalSeconds, transitionDuration);
+                        i, currentSceneDuration, transitionDuration);
                 }
 
                 var fadeTransition = TransitionBuilder.BuildCrossfade(
@@ -1517,10 +1539,24 @@ public class FfmpegVideoComposer : IVideoComposer
         else
         {
             // FFmpeg has a full path, look for ffprobe in the same directory
-            ffprobePath = Path.Combine(ffmpegDir, "ffprobe.exe");
-            if (!File.Exists(ffprobePath))
+            // Check OS first to determine correct extension (Windows vs Linux/Mac)
+            if (OperatingSystem.IsWindows())
             {
-                // Try without .exe extension (Linux/Mac)
+                ffprobePath = Path.Combine(ffmpegDir, "ffprobe.exe");
+                if (!File.Exists(ffprobePath))
+                {
+                    // Try without .exe extension as fallback
+                    ffprobePath = Path.Combine(ffmpegDir, "ffprobe");
+                    if (!File.Exists(ffprobePath))
+                    {
+                        // Fall back to PATH
+                        ffprobePath = "ffprobe";
+                    }
+                }
+            }
+            else
+            {
+                // Linux/Mac - no .exe extension
                 ffprobePath = Path.Combine(ffmpegDir, "ffprobe");
                 if (!File.Exists(ffprobePath))
                 {

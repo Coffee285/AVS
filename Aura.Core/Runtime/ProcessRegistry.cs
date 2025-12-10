@@ -121,8 +121,68 @@ public class ProcessRegistry : IAsyncDisposable
                 // Cancel any associated cancellation tokens
                 tracked.Cts.Cancel();
 
-                // Kill the process tree
-                process.Kill(entireProcessTree: true);
+                // Kill the process tree with Windows-specific fallback
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (Exception killEx)
+                {
+                    _logger.LogWarning(killEx, "Process.Kill(entireProcessTree: true) failed for PID {Pid}, attempting Windows-specific fallback", processId);
+
+                    // Windows-specific fallback: Use taskkill command
+                    if (OperatingSystem.IsWindows())
+                    {
+                        try
+                        {
+                            var taskkillProcess = new Process
+                            {
+                                StartInfo = new ProcessStartInfo
+                                {
+                                    FileName = "taskkill",
+                                    Arguments = $"/T /F /PID {processId}",
+                                    UseShellExecute = false,
+                                    CreateNoWindow = true,
+                                    RedirectStandardOutput = true,
+                                    RedirectStandardError = true
+                                }
+                            };
+
+                            taskkillProcess.Start();
+                            taskkillProcess.WaitForExit(5000);
+
+                            if (taskkillProcess.ExitCode == 0)
+                            {
+                                _logger.LogInformation("Successfully killed process tree using taskkill for PID {Pid}", processId);
+                            }
+                        }
+                        catch (Exception taskkillEx)
+                        {
+                            _logger.LogError(taskkillEx, "taskkill command failed for PID {Pid}", processId);
+                            // Try simple Kill() as last resort
+                            try
+                            {
+                                process.Kill();
+                            }
+                            catch
+                            {
+                                // Ignore - process may have already exited
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Non-Windows: Try simple Kill() as fallback
+                        try
+                        {
+                            process.Kill();
+                        }
+                        catch
+                        {
+                            // Ignore - process may have already exited
+                        }
+                    }
+                }
 
                 // Wait for it to exit (with timeout)
                 try
