@@ -195,10 +195,38 @@ export function ResourceMonitor({ compact = false }: ResourceMonitorProps) {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const failureStreakRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const pollIntervalRef = useRef<number>(2000); // Start with 2 seconds
+  const circuitBreakerOpenUntilRef = useRef<number>(0); // Circuit breaker timestamp
+
+  // Detect critical operations by checking for active progress indicators
+  // This is a heuristic - we pause polling when UI shows spinners/progress
+  const isCriticalOperationActive = (): boolean => {
+    // Check for loading spinners in Ideation, Localization, or Export
+    const hasLoadingSpinner = document.querySelector('[role="progressbar"], [data-loading="true"]');
+    // Check for SSE connections (video export)
+    const hasActiveExport = sessionStorage.getItem('active-export-job');
+    return Boolean(hasLoadingSpinner || hasActiveExport);
+  };
 
   // Fetch real system metrics from backend API
   useEffect(() => {
     const fetchMetrics = async () => {
+      // CIRCUIT BREAKER: Skip if circuit is open
+      const now = Date.now();
+      if (circuitBreakerOpenUntilRef.current > now) {
+        console.warn(
+          '[ResourceMonitor] Circuit breaker open, skipping poll until',
+          new Date(circuitBreakerOpenUntilRef.current).toISOString()
+        );
+        return;
+      }
+
+      // CRITICAL OPERATION DETECTION: Pause polling during heavy operations
+      if (isCriticalOperationActive()) {
+        console.info('[ResourceMonitor] Critical operation detected, pausing metrics polling');
+        return;
+      }
+
       try {
         // Cancel any pending request
         if (abortControllerRef.current) {
@@ -217,7 +245,10 @@ export function ResourceMonitor({ compact = false }: ResourceMonitorProps) {
         const parsedMetrics = parseMetricsResponse(systemMetrics);
         setMetrics(parsedMetrics);
         setLastUpdated(parsedMetrics.updatedAt ?? new Date());
+        
+        // SUCCESS: Reset failure streak and exponential backoff
         failureStreakRef.current = 0;
+        pollIntervalRef.current = 2000; // Reset to 2 seconds
         setStatus('live');
       } catch (error: unknown) {
         // Silently handle errors - don't update metrics if request fails
@@ -226,19 +257,56 @@ export function ResourceMonitor({ compact = false }: ResourceMonitorProps) {
         if (errorObj.name !== 'AbortError') {
           console.warn('[ResourceMonitor] Failed to fetch metrics:', errorObj.message);
         }
+        
+        // EXPONENTIAL BACKOFF: Increase poll interval on failure
         failureStreakRef.current += 1;
-        setStatus(failureStreakRef.current >= 3 ? 'offline' : 'stale');
+        
+        // Increase interval: 2s → 5s → 10s → 30s
+        if (failureStreakRef.current === 1) {
+          pollIntervalRef.current = 5000;
+        } else if (failureStreakRef.current === 2) {
+          pollIntervalRef.current = 10000;
+        } else if (failureStreakRef.current >= 3) {
+          pollIntervalRef.current = 30000;
+        }
+        
+        // CIRCUIT BREAKER: Open circuit after 3 consecutive failures for 60 seconds
+        if (failureStreakRef.current >= 3) {
+          circuitBreakerOpenUntilRef.current = now + 60000; // 60 seconds
+          setStatus('offline');
+          console.warn(
+            '[ResourceMonitor] Circuit breaker opened for 60 seconds after 3 consecutive failures'
+          );
+        } else {
+          setStatus('stale');
+        }
       }
     };
 
     // Fetch immediately on mount
     fetchMetrics();
 
-    // Poll every 2 seconds
-    const interval = setInterval(fetchMetrics, 2000);
+    // Dynamic polling with exponential backoff
+    const startPolling = () => {
+      let timeoutId: ReturnType<typeof setTimeout>;
+      
+      const poll = () => {
+        fetchMetrics().finally(() => {
+          // Schedule next poll with current interval
+          timeoutId = setTimeout(poll, pollIntervalRef.current);
+        });
+      };
+      
+      // Start first poll after initial delay
+      timeoutId = setTimeout(poll, pollIntervalRef.current);
+      
+      return () => clearTimeout(timeoutId);
+    };
+
+    const cleanup = startPolling();
 
     return () => {
-      clearInterval(interval);
+      cleanup();
       // Cancel any pending request on unmount
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();

@@ -529,6 +529,9 @@ export const FinalExport: FC<FinalExportProps> = ({
     setExportProgress(0);
     setExportResults([]);
     setResolvedPaths({});
+    
+    // Signal to ResourceMonitor that export is active (for polling throttling)
+    sessionStorage.setItem('active-export-job', 'true');
 
     try {
       const formatsToExport = batchExport ? selectedFormats : [data.format];
@@ -1114,6 +1117,9 @@ export const FinalExport: FC<FinalExportProps> = ({
       console.error('[FinalExport] Export failed:', error);
       setExportStatus('error');
       setExportStage(error instanceof Error ? error.message : 'Export failed. Please try again.');
+    } finally {
+      // Clear export flag to allow ResourceMonitor to resume normal polling
+      sessionStorage.removeItem('active-export-job');
     }
   }, [batchExport, selectedFormats, data, wizardData, estimatedFileSize]);
 
@@ -1124,6 +1130,9 @@ export const FinalExport: FC<FinalExportProps> = ({
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
+    
+    // Clear export flag to allow ResourceMonitor to resume normal polling
+    sessionStorage.removeItem('active-export-job');
 
     setExportStatus('idle');
     setExportProgress(0);

@@ -349,6 +349,9 @@ export const LocalizationPage: React.FC = () => {
     setLastOperation('translate');
     setTranslatedProviderInfo('');
     startElapsedTimer();
+    
+    // Signal to ResourceMonitor that a critical LLM operation is active
+    sessionStorage.setItem('active-export-job', 'true');
 
     // Create new AbortController for user-initiated cancellation
     // Set a frontend timeout that's slightly longer than the backend timeout
@@ -405,6 +408,8 @@ export const LocalizationPage: React.FC = () => {
       setLoading(false);
       setLoadingMessage('');
       abortControllerRef.current = null;
+      // Clear flag to allow ResourceMonitor to resume normal polling
+      sessionStorage.removeItem('active-export-job');
     }
   }, [
     sourceText,
@@ -481,6 +486,9 @@ export const LocalizationPage: React.FC = () => {
     );
     setLastOperation('analyze');
     startElapsedTimer();
+    
+    // Signal to ResourceMonitor that a critical LLM operation is active
+    sessionStorage.setItem('active-export-job', 'true');
 
     // Create new AbortController for user-initiated cancellation
     const abortController = new AbortController();
@@ -545,6 +553,8 @@ export const LocalizationPage: React.FC = () => {
       setLoading(false);
       setLoadingMessage('');
       abortControllerRef.current = null;
+      // Clear flag to allow ResourceMonitor to resume normal polling
+      sessionStorage.removeItem('active-export-job');
     }
   }, [
     sourceText,
