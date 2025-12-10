@@ -33,7 +33,7 @@ const useStyles = makeStyles({
     position: 'relative',
     width: '6px',
     height: '100%',
-    cursor: 'col-resize',
+    cursor: openCutTokens.cursors.resizeCol,
     backgroundColor: 'transparent',
     display: 'flex',
     alignItems: 'center',
@@ -70,7 +70,7 @@ const useStyles = makeStyles({
     },
   },
   dividerCollapsed: {
-    cursor: 'pointer',
+    cursor: openCutTokens.cursors.pointer,
     ':hover::after': {
       width: '4px',
     },
@@ -124,7 +124,7 @@ export const PanelDivider: FC<PanelDividerProps> = ({
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-    document.body.style.cursor = 'col-resize';
+    document.body.style.cursor = openCutTokens.cursors.resizeCol;
     document.body.style.userSelect = 'none';
 
     return () => {

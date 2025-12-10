@@ -98,7 +98,7 @@ const useStyles = makeStyles({
     left: 0,
     right: 0,
     height: '8px',
-    cursor: 'ns-resize',
+    cursor: openCutTokens.cursors.resizeNS,
     zIndex: openCutTokens.zIndex.sticky,
     display: 'flex',
     alignItems: 'center',
@@ -195,6 +195,7 @@ const useStyles = makeStyles({
     flex: 1,
     position: 'relative',
     overflow: 'hidden',
+    cursor: openCutTokens.cursors.resizeCol,
   },
   ruler: {
     position: 'absolute',
@@ -294,7 +295,7 @@ const useStyles = makeStyles({
     bottom: '4px',
     borderRadius: openCutTokens.radius.sm,
     overflow: 'hidden',
-    cursor: 'pointer',
+    cursor: openCutTokens.cursors.grab,
     display: 'flex',
     alignItems: 'center',
     transition: `box-shadow ${openCutTokens.animation.duration.instant} ${openCutTokens.animation.easing.easeOut}, transform ${openCutTokens.animation.duration.instant} ${openCutTokens.animation.easing.easeOut}`,
@@ -324,14 +325,15 @@ const useStyles = makeStyles({
     transform: 'translateY(-1px)',
   },
   clipDraggable: {
-    cursor: 'grab',
+    cursor: openCutTokens.cursors.grab,
   },
   clipDragging: {
-    cursor: 'grabbing',
+    cursor: openCutTokens.cursors.grabbing,
     opacity: 0.8,
   },
   clipLocked: {
-    cursor: 'not-allowed',
+    cursor: openCutTokens.cursors.notAllowed,
+    opacity: 0.6,
   },
   clipThumbnail: {
     width: '40px',
@@ -376,14 +378,15 @@ const useStyles = makeStyles({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    width: '5px',
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    cursor: 'ew-resize',
+    width: '8px',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    cursor: openCutTokens.cursors.resizeEW,
     opacity: 0,
-    transition: `opacity ${openCutTokens.animation.duration.instant} ${openCutTokens.animation.easing.easeOut}`,
+    transition: `opacity ${openCutTokens.animation.duration.instant} ${openCutTokens.animation.easing.easeOut}, background-color ${openCutTokens.animation.duration.instant} ${openCutTokens.animation.easing.easeOut}`,
+    zIndex: 2,
     ':hover': {
       opacity: 1,
-      backgroundColor: 'rgba(255,255,255,0.5)',
+      backgroundColor: 'rgba(255,255,255,0.4)',
     },
   },
   clipTrimHandleLeft: {
@@ -402,7 +405,7 @@ const useStyles = makeStyles({
     backgroundColor: openCutTokens.colors.playhead,
     zIndex: openCutTokens.zIndex.sticky - 5,
     pointerEvents: 'auto',
-    cursor: 'ew-resize',
+    cursor: openCutTokens.cursors.resizeEW,
   },
   playheadHandle: {
     position: 'absolute',
@@ -414,7 +417,7 @@ const useStyles = makeStyles({
     borderRadius: `${openCutTokens.radius.xs} ${openCutTokens.radius.xs} 50% 50%`,
     boxShadow: openCutTokens.shadows.sm,
     pointerEvents: 'auto',
-    cursor: 'ew-resize',
+    cursor: openCutTokens.cursors.resizeEW,
     userSelect: 'none',
     transition: `transform ${openCutTokens.animation.duration.fast} ${openCutTokens.animation.easing.easeOut}`,
     ':hover': {
@@ -422,7 +425,7 @@ const useStyles = makeStyles({
     },
   },
   playheadDragging: {
-    cursor: 'ew-resize',
+    cursor: openCutTokens.cursors.resizeEW,
     transform: 'scale(1.2)',
   },
   controlButton: {
@@ -461,6 +464,7 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorBrandBackground2,
     outline: `2px dashed ${tokens.colorBrandStroke1}`,
     outlineOffset: '-2px',
+    cursor: openCutTokens.cursors.copy,
   },
 });
 
@@ -905,7 +909,7 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
 
     // Prevent text selection while dragging
     document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'ew-resize';
+    document.body.style.cursor = openCutTokens.cursors.resizeEW;
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);

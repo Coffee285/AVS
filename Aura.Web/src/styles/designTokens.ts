@@ -268,6 +268,39 @@ export const openCutTokens = {
       WebkitUserSelect: 'text',
     },
   },
+
+  /**
+   * Cursor styles for professional NLE interactions.
+   * Provides visual feedback for different interactive zones.
+   */
+  cursors: {
+    /** Default cursor for general UI */
+    default: 'default',
+    /** Pointer cursor for clickable elements */
+    pointer: 'pointer',
+    /** Open hand cursor for draggable items */
+    grab: 'grab',
+    /** Closed hand cursor while dragging */
+    grabbing: 'grabbing',
+    /** East-west resize cursor for horizontal resizing (trim handles) */
+    resizeEW: 'ew-resize',
+    /** North-south resize cursor for vertical resizing (track height) */
+    resizeNS: 'ns-resize',
+    /** Column resize cursor for horizontal panel dividers */
+    resizeCol: 'col-resize',
+    /** Row resize cursor for horizontal dividers */
+    resizeRow: 'row-resize',
+    /** Move cursor for repositioning elements */
+    move: 'move',
+    /** Copy cursor for drag-and-drop operations */
+    copy: 'copy',
+    /** Not-allowed cursor for disabled/locked elements */
+    notAllowed: 'not-allowed',
+    /** Text cursor for editable text areas */
+    text: 'text',
+    /** Crosshair cursor for precision selection */
+    crosshair: 'crosshair',
+  },
 } as const;
 
 /**
