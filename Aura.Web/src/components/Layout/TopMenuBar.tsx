@@ -17,6 +17,7 @@ import {
 import { Checkmark20Regular } from '@fluentui/react-icons';
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { zoomIn, zoomOut, resetZoom } from '../../constants/zoom';
 import { getWorkspaceLayouts, PanelSizes } from '../../services/workspaceLayoutService';
 import { useWorkspaceLayoutStore } from '../../state/workspaceLayout';
 import { SaveWorkspaceDialog } from '../EditorLayout/SaveWorkspaceDialog';
@@ -113,6 +114,18 @@ export function TopMenuBar({
   const handleResetWorkspace = useCallback(() => {
     resetLayout();
   }, [resetLayout]);
+
+  const handleZoomIn = useCallback(() => {
+    zoomIn();
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    zoomOut();
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    resetZoom();
+  }, []);
 
   return (
     <div className={styles.menuBar}>
@@ -260,12 +273,22 @@ export function TopMenuBar({
         </MenuTrigger>
         <MenuPopover>
           <MenuList>
-            <MenuItem>Zoom In</MenuItem>
-            <MenuItem>Zoom Out</MenuItem>
-            <MenuItem>
+            <MenuItem onClick={handleZoomIn}>
               <div className={styles.menuItemContent}>
-                <span>Fit to Screen</span>
-                <span className={styles.shortcut}>Shift+Z</span>
+                <span>Zoom In</span>
+                <span className={styles.shortcut}>Ctrl++</span>
+              </div>
+            </MenuItem>
+            <MenuItem onClick={handleZoomOut}>
+              <div className={styles.menuItemContent}>
+                <span>Zoom Out</span>
+                <span className={styles.shortcut}>Ctrl+-</span>
+              </div>
+            </MenuItem>
+            <MenuItem onClick={handleResetZoom}>
+              <div className={styles.menuItemContent}>
+                <span>Reset Zoom</span>
+                <span className={styles.shortcut}>Ctrl+0</span>
               </div>
             </MenuItem>
             <MenuDivider />

@@ -1,11 +1,7 @@
 import { Button, makeStyles, tokens, Tooltip, Text } from '@fluentui/react-components';
 import { ZoomIn24Regular, ZoomOut24Regular } from '@fluentui/react-icons';
 import { useEffect, useMemo, useState } from 'react';
-
-const MIN_ZOOM = 100;
-const MAX_ZOOM = 140;
-const STEP = 10;
-const DEFAULT_ZOOM = 120;
+import { MIN_ZOOM, MAX_ZOOM, STEP, DEFAULT_ZOOM, ZOOM_STORAGE_KEY } from '../constants/zoom';
 
 const useStyles = makeStyles({
   root: {
@@ -25,7 +21,7 @@ export function ZoomControls() {
   const styles = useStyles();
   const initialZoom = useMemo(() => {
     try {
-      const stored = localStorage.getItem('aura-ui-zoom');
+      const stored = localStorage.getItem(ZOOM_STORAGE_KEY);
       const parsed = stored ? parseInt(stored, 10) : DEFAULT_ZOOM;
       return Number.isFinite(parsed)
         ? Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parsed))
@@ -41,7 +37,7 @@ export function ZoomControls() {
     const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
     document.documentElement.style.setProperty('--aura-base-font-size', `${clamped}%`);
     try {
-      localStorage.setItem('aura-ui-zoom', String(clamped));
+      localStorage.setItem(ZOOM_STORAGE_KEY, String(clamped));
     } catch {
       // ignore storage issues
     }
