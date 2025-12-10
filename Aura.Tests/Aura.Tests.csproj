@@ -115,7 +115,6 @@
     <Compile Remove="Integration\ConcurrentJobExecutionTests.cs" />
     <Compile Remove="Integration\FullPipelineIntegrationTests.cs" />
     <Compile Remove="Integration\ProviderPipelineArchitectureTests.cs" />
-    <Compile Remove="Integration\VideoGenerationIntegrationTests.cs" />
     <Compile Remove="IntelligentPacingOptimizerTests.cs" />
     <Compile Remove="OrchestratorMiddlewareTests.cs" />
     <Compile Remove="PipelineOrchestrationEngineTests.cs" />
