@@ -342,6 +342,38 @@ export const ExportSettingsPanel: FC<ExportSettingsProps> = ({ className, onSave
             onChange={(_, data) => updateCurrentSetting('burnCaptions', data.checked)}
           />
         </div>
+
+        <div className={styles.switchRow}>
+          <Text className={styles.fieldLabel}>Ken Burns Effect</Text>
+          <Switch
+            checked={currentSettings.enableKenBurns ?? true}
+            onChange={(_, data) => updateCurrentSetting('enableKenBurns', data.checked)}
+          />
+        </div>
+
+        {(currentSettings.enableKenBurns ?? true) && (
+          <div className={styles.fieldRow}>
+            <Text className={styles.fieldLabel}>Ken Burns Intensity</Text>
+            <div className={styles.sliderContainer}>
+              <Slider
+                min={0}
+                max={0.3}
+                step={0.05}
+                value={currentSettings.kenBurnsIntensity ?? 0.1}
+                onChange={(_, data) => updateCurrentSetting('kenBurnsIntensity', data.value)}
+              />
+              <Text className={styles.sliderValue}>
+                {(currentSettings.kenBurnsIntensity ?? 0.1) === 0
+                  ? 'None'
+                  : (currentSettings.kenBurnsIntensity ?? 0.1) <= 0.1
+                    ? 'Subtle'
+                    : (currentSettings.kenBurnsIntensity ?? 0.1) <= 0.2
+                      ? 'Medium'
+                      : 'Dramatic'}
+              </Text>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Save as Preset Button */}

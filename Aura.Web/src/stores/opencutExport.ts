@@ -14,11 +14,15 @@ import type {
 } from '../types/opencut';
 
 /**
- * Extended export settings with optional audio sample rate.
+ * Extended export settings with optional audio sample rate and Ken Burns effects.
  */
 export interface ExportSettings extends BaseExportSettings {
   /** Audio sample rate in Hz */
   audioSampleRate?: number;
+  /** Enable Ken Burns effect for static images */
+  enableKenBurns?: boolean;
+  /** Ken Burns zoom intensity (0.0 = no zoom, 0.1 = subtle, 0.3 = dramatic) */
+  kenBurnsIntensity?: number;
 }
 
 /**
@@ -54,6 +58,8 @@ export const BUILTIN_PRESETS: ExportPreset[] = [
       twoPass: true,
       includeAudio: true,
       burnCaptions: false,
+      enableKenBurns: true,
+      kenBurnsIntensity: 0.1,
     },
   },
   {
@@ -75,6 +81,8 @@ export const BUILTIN_PRESETS: ExportPreset[] = [
       twoPass: false,
       includeAudio: true,
       burnCaptions: false,
+      enableKenBurns: true,
+      kenBurnsIntensity: 0.1,
     },
   },
   {
@@ -96,6 +104,8 @@ export const BUILTIN_PRESETS: ExportPreset[] = [
       twoPass: false,
       includeAudio: true,
       burnCaptions: false,
+      enableKenBurns: true,
+      kenBurnsIntensity: 0.1,
     },
   },
   {
@@ -117,6 +127,8 @@ export const BUILTIN_PRESETS: ExportPreset[] = [
       twoPass: false,
       includeAudio: true,
       burnCaptions: false,
+      enableKenBurns: true,
+      kenBurnsIntensity: 0.1,
     },
   },
   {
@@ -138,6 +150,8 @@ export const BUILTIN_PRESETS: ExportPreset[] = [
       twoPass: false,
       includeAudio: true,
       burnCaptions: false,
+      enableKenBurns: true,
+      kenBurnsIntensity: 0.1,
     },
   },
   {
@@ -186,6 +200,8 @@ export const BUILTIN_PRESETS: ExportPreset[] = [
       twoPass: false,
       includeAudio: true,
       burnCaptions: false,
+      enableKenBurns: true,
+      kenBurnsIntensity: 0.1,
     },
   },
 ];
