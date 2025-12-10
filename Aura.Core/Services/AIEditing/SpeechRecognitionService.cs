@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Aura.Core.Captions;
+using Aura.Core.Models;
 using Aura.Core.Models.AIEditing;
 using Microsoft.Extensions.Logging;
 
@@ -215,23 +218,104 @@ public class SpeechRecognitionService
     }
 
     /// <summary>
-    /// Burns captions into video
+    /// Burns captions into video using FFmpeg subtitle filter
     /// </summary>
     public async Task<string> BurnCaptionsAsync(
         string videoPath,
         SpeechRecognitionResult captionResult,
         string outputPath,
+        CaptionRenderStyle? style = null,
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Burning captions into video: {VideoPath}", videoPath);
 
-        await Task.CompletedTask.ConfigureAwait(false);
+        if (!File.Exists(videoPath))
+        {
+            throw new FileNotFoundException("Video file not found", videoPath);
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Placeholder: In production, use FFmpeg to burn subtitles
-        // ffmpeg -i input.mp4 -vf subtitles=captions.srt output.mp4
-        
-        _logger.LogInformation("Video with burned captions created: {OutputPath}", outputPath);
-        return outputPath;
+        style ??= new CaptionRenderStyle();
+
+        // Generate SRT file from caption result
+        var srtPath = Path.ChangeExtension(outputPath, ".srt");
+        var lines = captionResult.Segments.Select((s, i) => new ScriptLine(
+            i, 
+            s.Text, 
+            s.StartTime, 
+            s.EndTime - s.StartTime
+        )).ToList();
+
+        // Use NullLogger for CaptionBuilder since logging is already done at this level
+        var captionBuilder = new CaptionBuilder(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<CaptionBuilder>.Instance);
+        var srtContent = captionBuilder.GenerateSrt(lines);
+        await File.WriteAllTextAsync(srtPath, srtContent, cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation("Generated SRT file: {SrtPath}", srtPath);
+
+        // Build FFmpeg command with subtitle filter
+        var subtitleFilter = captionBuilder.BuildBurnInFilter(srtPath, style);
+
+        var ffmpegArgs = string.Format(
+            "-i \"{0}\" -vf \"{1}\" -c:a copy -y \"{2}\"",
+            videoPath, subtitleFilter, outputPath);
+
+        _logger.LogDebug("FFmpeg command: ffmpeg {Args}", ffmpegArgs);
+
+        var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "ffmpeg",
+                Arguments = ffmpegArgs,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            }
+        };
+
+        try
+        {
+            process.Start();
+            
+            var stderr = await process.StandardError.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            var stdout = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+            if (process.ExitCode != 0)
+            {
+                _logger.LogError("FFmpeg caption burn-in failed with exit code {ExitCode}: {Error}", 
+                    process.ExitCode, stderr);
+                throw new InvalidOperationException(
+                    $"Failed to burn captions: FFmpeg exited with code {process.ExitCode}. Error: {stderr}");
+            }
+
+            // Verify output file was created
+            if (!File.Exists(outputPath))
+            {
+                throw new InvalidOperationException(
+                    $"FFmpeg reported success but output file not created: {outputPath}");
+            }
+
+            var outputInfo = new FileInfo(outputPath);
+            if (outputInfo.Length == 0)
+            {
+                throw new InvalidOperationException(
+                    $"FFmpeg created empty output file: {outputPath}");
+            }
+
+            _logger.LogInformation("Captions burned into video: {OutputPath} ({SizeMB:F2} MB)", 
+                outputPath, outputInfo.Length / 1024.0 / 1024.0);
+            
+            return outputPath;
+        }
+        finally
+        {
+            process.Dispose();
+        }
     }
 }
