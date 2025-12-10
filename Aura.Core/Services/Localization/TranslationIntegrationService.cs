@@ -94,7 +94,7 @@ public class TranslationIntegrationService
         };
 
         var translationResult = await _translationService.TranslateAsync(
-            translationRequest, cancellationToken).ConfigureAwait(false);
+            translationRequest, null, cancellationToken).ConfigureAwait(false);
 
         var translatedScriptLines = translationResult.TranslatedLines
             .Select(line => new ScriptLine(

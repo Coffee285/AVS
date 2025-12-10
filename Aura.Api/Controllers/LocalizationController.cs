@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Aura.Api.Models.ApiModels.V1;
@@ -199,7 +200,7 @@ public class LocalizationController : ControllerBase
         try
         {
             var translationRequest = MapToTranslationRequest(request);
-            var result = await _localizationService.TranslateAsync(translationRequest, linkedCts.Token).ConfigureAwait(false);
+            var result = await _localizationService.TranslateAsync(translationRequest, null, linkedCts.Token).ConfigureAwait(false);
 
             var dto = MapToTranslationResultDto(result);
 
@@ -352,6 +353,125 @@ public class LocalizationController : ControllerBase
             _logger.LogError(ex, "Translation failed; returning pass-through content");
             var fallback = BuildPassthroughTranslationResult(request, ex.Message);
             return Ok(fallback);
+        }
+    }
+    
+    /// <summary>
+    /// Translate script with real-time progress updates via Server-Sent Events
+    /// </summary>
+    [HttpPost("translate-stream")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task TranslateWithProgressAsync(
+        [FromBody] TranslateScriptRequest request,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Translation stream request: {Source} → {Target}, CorrelationId: {CorrelationId}",
+            request.SourceLanguage, request.TargetLanguage, HttpContext.TraceIdentifier);
+
+        // Set SSE headers
+        Response.ContentType = "text/event-stream";
+        Response.Headers.Append("Cache-Control", "no-cache");
+        Response.Headers.Append("Connection", "keep-alive");
+        Response.Headers.Append("X-Accel-Buffering", "no");
+
+        // Fast-path: if source and target are identical, skip provider calls
+        if (string.Equals(request.SourceLanguage, request.TargetLanguage, StringComparison.OrdinalIgnoreCase))
+        {
+            var passthrough = BuildPassthroughTranslationResult(request);
+            var passthroughJson = JsonSerializer.Serialize(new { success = true, result = passthrough });
+            await Response.WriteAsync($"data: {passthroughJson}\n\n", cancellationToken).ConfigureAwait(false);
+            await Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        // Validate language codes
+        var sourceValidation = _localizationService.ValidateLanguageCode(request.SourceLanguage);
+        if (!sourceValidation.IsValid && !sourceValidation.IsWarning)
+        {
+            var errorJson = JsonSerializer.Serialize(new 
+            { 
+                success = false, 
+                error = sourceValidation.Message,
+                errorCode = sourceValidation.ErrorCode ?? "INVALID_LANGUAGE"
+            });
+            await Response.WriteAsync($"data: {errorJson}\n\n", cancellationToken).ConfigureAwait(false);
+            await Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var targetValidation = _localizationService.ValidateLanguageCode(request.TargetLanguage);
+        if (!targetValidation.IsValid && !targetValidation.IsWarning)
+        {
+            var errorJson = JsonSerializer.Serialize(new 
+            { 
+                success = false, 
+                error = targetValidation.Message,
+                errorCode = targetValidation.ErrorCode ?? "INVALID_LANGUAGE"
+            });
+            await Response.WriteAsync($"data: {errorJson}\n\n", cancellationToken).ConfigureAwait(false);
+            await Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        // Create progress reporter that streams updates via SSE
+        var progress = new Progress<LocalizationProgress>(async p =>
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(new 
+                { 
+                    stage = p.Stage,
+                    currentScene = p.CurrentScene,
+                    totalScenes = p.TotalScenes,
+                    percentComplete = p.PercentComplete,
+                    currentText = p.CurrentText
+                });
+                await Response.WriteAsync($"data: {json}\n\n", cancellationToken).ConfigureAwait(false);
+                await Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to send progress update via SSE");
+            }
+        });
+
+        // Create a linked cancellation token with timeout
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(_llmTimeoutSeconds));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+        try
+        {
+            var translationRequest = MapToTranslationRequest(request);
+            var result = await _localizationService.TranslateAsync(translationRequest, progress, linkedCts.Token).ConfigureAwait(false);
+
+            var dto = MapToTranslationResultDto(result);
+            var finalJson = JsonSerializer.Serialize(new { success = true, result = dto });
+            await Response.WriteAsync($"data: {finalJson}\n\n", linkedCts.Token).ConfigureAwait(false);
+            await Response.Body.FlushAsync(linkedCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            var errorJson = JsonSerializer.Serialize(new 
+            { 
+                success = false, 
+                error = $"Translation request timed out after {_llmTimeoutSeconds} seconds",
+                errorCode = "TIMEOUT"
+            });
+            await Response.WriteAsync($"data: {errorJson}\n\n", CancellationToken.None).ConfigureAwait(false);
+            await Response.Body.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Translation stream failed, CorrelationId: {CorrelationId}", HttpContext.TraceIdentifier);
+            var errorJson = JsonSerializer.Serialize(new 
+            { 
+                success = false, 
+                error = ex.Message,
+                errorCode = "TRANSLATION_ERROR"
+            });
+            await Response.WriteAsync($"data: {errorJson}\n\n", CancellationToken.None).ConfigureAwait(false);
+            await Response.Body.FlushAsync(CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -535,7 +655,7 @@ public class LocalizationController : ControllerBase
             _logger.LogInformation("Translation request with model selection: Provider={Provider}, ModelId={ModelId}, CorrelationId: {CorrelationId}",
                 request.Provider ?? "(default)", request.ModelId ?? "(default)", HttpContext.TraceIdentifier);
 
-            var result = await _localizationService.TranslateAsync(translationRequest, linkedCts.Token).ConfigureAwait(false);
+            var result = await _localizationService.TranslateAsync(translationRequest, null, linkedCts.Token).ConfigureAwait(false);
 
             _logger.LogInformation("Simple translation completed in {Time:F2}s, CorrelationId: {CorrelationId}",
                 result.TranslationTimeSeconds, HttpContext.TraceIdentifier);

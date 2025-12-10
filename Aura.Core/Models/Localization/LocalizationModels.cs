@@ -413,3 +413,15 @@ public class CulturalRecommendation
     public string Reasoning { get; set; } = string.Empty;
     public LocalizationPriority Priority { get; set; }
 }
+
+/// <summary>
+/// Progress information for localization operations
+/// </summary>
+public class LocalizationProgress
+{
+    public string Stage { get; set; } = "Initializing";
+    public int CurrentScene { get; set; }
+    public int TotalScenes { get; set; }
+    public int PercentComplete { get; set; }
+    public string? CurrentText { get; set; }
+}

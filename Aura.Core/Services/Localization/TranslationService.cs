@@ -33,6 +33,7 @@ public class TranslationService
     private readonly VisualLocalizationAnalyzer _visualAnalyzer;
     // ARCHITECTURAL FIX: Inject IOllamaDirectClient instead of using reflection
     private readonly IOllamaDirectClient? _ollamaDirectClient;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _translationCache = new();
 
     public TranslationService(
         ILogger<TranslationService> logger,
@@ -144,11 +145,21 @@ public class TranslationService
     /// </summary>
     public async Task<TranslationResult> TranslateAsync(
         TranslationRequest request,
+        IProgress<LocalizationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
         _logger.LogInformation("Starting translation from {Source} to {Target}",
             request.SourceLanguage, request.TargetLanguage);
+        
+        var totalScenes = request.ScriptLines?.Count ?? 0;
+        progress?.Report(new LocalizationProgress
+        {
+            Stage = "Initializing",
+            CurrentScene = 0,
+            TotalScenes = totalScenes,
+            PercentComplete = 0
+        });
 
         // Pre-flight check: Validate provider availability before attempting translation
         var isAvailable = await IsProviderAvailableAsync(cancellationToken).ConfigureAwait(false);
@@ -228,6 +239,8 @@ public class TranslationService
             var translatedLines = await TranslateScriptLinesAsync(
                 request,
                 targetLanguage,
+                progress,
+                totalScenes,
                 cancellationToken).ConfigureAwait(false);
             result.TranslatedLines = translatedLines;
             result.TranslatedText = string.Join("\n", translatedLines.Select(l => l.TranslatedText));
@@ -280,6 +293,14 @@ public class TranslationService
 
             // Phase 6: Calculate translation metrics for monitoring
             _logger.LogInformation("Phase 6: Calculating translation metrics");
+            
+            progress?.Report(new LocalizationProgress
+            {
+                Stage = "Complete",
+                CurrentScene = totalScenes,
+                TotalScenes = totalScenes,
+                PercentComplete = 100
+            });
 
             // Only calculate metrics if we have valid source and translated text
             if (!string.IsNullOrWhiteSpace(result.SourceText) && !string.IsNullOrWhiteSpace(result.TranslatedText))
@@ -394,7 +415,7 @@ public class TranslationService
                     Glossary = request.Glossary
                 };
 
-                var translation = await TranslateAsync(translationRequest, cancellationToken).ConfigureAwait(false);
+                var translation = await TranslateAsync(translationRequest, null, cancellationToken).ConfigureAwait(false);
                 result.Translations[targetLanguage] = translation;
                 result.SuccessfulLanguages.Add(targetLanguage);
 
@@ -465,6 +486,8 @@ public class TranslationService
     private async Task<List<TranslatedScriptLine>> TranslateScriptLinesAsync(
         TranslationRequest request,
         LanguageInfo targetLanguage,
+        IProgress<LocalizationProgress>? progress,
+        int totalScenes,
         CancellationToken cancellationToken)
     {
         var translatedLines = new List<TranslatedScriptLine>();
@@ -489,33 +512,58 @@ public class TranslationService
 
         if (request.ScriptLines.Count != 0)
         {
-            // Translate script lines with context
-            for (int i = 0; i < request.ScriptLines.Count; i++)
+            // Translate script lines with parallel processing for better performance
+            var completedScenes = 0;
+            var semaphore = new SemaphoreSlim(3); // Max 3 concurrent translations
+            var translationTasks = request.ScriptLines.Select(async (line, i) =>
             {
-                var line = request.ScriptLines[i];
-                var context = BuildTranslationContext(request, i);
-
-                var translatedText = await TranslateWithContextAsync(
-                    line.Text,
-                    request.SourceLanguage,
-                    request.TargetLanguage,
-                    context,
-                    request.Options,
-                    request.Glossary,
-                    llmParameters,
-                    cancellationToken).ConfigureAwait(false);
-
-                translatedLines.Add(new TranslatedScriptLine
+                await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
                 {
-                    SceneIndex = i,
-                    SourceText = line.Text,
-                    TranslatedText = translatedText,
-                    OriginalStartSeconds = line.Start.TotalSeconds,
-                    OriginalDurationSeconds = line.Duration.TotalSeconds,
-                    AdjustedStartSeconds = line.Start.TotalSeconds,
-                    AdjustedDurationSeconds = line.Duration.TotalSeconds
-                });
-            }
+                    var context = BuildTranslationContext(request, i);
+
+                    var translatedText = await TranslateWithContextAndCacheAsync(
+                        line.Text,
+                        request.SourceLanguage,
+                        request.TargetLanguage,
+                        context,
+                        request.Options,
+                        request.Glossary,
+                        llmParameters,
+                        cancellationToken).ConfigureAwait(false);
+
+                    var currentCompleted = System.Threading.Interlocked.Increment(ref completedScenes);
+                    
+                    progress?.Report(new LocalizationProgress
+                    {
+                        Stage = "Translating",
+                        CurrentScene = currentCompleted,
+                        TotalScenes = totalScenes,
+                        PercentComplete = (int)((double)currentCompleted / totalScenes * 100),
+                        CurrentText = line.Text.Length > 50 ? line.Text.Substring(0, 50) + "..." : line.Text
+                    });
+
+                    return new TranslatedScriptLine
+                    {
+                        SceneIndex = i,
+                        SourceText = line.Text,
+                        TranslatedText = translatedText,
+                        OriginalStartSeconds = line.Start.TotalSeconds,
+                        OriginalDurationSeconds = line.Duration.TotalSeconds,
+                        AdjustedStartSeconds = line.Start.TotalSeconds,
+                        AdjustedDurationSeconds = line.Duration.TotalSeconds
+                    };
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            }).ToList();
+
+            var results = await Task.WhenAll(translationTasks).ConfigureAwait(false);
+            
+            // Sort by scene index to maintain order
+            translatedLines.AddRange(results.OrderBy(r => r.SceneIndex));
         }
         else if (!string.IsNullOrEmpty(request.SourceText))
         {
@@ -540,6 +588,53 @@ public class TranslationService
         }
 
         return translatedLines;
+    }
+    
+    private async Task<string> TranslateWithContextAndCacheAsync(
+        string text,
+        string sourceLanguage,
+        string targetLanguage,
+        string context,
+        TranslationOptions options,
+        Dictionary<string, string> glossary,
+        LlmParameters? llmParameters,
+        CancellationToken cancellationToken)
+    {
+        // Check cache first (only cache short strings to avoid memory bloat)
+        if (text.Length < 500)
+        {
+            var cacheKey = $"{targetLanguage}:{sourceLanguage}:{text.GetHashCode()}";
+            if (_translationCache.TryGetValue(cacheKey, out var cached))
+            {
+                _logger.LogDebug("Translation cache hit for {Length} chars", text.Length);
+                return cached;
+            }
+            
+            // Translate and cache result
+            var translated = await TranslateWithContextAsync(
+                text,
+                sourceLanguage,
+                targetLanguage,
+                context,
+                options,
+                glossary,
+                llmParameters,
+                cancellationToken).ConfigureAwait(false);
+            
+            _translationCache.TryAdd(cacheKey, translated);
+            return translated;
+        }
+        
+        // For longer texts, don't cache
+        return await TranslateWithContextAsync(
+            text,
+            sourceLanguage,
+            targetLanguage,
+            context,
+            options,
+            glossary,
+            llmParameters,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<string> TranslateWithContextAsync(
