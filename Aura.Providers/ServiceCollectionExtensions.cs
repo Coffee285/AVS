@@ -22,6 +22,8 @@ namespace Aura.Providers;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
+    // Named HttpClient constants
+    private const string TtsHttpClientName = "TtsClient";
     /// <summary>
     /// Registers all provider services including LLM, TTS, Image, Music, SFX, and Rendering providers
     /// This is the single entry point for provider registration
@@ -237,6 +239,29 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddTtsProviders(this IServiceCollection services)
     {
+        // Register named HttpClient for TTS providers with extended timeout
+        // TTS synthesis can take several minutes for long scripts
+        // Timeout set to 10 minutes to handle large batches without premature failures
+        services.AddHttpClient(TtsHttpClientName, client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(10); // 600 seconds for TTS synthesis
+            client.DefaultRequestHeaders.Add("User-Agent", "AuraVideoStudio/1.0");
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        })
+        .ConfigurePrimaryHttpMessageHandler(() =>
+        {
+            var handler = new HttpClientHandler
+            {
+                UseProxy = true,
+                UseDefaultCredentials = true,
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                AllowAutoRedirect = true,
+                MaxAutomaticRedirections = 5
+            };
+            return handler;
+        })
+        .SetHandlerLifetime(TimeSpan.FromMinutes(15)); // Prevent connection pool exhaustion
+
         // Register TTS support services
         services.AddSingleton<VoiceCache>(sp =>
         {
@@ -274,7 +299,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITtsProvider>(sp =>
         {
             var logger = sp.GetRequiredService<ILogger<ElevenLabsTtsProvider>>();
-            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+            var httpClient = httpClientFactory.CreateClient(TtsHttpClientName); // Use configured TTS client with extended timeout
             var settings = sp.GetRequiredService<ProviderSettings>();
             var apiKey = settings.GetElevenLabsApiKey();
             var offlineOnly = settings.IsOfflineOnly();
@@ -295,7 +321,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITtsProvider>(sp =>
         {
             var logger = sp.GetRequiredService<ILogger<PlayHTTtsProvider>>();
-            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+            var httpClient = httpClientFactory.CreateClient(TtsHttpClientName); // Use configured TTS client with extended timeout
             var settings = sp.GetRequiredService<ProviderSettings>();
             var apiKey = settings.GetPlayHTApiKey();
             var userId = settings.GetPlayHTUserId();
@@ -368,7 +395,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITtsProvider>(sp =>
         {
             var logger = sp.GetRequiredService<ILogger<Mimic3TtsProvider>>();
-            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+            var httpClient = httpClientFactory.CreateClient(TtsHttpClientName); // Use configured TTS client with extended timeout
             var silentWavGenerator = sp.GetRequiredService<Aura.Core.Audio.SilentWavGenerator>();
             var wavValidator = sp.GetRequiredService<Aura.Core.Audio.WavValidator>();
             var settings = sp.GetRequiredService<ProviderSettings>();
