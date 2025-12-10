@@ -1,5 +1,4 @@
 using Aura.Core.Orchestrator;
-using Aura.Core.Runtime;
 using Aura.Core.Services.Generation;
 using Aura.Core.Timeline;
 
@@ -15,11 +14,6 @@ public static class OrchestratorServicesExtensions
     /// </summary>
     public static IServiceCollection AddOrchestratorServices(this IServiceCollection services, IConfiguration configuration)
     {
-        // Process management services - CRITICAL for FFmpeg rendering stability
-        // These services ensure proper process tracking, cleanup, and prevent zombie processes
-        services.AddSingleton<ProcessRegistry>();
-        services.AddSingleton<ManagedProcessRunner>();
-
         // Script orchestrator with lazy provider creation
         services.AddSingleton<ScriptOrchestrator>(sp =>
         {
