@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Dark Theme - Aura Video Studio</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+            background: #0d0d0d;
+            color: #e8e8e8;
+            padding: 40px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #e8e8e8;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: #a0a0a0;
+            margin-bottom: 40px;
+        }
+
+        .section {
+            margin-bottom: 60px;
+        }
+
+        h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            color: #e8e8e8;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 12px;
+        }
+
+        /* Background Layers */
+        .bg-layers {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+
+        .bg-layer {
+            padding: 24px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .bg-layer-name {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .bg-layer-value {
+            font-size: 12px;
+            font-family: ui-monospace, "Cascadia Code", monospace;
+            color: #a0a0a0;
+        }
+
+        .bg-deepest { background: #0d0d0d; }
+        .bg-deep { background: #141414; }
+        .bg-surface { background: #1a1a1a; }
+        .bg-elevated { background: #222222; }
+        .bg-highlight { background: #2a2a2a; }
+
+        /* Timeline Demo */
+        .timeline-demo {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 1px 0 0 rgba(0, 0, 0, 0.3), 4px 0 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .timeline-header {
+            background: #222222;
+            padding: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px 8px 0 0;
+            margin-bottom: 16px;
+        }
+
+        .tracks {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .track {
+            display: flex;
+            min-height: 60px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            transition: background-color 0.15s ease;
+            position: relative;
+        }
+
+        .track:hover {
+            background: #2a2a2a;
+        }
+
+        .track-label {
+            width: 160px;
+            background: #1a1a1a;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #a0a0a0;
+        }
+
+        .track-content {
+            flex: 1;
+            background: #141414;
+            position: relative;
+            padding: 8px;
+        }
+
+        /* Clip Styles with Gradients */
+        .clip {
+            position: absolute;
+            top: 8px;
+            height: 44px;
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+            transition: box-shadow 0.15s ease, transform 0.15s ease;
+            cursor: pointer;
+        }
+
+        .clip:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .clip-video {
+            background: linear-gradient(180deg, #4a7c9b 0%, #3a6277 100%);
+            border: 1px solid #5a8caa;
+            left: 50px;
+            width: 180px;
+        }
+
+        .clip-audio {
+            background: linear-gradient(180deg, #5a9b5e 0%, #4a7f4d 100%);
+            border: 1px solid #6aab6e;
+            left: 250px;
+            width: 240px;
+        }
+
+        .clip-text {
+            background: linear-gradient(180deg, #9b7a5a 0%, #7f6349 100%);
+            border: 1px solid #ab8a6a;
+            left: 520px;
+            width: 160px;
+        }
+
+        .clip-image {
+            background: linear-gradient(180deg, #7a5a9b 0%, #634980 100%);
+            border: 1px solid #8a6aab;
+            left: 50px;
+            width: 200px;
+        }
+
+        .clip-selected {
+            box-shadow: 0 0 0 2px #5c9eff, 0 2px 12px rgba(92, 158, 255, 0.3);
+            animation: selectionGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes selectionGlow {
+            0%, 100% {
+                box-shadow: 0 0 0 2px #5c9eff;
+            }
+            50% {
+                box-shadow: 0 0 0 2px #5c9eff, 0 0 12px #5c9eff;
+            }
+        }
+
+        .clip-name {
+            font-size: 12px;
+            font-weight: 500;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Color Swatches */
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .color-swatch {
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .color-name {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .color-value {
+            font-size: 12px;
+            font-family: ui-monospace, "Cascadia Code", monospace;
+            color: #a0a0a0;
+        }
+
+        /* Interactive States */
+        .interactive-demo {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .demo-button {
+            background: #222222;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #e8e8e8;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .demo-button:hover {
+            background: #2a2a2a;
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-1px);
+        }
+
+        .demo-button:active {
+            background: #1a1a1a;
+        }
+
+        .demo-button.accent {
+            background: #5c9eff;
+            color: #0d0d0d;
+            border-color: #3d7bd9;
+        }
+
+        .demo-button.accent:hover {
+            background: #3d7bd9;
+        }
+
+        .panel-demo {
+            background: #1a1a1a;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 1px 0 0 rgba(0, 0, 0, 0.3), 4px 0 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .panel-header {
+            background: #222222;
+            padding: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            font-weight: 500;
+        }
+
+        .panel-content {
+            padding: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Professional Dark Theme</h1>
+        <p class="subtitle">Industry-standard dark theme matching Adobe Premiere Pro and DaVinci Resolve</p>
+
+        <div class="section">
+            <h2>Background Layers (Depth System)</h2>
+            <div class="bg-layers">
+                <div class="bg-layer bg-deepest">
+                    <div class="bg-layer-name">Deepest</div>
+                    <div class="bg-layer-value">#0d0d0d</div>
+                </div>
+                <div class="bg-layer bg-deep">
+                    <div class="bg-layer-name">Deep</div>
+                    <div class="bg-layer-value">#141414</div>
+                </div>
+                <div class="bg-layer bg-surface">
+                    <div class="bg-layer-name">Surface</div>
+                    <div class="bg-layer-value">#1a1a1a</div>
+                </div>
+                <div class="bg-layer bg-elevated">
+                    <div class="bg-layer-name">Elevated</div>
+                    <div class="bg-layer-value">#222222</div>
+                </div>
+                <div class="bg-layer bg-highlight">
+                    <div class="bg-layer-name">Highlight</div>
+                    <div class="bg-layer-value">#2a2a2a</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Timeline with Gradient Clips</h2>
+            <div class="timeline-demo">
+                <div class="timeline-header">
+                    Timeline Editor
+                </div>
+                <div class="tracks">
+                    <div class="track">
+                        <div class="track-label">
+                            🎬 Video Track 1
+                        </div>
+                        <div class="track-content">
+                            <div class="clip clip-video clip-selected">
+                                <span class="clip-name">Clip_001.mp4</span>
+                            </div>
+                            <div class="clip clip-video" style="left: 250px; width: 200px;">
+                                <span class="clip-name">Clip_002.mp4</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="track">
+                        <div class="track-label">
+                            🎵 Audio Track 1
+                        </div>
+                        <div class="track-content">
+                            <div class="clip clip-audio">
+                                <span class="clip-name">Background_Music.wav</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="track">
+                        <div class="track-label">
+                            📝 Text Track 1
+                        </div>
+                        <div class="track-content">
+                            <div class="clip clip-text">
+                                <span class="clip-name">Title_Text</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="track">
+                        <div class="track-label">
+                            🖼️ Image Track 1
+                        </div>
+                        <div class="track-content">
+                            <div class="clip clip-image">
+                                <span class="clip-name">Overlay.png</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Clip Colors with Gradients</h2>
+            <div class="color-grid">
+                <div class="color-swatch" style="background: linear-gradient(180deg, #4a7c9b 0%, #3a6277 100%); border-color: #5a8caa;">
+                    <div class="color-name">Video Clip</div>
+                    <div class="color-value">#4a7c9b → #3a6277</div>
+                </div>
+                <div class="color-swatch" style="background: linear-gradient(180deg, #5a9b5e 0%, #4a7f4d 100%); border-color: #6aab6e;">
+                    <div class="color-name">Audio Clip</div>
+                    <div class="color-value">#5a9b5e → #4a7f4d</div>
+                </div>
+                <div class="color-swatch" style="background: linear-gradient(180deg, #9b7a5a 0%, #7f6349 100%); border-color: #ab8a6a;">
+                    <div class="color-name">Text Clip</div>
+                    <div class="color-value">#9b7a5a → #7f6349</div>
+                </div>
+                <div class="color-swatch" style="background: linear-gradient(180deg, #7a5a9b 0%, #634980 100%); border-color: #8a6aab;">
+                    <div class="color-name">Image Clip</div>
+                    <div class="color-value">#7a5a9b → #634980</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Interactive States</h2>
+            <div class="interactive-demo">
+                <button class="demo-button">Default Button</button>
+                <button class="demo-button accent">Accent Button</button>
+                <button class="demo-button" disabled style="opacity: 0.5; cursor: not-allowed;">Disabled Button</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Panel with Depth</h2>
+            <div class="panel-demo">
+                <div class="panel-header">Properties Panel</div>
+                <div class="panel-content">
+                    <p style="color: #a0a0a0; margin-bottom: 12px;">Panels use shadow and layering for depth rather than harsh borders.</p>
+                    <p style="color: #666666; font-size: 14px;">Subtle borders (rgba(255, 255, 255, 0.06)) create a refined, professional look.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Key Features</h2>
+            <div style="background: #1a1a1a; padding: 24px; border-radius: 12px; line-height: 1.8;">
+                <ul style="list-style: none; color: #a0a0a0;">
+                    <li style="margin-bottom: 12px;">✓ Layered backgrounds create visual depth (darker = deeper)</li>
+                    <li style="margin-bottom: 12px;">✓ Subtle borders using transparency (6-15% white)</li>
+                    <li style="margin-bottom: 12px;">✓ Clip gradients provide rich, dimensional appearance</li>
+                    <li style="margin-bottom: 12px;">✓ Selection glow with subtle animation</li>
+                    <li style="margin-bottom: 12px;">✓ Shadow-based depth instead of harsh outlines</li>
+                    <li style="margin-bottom: 12px;">✓ Consistent hover states across all interactive elements</li>
+                    <li>✓ Professional color palette matching Adobe Premiere Pro</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Add hover effect to track
+        document.querySelectorAll('.track').forEach(track => {
+            track.addEventListener('mouseenter', () => {
+                track.style.background = '#2a2a2a';
+            });
+            track.addEventListener('mouseleave', () => {
+                track.style.background = '';
+            });
+        });
+    </script>
+</body>
+</html>

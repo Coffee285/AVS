@@ -9,24 +9,26 @@ import { tokens } from '@fluentui/react-components';
 import { openCutTokens } from './designTokens';
 
 /**
- * Common panel styles for consistent panel appearance.
+ * Common panel styles for consistent panel appearance with depth.
  */
 export const panelStyles = {
   container: {
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100%',
-    backgroundColor: tokens.colorNeutralBackground2,
+    backgroundColor: openCutTokens.colors.bg.surface,
     overflow: 'hidden',
+    boxShadow: '1px 0 0 rgba(0, 0, 0, 0.3), 4px 0 12px rgba(0, 0, 0, 0.2)',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: `${openCutTokens.spacing.md} ${openCutTokens.spacing.panelPadding}`,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
+    borderBottom: `1px solid ${openCutTokens.colors.border.subtle}`,
     minHeight: '56px',
     gap: openCutTokens.spacing.sm,
+    backgroundColor: openCutTokens.colors.bg.elevated,
   },
   headerTitle: {
     display: 'flex',
@@ -242,7 +244,7 @@ export const loadingStateStyles = {
 } as const;
 
 /**
- * Timeline-specific styles.
+ * Timeline-specific styles with professional depth and gradients.
  */
 export const timelineStyles = {
   clip: {
@@ -250,20 +252,37 @@ export const timelineStyles = {
       position: 'absolute' as const,
       top: '4px',
       bottom: '4px',
-      borderRadius: openCutTokens.radius.md,
+      borderRadius: '4px',
       overflow: 'hidden',
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
-      transition: `box-shadow ${openCutTokens.animation.duration.fast} ${openCutTokens.animation.easing.easeOut}, transform ${openCutTokens.animation.duration.fast} ${openCutTokens.animation.easing.easeOut}`,
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.3)',
+      transition: 'box-shadow 0.15s ease, transform 0.15s ease',
     },
     hover: {
-      boxShadow: openCutTokens.shadows.md,
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
       transform: 'translateY(-1px)',
     },
     selected: {
-      boxShadow: `0 0 0 2px ${tokens.colorBrandStroke1}`,
+      boxShadow: `0 0 0 2px ${openCutTokens.colors.accent.primary}, 0 2px 12px rgba(92, 158, 255, 0.3)`,
       transform: 'translateY(-1px)',
+    },
+    video: {
+      background: openCutTokens.colors.clips.video.bg,
+      border: `1px solid ${openCutTokens.colors.clips.video.border}`,
+    },
+    audio: {
+      background: openCutTokens.colors.clips.audio.bg,
+      border: `1px solid ${openCutTokens.colors.clips.audio.border}`,
+    },
+    text: {
+      background: openCutTokens.colors.clips.text.bg,
+      border: `1px solid ${openCutTokens.colors.clips.text.border}`,
+    },
+    image: {
+      background: openCutTokens.colors.clips.image.bg,
+      border: `1px solid ${openCutTokens.colors.clips.image.border}`,
     },
   },
   playhead: {
@@ -365,6 +384,16 @@ export const keyframes = {
       }
       to {
         transform: rotate(360deg);
+      }
+    }
+  `,
+  selectionGlow: `
+    @keyframes selectionGlow {
+      0%, 100% {
+        box-shadow: 0 0 0 2px ${openCutTokens.colors.accent.primary};
+      }
+      50% {
+        box-shadow: 0 0 0 2px ${openCutTokens.colors.accent.primary}, 0 0 12px ${openCutTokens.colors.accent.primary};
       }
     }
   `,
