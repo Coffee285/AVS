@@ -41,7 +41,10 @@ public class NullTtsProvider : ITtsProvider
         VoiceSpec spec,
         CancellationToken ct = default)
     {
-        _logger.LogWarning("NullTtsProvider: Generating silent audio placeholder");
+        _logger.LogWarning(
+            "NullTtsProvider: Generating silent audio as fallback. " +
+            "No TTS providers are configured or available. " +
+            "To add voice narration, configure a TTS provider (ElevenLabs, PlayHT, Azure, Piper, or Windows TTS) in Settings.");
         
         // Calculate total duration
         var totalDuration = TimeSpan.Zero;
@@ -52,11 +55,22 @@ public class NullTtsProvider : ITtsProvider
 
         var outputPath = Path.Combine(_outputDir, $"silent-{Guid.NewGuid()}.wav");
 
-        // Use SilentWavGenerator for reliable, validated silent audio
-        await _silentWavGenerator.GenerateAsync(outputPath, totalDuration, ct: ct).ConfigureAwait(false);
+        try
+        {
+            // Use SilentWavGenerator for reliable, validated silent audio
+            await _silentWavGenerator.GenerateAsync(outputPath, totalDuration, ct: ct).ConfigureAwait(false);
 
-        _logger.LogInformation("Generated silent audio: {Path}, Duration: {Duration}s", 
-            outputPath, totalDuration.TotalSeconds);
+            _logger.LogInformation(
+                "Generated silent audio placeholder: {Path}, Duration: {Duration}s. " +
+                "Video will have no narration. Configure a TTS provider to add voice.",
+                outputPath, totalDuration.TotalSeconds);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate silent audio fallback - this should never fail");
+            throw new InvalidOperationException(
+                "NullTtsProvider failed to generate silent audio. This indicates a critical system error.", ex);
+        }
         
         return outputPath;
     }
