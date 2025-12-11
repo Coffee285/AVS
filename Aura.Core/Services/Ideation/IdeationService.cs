@@ -4507,7 +4507,14 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
                     new[] { "Retry", "Try smaller model" });
             }
 
-            _logger.LogInformation("Ollama ideation completed: {Length} chars", response.Length);
+            var callDuration = DateTime.UtcNow - startTime;
+            
+            // Log provider utilization verification
+            _logger.LogInformation(
+                "LLM call completed: Provider={Provider}, Duration={Duration}ms, ResponseLength={Length} chars. " +
+                "If Ollama is running, you should see CPU/GPU utilization in system monitor.",
+                "Ollama", callDuration.TotalMilliseconds, response.Length);
+            
             return response;
         }
         catch (Exception ex)
