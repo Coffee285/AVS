@@ -41,6 +41,7 @@ import type { FC } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOpenCutMediaStore } from '../../stores/opencutMedia';
 import { useOpenCutPlaybackStore } from '../../stores/opencutPlayback';
+import { useOpenCutProjectStore } from '../../stores/opencutProject';
 import { useOpenCutTimelineStore } from '../../stores/opencutTimeline';
 import { openCutTokens } from '../../styles/designTokens';
 import { CaptionPreview } from './Captions';
@@ -53,7 +54,7 @@ export interface PreviewPanelProps {
 }
 
 type PreviewQuality = 'quarter' | 'half' | 'full';
-type ZoomLevel = 'fit' | '50' | '100' | '200';
+type ZoomLevel = 'fit' | 'fill' | '50' | '100' | '200';
 
 const useStyles = makeStyles({
   container: {
@@ -98,12 +99,13 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: openCutTokens.spacing.md,
-    backgroundColor: tokens.colorNeutralBackground3,
+    padding: openCutTokens.preview.containerPadding,
+    backgroundColor: openCutTokens.preview.backgroundDark,
     position: 'relative',
     overflow: 'hidden',
     minHeight: 0,
     minWidth: 0,
+    boxShadow: openCutTokens.preview.innerShadow,
   },
   canvasWrapper: {
     position: 'relative',
@@ -117,23 +119,15 @@ const useStyles = makeStyles({
     minWidth: 0,
   },
   canvas: {
-    width: '100%',
-    height: '100%',
-    maxWidth: '100%',
-    maxHeight: '100%',
-    aspectRatio: '16 / 9',
-    backgroundColor: '#000000',
-    borderRadius: openCutTokens.radius.md,
-    boxShadow: openCutTokens.shadows.md,
+    backgroundColor: openCutTokens.preview.canvasBackground,
+    borderRadius: '2px',
+    boxShadow: openCutTokens.preview.canvasShadow,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
     position: 'relative',
-    transition: `box-shadow ${openCutTokens.animation.duration.normal} ${openCutTokens.animation.easing.easeOut}`,
-    ':hover': {
-      boxShadow: openCutTokens.shadows.lg,
-    },
+    transition: `width ${openCutTokens.preview.transitionDuration} ${openCutTokens.preview.transitionEasing}, height ${openCutTokens.preview.transitionDuration} ${openCutTokens.preview.transitionEasing}`,
   },
   canvasGlow: {
     position: 'absolute',
@@ -203,29 +197,23 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: openCutTokens.spacing.lg,
-    padding: openCutTokens.spacing.xxl,
-    color: tokens.colorNeutralForeground4,
-    textAlign: 'center',
+    gap: '8px',
+    padding: '24px',
     zIndex: 1,
   },
   placeholderIcon: {
-    width: '64px',
-    height: '64px',
+    width: openCutTokens.preview.emptyIconSize,
+    height: openCutTokens.preview.emptyIconSize,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: tokens.borderRadiusCircular,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    color: 'rgba(255, 255, 255, 0.3)',
-    '& svg': {
-      width: '32px',
-      height: '32px',
-    },
+    backgroundColor: openCutTokens.preview.emptyIconBackground,
+    color: openCutTokens.preview.emptyIconColor,
   },
   placeholderText: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: openCutTokens.typography.fontSize.md,
+    color: openCutTokens.preview.emptyTextColor,
+    fontSize: openCutTokens.preview.emptyTextSize,
   },
   loadingOverlay: {
     position: 'absolute',
@@ -299,6 +287,7 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ className, isLoading = fal
   const playbackStore = useOpenCutPlaybackStore();
   const timelineStore = useOpenCutTimelineStore();
   const mediaStore = useOpenCutMediaStore();
+  const projectStore = useOpenCutProjectStore();
 
   const [showSafeAreas, setShowSafeAreas] = useState(false);
   const [showTimecode, setShowTimecode] = useState(false);
@@ -452,6 +441,9 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ className, isLoading = fal
   const handleZoomIn = useCallback(() => {
     switch (zoom) {
       case 'fit':
+        setZoom('fill');
+        break;
+      case 'fill':
         setZoom('50');
         break;
       case '50':
@@ -472,6 +464,9 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ className, isLoading = fal
         setZoom('50');
         break;
       case '50':
+        setZoom('fill');
+        break;
+      case 'fill':
         setZoom('fit');
         break;
     }
@@ -481,6 +476,8 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ className, isLoading = fal
     switch (zoom) {
       case 'fit':
         return 'Fit';
+      case 'fill':
+        return 'Fill';
       case '50':
         return '50%';
       case '100':
@@ -490,22 +487,76 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ className, isLoading = fal
     }
   };
 
+  // Intelligent preview dimension calculation
+  const calculatePreviewDimensions = useCallback(() => {
+    if (!canvasWrapperRef.current) return { width: 0, height: 0 };
+
+    const container = canvasWrapperRef.current.getBoundingClientRect();
+    const projectAspectRatio = projectStore.activeProject
+      ? projectStore.activeProject.canvasWidth / projectStore.activeProject.canvasHeight
+      : 16 / 9;
+
+    // Available space (with padding)
+    const padding = 16;
+    const availableWidth = container.width - padding * 2;
+    const availableHeight = container.height - padding * 2;
+    const containerAspectRatio = availableWidth / availableHeight;
+
+    let previewWidth: number;
+    let previewHeight: number;
+
+    switch (zoom) {
+      case 'fit':
+        // Fit entire video in view
+        if (containerAspectRatio > projectAspectRatio) {
+          // Container is wider - fit to height
+          previewHeight = availableHeight;
+          previewWidth = previewHeight * projectAspectRatio;
+        } else {
+          // Container is taller - fit to width
+          previewWidth = availableWidth;
+          previewHeight = previewWidth / projectAspectRatio;
+        }
+        break;
+
+      case 'fill':
+        // Fill container (may crop)
+        if (containerAspectRatio > projectAspectRatio) {
+          previewWidth = availableWidth;
+          previewHeight = previewWidth / projectAspectRatio;
+        } else {
+          previewHeight = availableHeight;
+          previewWidth = previewHeight * projectAspectRatio;
+        }
+        break;
+
+      case '100':
+        // Native resolution
+        previewWidth = projectStore.activeProject?.canvasWidth || 1920;
+        previewHeight = projectStore.activeProject?.canvasHeight || 1080;
+        break;
+
+      default: {
+        // Custom zoom percentage (50%, 200%)
+        const zoomValue = parseInt(zoom) / 100;
+        previewWidth = (projectStore.activeProject?.canvasWidth || 1920) * zoomValue;
+        previewHeight = (projectStore.activeProject?.canvasHeight || 1080) * zoomValue;
+      }
+    }
+
+    return { width: previewWidth, height: previewHeight };
+  }, [zoom, projectStore.activeProject]);
+
   const computeFittedSize = useCallback(
     (containerWidth: number, containerHeight: number) => {
       if (containerWidth <= 0 || containerHeight <= 0) {
         return { width: 0, height: 0 };
       }
-      const containerAspect = containerWidth / containerHeight;
-      if (containerAspect > videoAspect) {
-        const height = containerHeight;
-        const width = height * videoAspect;
-        return { width, height };
-      }
-      const width = containerWidth;
-      const height = width / videoAspect;
-      return { width, height };
+
+      // Use intelligent preview dimensions calculation
+      return calculatePreviewDimensions();
     },
-    [videoAspect]
+    [calculatePreviewDimensions]
   );
 
   // Track video aspect ratio when metadata is available
@@ -814,25 +865,19 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ className, isLoading = fal
                 loop={loopPlayback}
               />
             ) : (
-              <div className={styles.placeholder}>
-                <motion.div
-                  className={styles.placeholderIcon}
-                  initial={{ scale: 0.8 }}
-                  animate={{ scale: 1 }}
-                  transition={{ duration: 0.4, ease: 'easeOut', delay: 0.1 }}
-                >
+              <motion.div
+                className={styles.placeholder}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className={styles.placeholderIcon}>
                   <Video24Regular />
-                </motion.div>
-                <motion.div
-                  initial={{ y: 8, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.3, delay: 0.2 }}
-                >
-                  <Text size={400} className={styles.placeholderText}>
-                    Add media to the timeline to preview
-                  </Text>
-                </motion.div>
-              </div>
+                </div>
+                <Text size={200} className={styles.placeholderText}>
+                  Add media to preview
+                </Text>
+              </motion.div>
             )}
 
             {/* Safe Area Guides */}
@@ -884,6 +929,9 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ className, isLoading = fal
                   <MenuDivider />
                   <MenuItem onClick={() => handleZoomSelect('fit')}>
                     Zoom: Fit {zoom === 'fit' ? '✓' : ''}
+                  </MenuItem>
+                  <MenuItem onClick={() => handleZoomSelect('fill')}>
+                    Zoom: Fill {zoom === 'fill' ? '✓' : ''}
                   </MenuItem>
                   <MenuItem onClick={() => handleZoomSelect('50')}>
                     Zoom: 50% {zoom === '50' ? '✓' : ''}
