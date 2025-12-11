@@ -69,6 +69,7 @@ public class VideoOrchestrator
     private readonly Services.AudioIntelligence.IVoiceEnhancementService? _voiceEnhancementService;
     private readonly Services.AudioIntelligence.IMusicMatchingService? _musicMatchingService;
     private readonly Services.AudioIntelligence.IIntelligentDuckingService? _intelligentDuckingService;
+    private readonly Audio.WavValidator? _wavValidator;
 
     public VideoOrchestrator(
         ILogger<VideoOrchestrator> logger,
@@ -98,7 +99,8 @@ public class VideoOrchestrator
         TopicAwareFallbackGenerator? fallbackGenerator = null,
         Services.AudioIntelligence.IVoiceEnhancementService? voiceEnhancementService = null,
         Services.AudioIntelligence.IMusicMatchingService? musicMatchingService = null,
-        Services.AudioIntelligence.IIntelligentDuckingService? intelligentDuckingService = null)
+        Services.AudioIntelligence.IIntelligentDuckingService? intelligentDuckingService = null,
+        Audio.WavValidator? wavValidator = null)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(llmProvider);
@@ -145,6 +147,7 @@ public class VideoOrchestrator
         _voiceEnhancementService = voiceEnhancementService;
         _musicMatchingService = musicMatchingService;
         _intelligentDuckingService = intelligentDuckingService;
+        _wavValidator = wavValidator;
 
         if (_assetTaggingService != null)
         {
@@ -1862,34 +1865,20 @@ public class VideoOrchestrator
 
                             // FAST-FAIL: Verify audio file is complete and valid WAV format
                             // This catches scenarios where TTS provider creates file but it's corrupted
-                            try
+                            if (_wavValidator != null)
                             {
-                                // Basic WAV header check - should start with "RIFF" and contain "WAVE"
-                                using var fileStream = new FileStream(audioPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                                var header = new byte[12];
-                                var bytesRead = await fileStream.ReadAsync(header, 0, header.Length, ctRetry).ConfigureAwait(false);
-                                
-                                if (bytesRead < 12)
-                                {
-                                    throw new InvalidOperationException($"TTS audio file has invalid header (only {bytesRead} bytes)");
-                                }
-
-                                var riff = System.Text.Encoding.ASCII.GetString(header, 0, 4);
-                                var wave = System.Text.Encoding.ASCII.GetString(header, 8, 4);
-                                
-                                if (riff != "RIFF" || wave != "WAVE")
+                                var wavValidation = await _wavValidator.QuickValidateAsync(audioPath, ctRetry).ConfigureAwait(false);
+                                if (!wavValidation)
                                 {
                                     throw new InvalidOperationException(
-                                        $"TTS audio file has invalid WAV format. Expected 'RIFF...WAVE', got '{riff}...{wave}'. " +
-                                        "This may indicate a provider-specific audio format issue.");
+                                        $"TTS audio file at {audioPath} has invalid WAV format. " +
+                                        "This may indicate a provider-specific audio format issue or corrupted file.");
                                 }
-
-                                _logger.LogDebug("Audio file format validation passed for {Path}", audioPath);
+                                _logger.LogDebug("Audio file WAV format validation passed for {Path}", audioPath);
                             }
-                            catch (Exception ex) when (ex is not ValidationException and not InvalidOperationException)
+                            else
                             {
-                                _logger.LogError(ex, "Failed to validate audio file format at {Path}", audioPath);
-                                throw new InvalidOperationException($"Audio file format validation failed: {ex.Message}", ex);
+                                _logger.LogDebug("WavValidator not available, skipping detailed WAV format validation");
                             }
 
                             // Register for cleanup (will be promoted to artifact later)

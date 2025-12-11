@@ -291,7 +291,8 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<ITtsProvider>(sp =>
             {
                 var logger = sp.GetRequiredService<ILogger<WindowsTtsProvider>>();
-                return new WindowsTtsProvider(logger);
+                var wavValidator = sp.GetRequiredService<Aura.Core.Audio.WavValidator>();
+                return new WindowsTtsProvider(logger, wavValidator);
             });
         }
 
