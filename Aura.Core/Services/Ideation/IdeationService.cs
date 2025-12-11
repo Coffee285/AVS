@@ -346,8 +346,8 @@ You MUST analyze the topic deeply and provide concepts that are genuinely useful
             string? providerUsed = null;
             bool stageAdapterFailed = false;
             bool attemptedOllamaFallback = false;
-            string? lastSystemPrompt = systemPrompt;
-            string? lastUserPrompt = userPrompt;
+            string? lastSystemPrompt = null;
+            string? lastUserPrompt = null;
 
             // Create LLM parameters with JSON format for ideation (requires structured output)
             // This ensures Ollama and other providers return valid JSON
@@ -369,8 +369,6 @@ You MUST analyze the topic deeply and provide concepts that are genuinely useful
                     // Strengthen prompt on retries if previous attempt had generic content
                     var currentSystemPrompt = systemPrompt;
                     var currentUserPrompt = userPrompt;
-                    lastSystemPrompt = currentSystemPrompt;
-                    lastUserPrompt = currentUserPrompt;
                     if (attempt > 0 && lastAttemptHadGenericContent)
                     {
                         _logger.LogInformation("Strengthening prompt for retry attempt {Attempt} due to generic content detection",
@@ -408,11 +406,11 @@ EXAMPLE OF WHAT TO DO:
 ✅ Pro: 'Visual demonstrations make [specific technique for {topicName}] easy to understand for beginners'
 
 Generate SPECIFIC content NOW. Do not use placeholders.";
-                        
-                        // Update the last prompts after modification
-                        lastSystemPrompt = currentSystemPrompt;
-                        lastUserPrompt = currentUserPrompt;
                     }
+                    
+                    // Save the final prompts (after any modifications) for potential fallback use
+                    lastSystemPrompt = currentSystemPrompt;
+                    lastUserPrompt = currentUserPrompt;
 
                     // Verify provider type and log detailed information
                     var providerType = _llmProvider.GetType();
