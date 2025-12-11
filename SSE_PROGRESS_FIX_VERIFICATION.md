@@ -223,11 +223,11 @@ VideoOrchestrator.GenerateVideoAsync()
 
 If this fix causes issues:
 
-1. **Revert commit** `da09005` (Fix SSE progress sync)
-2. **Restore old behavior** where only terminal states sync
-3. **Frontend will fall back to polling** (already implemented)
+1. **Revert this PR** to restore old behavior where only terminal states sync
+2. **Frontend will automatically fall back to polling** (already implemented)
+3. **Identify and document the issue** before attempting a new fix
 
-The polling fallback is robust and was working before, so reverting is safe.
+The polling fallback is robust and was working before, so reverting is safe. Users will experience degraded UX (30-second delay) but video generation will still work.
 
 ## Performance Considerations
 
