@@ -13,34 +13,55 @@ import { persist } from 'zustand/middleware';
 import { createSafeJSONStorage } from './opencutPersist';
 
 /**
- * Layout sizing constants following the design specification.
- * These define the constraints for panel resizing.
+ * Layout sizing constants following professional NLE design.
+ * Based on analysis of Adobe Premiere Pro and DaVinci Resolve.
+ * Timeline gets 45% of vertical space as that's where editors spend most time.
  */
 export const LAYOUT_CONSTANTS = {
   /** Left panel (Media) constraints */
   leftPanel: {
-    minWidth: 200,
-    maxWidth: 600,
-    collapsedWidth: 48,
     defaultWidth: 320,
+    minWidth: 240,
+    maxWidth: 480,
+    collapsedWidth: 48,
   },
   /** Right panel (Properties) constraints */
   rightPanel: {
-    minWidth: 250,
-    maxWidth: 700,
+    defaultWidth: 280,
+    minWidth: 200,
+    maxWidth: 400,
     collapsedWidth: 48,
-    defaultWidth: 340,
   },
   /** Timeline constraints */
   timeline: {
+    defaultHeightPercent: 0.45, // 45% of available vertical space
     minHeight: 200,
-    maxHeight: 640,
-    defaultHeight: 380,
+    maxHeightPercent: 0.7,
+    trackHeight: {
+      default: 64,
+      min: 32,
+      max: 120,
+      compact: 24,
+    },
+    headerWidth: 200, // Track header area
+  },
+  /** Preview constraints */
+  preview: {
+    defaultHeightPercent: 0.4,
+    minHeight: 200,
+    toolbarHeight: 36,
+    controlsHeight: 48,
+  },
+  /** Fixed heights */
+  toolbar: {
+    main: 40,
+    timeline: 36,
+    playback: 48,
   },
   /** Animation settings */
   animation: {
     collapseDuration: 200,
-    collapseEasing: 'ease-out',
+    collapseEasing: 'cubic-bezier(0.4, 0, 0.2, 1)',
   },
 } as const;
 
@@ -61,6 +82,8 @@ export interface LayoutState {
 
   /** Height of the timeline panel */
   timelineHeight: number;
+  /** Whether the user has manually customized the timeline height */
+  hasCustomLayout: boolean;
 
   /** Actions */
   setLeftPanelWidth: (width: number) => void;
@@ -69,7 +92,8 @@ export interface LayoutState {
   setRightPanelWidth: (width: number) => void;
   setRightPanelCollapsed: (collapsed: boolean) => void;
   toggleRightPanel: () => void;
-  setTimelineHeight: (height: number) => void;
+  setTimelineHeight: (height: number, isUserAction?: boolean) => void;
+  calculateInitialLayout: (windowHeight: number) => void;
   resetLayout: () => void;
 }
 
@@ -80,7 +104,8 @@ const defaultState = {
   rightPanelWidth: LAYOUT_CONSTANTS.rightPanel.defaultWidth,
   rightPanelCollapsed: false,
   rightPanelPreviousWidth: LAYOUT_CONSTANTS.rightPanel.defaultWidth,
-  timelineHeight: LAYOUT_CONSTANTS.timeline.defaultHeight,
+  timelineHeight: 400, // Fallback default, will be calculated on mount
+  hasCustomLayout: false,
 };
 
 export const useOpenCutLayoutStore = create<LayoutState>()(
@@ -154,12 +179,28 @@ export const useOpenCutLayoutStore = create<LayoutState>()(
         state.setRightPanelCollapsed(!state.rightPanelCollapsed);
       },
 
-      setTimelineHeight: (height: number) => {
-        const clampedHeight = Math.max(
-          LAYOUT_CONSTANTS.timeline.minHeight,
-          Math.min(LAYOUT_CONSTANTS.timeline.maxHeight, height)
-        );
-        set({ timelineHeight: clampedHeight });
+      setTimelineHeight: (height: number, isUserAction = true) => {
+        const clampedHeight = Math.max(LAYOUT_CONSTANTS.timeline.minHeight, height);
+        set({ timelineHeight: clampedHeight, hasCustomLayout: isUserAction });
+      },
+
+      calculateInitialLayout: (windowHeight: number) => {
+        const state = get();
+        // Only calculate if user hasn't customized the layout
+        if (!state.hasCustomLayout) {
+          // Account for typical fixed UI elements (conservative estimate)
+          const fixedHeight = 100;
+          const availableHeight = windowHeight - fixedHeight;
+
+          // Timeline gets 45% of available space (professional NLE standard)
+          const timelineHeight = Math.max(
+            LAYOUT_CONSTANTS.timeline.minHeight,
+            Math.floor(availableHeight * LAYOUT_CONSTANTS.timeline.defaultHeightPercent)
+          );
+
+          // Set without marking as custom (system-calculated)
+          set({ timelineHeight, hasCustomLayout: false });
+        }
       },
 
       resetLayout: () => {
@@ -177,6 +218,7 @@ export const useOpenCutLayoutStore = create<LayoutState>()(
         rightPanelCollapsed: state.rightPanelCollapsed,
         rightPanelPreviousWidth: state.rightPanelPreviousWidth,
         timelineHeight: state.timelineHeight,
+        hasCustomLayout: state.hasCustomLayout,
       }),
     }
   )

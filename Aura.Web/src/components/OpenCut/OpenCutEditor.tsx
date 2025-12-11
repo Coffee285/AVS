@@ -111,7 +111,7 @@ export function OpenCutEditor() {
   // Handler for inserting selected caption at playhead
   const handleInsertAtPlayhead = useCallback(() => {
     const { selectedCaptionId, getCaptionById } = captionsStore;
-    
+
     if (selectedCaptionId) {
       const caption = getCaptionById(selectedCaptionId);
       if (caption) {
@@ -194,6 +194,18 @@ export function OpenCutEditor() {
       projectStore.createProject('Untitled Project');
     }
   }, [projectStore]);
+
+  // Calculate intelligent layout based on window size
+  const calculateLayout = useCallback(() => {
+    layoutStore.calculateInitialLayout(window.innerHeight);
+  }, [layoutStore]);
+
+  // Apply layout on mount and window resize
+  useEffect(() => {
+    calculateLayout();
+    window.addEventListener('resize', calculateLayout);
+    return () => window.removeEventListener('resize', calculateLayout);
+  }, [calculateLayout]);
 
   // Register keyboard shortcuts for panel toggling
   useEffect(() => {
