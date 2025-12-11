@@ -173,18 +173,23 @@ interface JobOutputFile {
 
 // Job data structure returned from the backend API
 interface JobStatusData {
-  /** Progress percentage (0-100) */
+  /** Progress percentage (0-100) - backend may return as 'percent', 'Percent', or 'progress' */
   percent?: number;
+  Percent?: number;
+  progress?: number;
   /** Current execution stage (e.g., "Script", "Voice", "Rendering") */
   stage?: string;
+  Stage?: string;
   /** Detailed progress message from polling endpoint */
   progressMessage?: string;
   /** Short progress message from SSE progress events (similar purpose to progressMessage) */
   message?: string;
   /** Normalized job status: queued, running, completed, failed, cancelled */
   status?: string;
+  Status?: string;
   /** Error message if job failed */
   errorMessage?: string;
+  ErrorMessage?: string;
   /** Legacy error field (for compatibility) */
   error?: string;
   /** Detailed failure information */
@@ -202,6 +207,7 @@ interface JobStatusData {
   };
   /** Path to the output file for completed jobs */
   outputPath?: string;
+  OutputPath?: string;
   /** Artifacts produced by the job (video, subtitles, etc.) */
   artifacts?: Array<{
     path?: string;
@@ -261,17 +267,57 @@ function selectVideoFilePath(
 }
 
 /**
+ * Normalizes job data to handle both lowercase and capitalized field names from backend.
+ * Backend may return fields as lowercase (modern) or capitalized (legacy C# naming).
+ */
+function normalizeJobData(jobData?: JobStatusData | null): JobStatusData | undefined {
+  if (!jobData) return undefined;
+
+  return {
+    // Normalize status (lowercase or capitalized)
+    status: (jobData.status ?? jobData.Status ?? '').toLowerCase(),
+    
+    // Normalize progress (percent, Percent, or progress)
+    percent: jobData.progress ?? jobData.percent ?? jobData.Percent ?? 0,
+    
+    // Normalize stage
+    stage: jobData.stage ?? jobData.Stage,
+    
+    // Normalize outputPath
+    outputPath: jobData.outputPath ?? jobData.OutputPath,
+    
+    // Normalize error message
+    errorMessage: jobData.errorMessage ?? jobData.ErrorMessage ?? jobData.error,
+    
+    // Pass through other fields as-is
+    progressMessage: jobData.progressMessage,
+    message: jobData.message,
+    failureDetails: jobData.failureDetails,
+    output: jobData.output,
+    artifacts: jobData.artifacts,
+    correlationId: jobData.correlationId,
+    createdAt: jobData.createdAt,
+    startedAt: jobData.startedAt,
+    completedAt: jobData.completedAt,
+  };
+}
+
+/**
  * Extracts a usable output path from job data, handling multiple backend shapes.
  */
 function extractOutputPath(jobData?: JobStatusData | null): string | undefined {
   if (!jobData) return undefined;
 
+  // Normalize data first to handle field name variations
+  const normalized = normalizeJobData(jobData);
+  if (!normalized) return undefined;
+
   // 1) Direct outputPath field (most common)
-  const direct = normalizePath(jobData.outputPath);
+  const direct = normalizePath(normalized.outputPath);
   if (direct) return direct;
 
   // 2) Nested output object (used by newer backends)
-  const output = jobData.output;
+  const output = normalized.output;
   const fromOutput =
     normalizePath(output?.videoPath) ??
     normalizePath(output?.path) ??
@@ -282,7 +328,7 @@ function extractOutputPath(jobData?: JobStatusData | null): string | undefined {
   if (fromOutputFiles) return fromOutputFiles;
 
   // 3) Artifacts array (legacy/alternative shape)
-  const fromArtifacts = selectVideoFilePath(jobData.artifacts);
+  const fromArtifacts = selectVideoFilePath(normalized.artifacts);
   if (fromArtifacts) return fromArtifacts;
 
   return undefined;
@@ -328,6 +374,16 @@ function getInitializationMessage(pollAttempts: number): string {
 }
 
 /**
+ * Checks if a status string represents a completed state.
+ * Handles multiple status format variations.
+ */
+function isCompletedStatus(status?: string): boolean {
+  if (!status) return false;
+  const normalized = status.toLowerCase().trim();
+  return normalized === 'completed' || normalized === 'done' || normalized === 'succeeded';
+}
+
+/**
  * Checks job status and throws if job failed or was cancelled.
  * Returns true if job completed successfully WITH a valid outputPath.
  *
@@ -335,20 +391,24 @@ function getInitializationMessage(pollAttempts: number): string {
  * This prevents the bug where jobs at 72% appear complete but have no output file.
  */
 function checkJobCompletion(jobData: JobStatusData): boolean {
-  const status = (jobData.status || '').toLowerCase().trim();
+  // Normalize the job data first to handle field name variations
+  const normalized = normalizeJobData(jobData);
+  if (!normalized) return false;
+
+  const status = normalized.status || '';
 
   // Check for failure states first
   if (status === 'failed') {
-    throw new Error(jobData.errorMessage || 'Video generation failed');
+    throw new Error(normalized.errorMessage || 'Video generation failed');
   }
   if (status === 'cancelled' || status === 'canceled') {
     throw new Error('Video generation was cancelled');
   }
 
   // CRITICAL FIX: Only consider job completed if BOTH conditions are met:
-  // 1. Status is "completed"
+  // 1. Status is "completed" (or variants like "done", "succeeded")
   // 2. We have a valid outputPath or artifacts
-  if (status === 'completed') {
+  if (isCompletedStatus(status)) {
     const hasOutput = Boolean(extractOutputPath(jobData));
 
     if (!hasOutput) {
@@ -943,10 +1003,13 @@ export const FinalExport: FC<FinalExportProps> = ({
             const STUCK_CHECK_INTERVAL = 5; // Check every 5 polls
 
             // Stage-aware stuck detection thresholds (in milliseconds)
+            // CRITICAL FIX: Increased finalization threshold to 300s (5 minutes)
+            // Video finalization at 95%+ can legitimately take 2-3 minutes for muxing and flushing
             const getStuckThreshold = (progress: number): number => {
               if (progress < 50) return 120 * 1000; // 2 minutes for early stages
-              if (progress < 90) return 90 * 1000; // 90 seconds for mid stages
-              return 60 * 1000; // 1 minute for final stages (90%+)
+              if (progress < 70) return 90 * 1000; // 90 seconds for mid stages
+              if (progress < 90) return 120 * 1000; // 2 minutes for 70-90% (encoding)
+              return 300 * 1000; // 5 minutes for finalization (90%+) - muxing can be slow
             };
 
             while (!jobCompleted && pollAttempts < maxPollAttempts) {
@@ -988,11 +1051,15 @@ export const FinalExport: FC<FinalExportProps> = ({
                 const typedJobData = (await statusResponse.json()) as JobStatusData;
                 lastJobData = typedJobData;
 
-                const normalizedStatus = (typedJobData.status || '').toLowerCase();
+                // Normalize data to handle field name variations (lowercase vs capitalized)
+                const normalized = normalizeJobData(typedJobData);
+                if (!normalized) continue;
+
+                const normalizedStatus = normalized.status || '';
                 if (normalizedStatus === 'failed') {
                   throw new Error(
-                    typedJobData.errorMessage ||
-                      typedJobData.failureDetails?.message ||
+                    normalized.errorMessage ||
+                      normalized.failureDetails?.message ||
                       'Video generation failed'
                   );
                 }
@@ -1001,8 +1068,8 @@ export const FinalExport: FC<FinalExportProps> = ({
                 }
 
                 // Extract progress with proper fallbacks and update UI
-                const jobProgress = Math.max(0, Math.min(100, typedJobData.percent ?? 0));
-                const currentStage = typedJobData.stage || 'Processing';
+                const jobProgress = Math.max(0, Math.min(100, normalized.percent ?? 0));
+                const currentStage = normalized.stage || 'Processing';
 
                 // EXPONENTIAL BACKOFF: Adjust poll delay based on job activity
                 if (jobProgress === lastProgress && currentStage === lastStage) {

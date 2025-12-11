@@ -1121,8 +1121,8 @@ public partial class JobRunner
 
         JobProgress?.Invoke(this, eventArgs);
 
-        // CRITICAL FIX: Sync terminal states to ExportJobService for frontend polling
-        // This bridges the two job tracking systems (JobRunner and ExportJobService)
+        // CRITICAL FIX: Sync terminal states SYNCHRONOUSLY to avoid race condition
+        // Frontend polls immediately after job completes - sync must complete first
         if (_exportJobService != null && IsTerminalStatus(updated.Status))
         {
             var exportStatus = MapJobStatusToExportStatus(updated.Status);
@@ -1131,23 +1131,25 @@ public partial class JobRunner
                 "[Job {JobId}] Syncing terminal state to ExportJobService: Status={Status}, OutputPath={OutputPath}",
                 updated.Id, exportStatus, updated.OutputPath ?? "NULL");
             
-            // Fire-and-forget update to ExportJobService (don't await to avoid blocking)
-            _ = Task.Run(async () =>
+            try
             {
-                try
-                {
-                    await _exportJobService.UpdateJobStatusAsync(
-                        updated.Id,
-                        exportStatus,
-                        updated.Percent,
-                        updated.OutputPath,
-                        updated.ErrorMessage).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "[Job {JobId}] Failed to sync status to ExportJobService", updated.Id);
-                }
-            });
+                // AWAIT the sync for terminal states - this is critical for frontend polling
+                // Using GetAwaiter().GetResult() for synchronous blocking to prevent race condition
+                _exportJobService.UpdateJobStatusAsync(
+                    updated.Id,
+                    exportStatus,
+                    updated.Percent,
+                    updated.OutputPath,
+                    updated.ErrorMessage).GetAwaiter().GetResult();
+                    
+                _logger.LogInformation(
+                    "[Job {JobId}] Successfully synced terminal state to ExportJobService",
+                    updated.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[Job {JobId}] Failed to sync status to ExportJobService", updated.Id);
+            }
         }
 
         return updated;
