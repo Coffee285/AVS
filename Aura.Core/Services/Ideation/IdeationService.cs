@@ -427,8 +427,8 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
                     // Prefer StageAdapter (same path as script generation), then fall back to direct Ollama if allowed.
                     var stageAdapterFailed = false;
                     
-                    // Add 120-second timeout for LLM call
-                    using var llmTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+                    // Add 600-second timeout for LLM call (increased from 120s for complex ideation requests)
+                    using var llmTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(600));
                     using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, llmTimeoutCts.Token);
                     
                     try
@@ -458,7 +458,7 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
                     }
                     catch (OperationCanceledException) when (llmTimeoutCts.IsCancellationRequested)
                     {
-                        _logger.LogWarning("LLM call timed out after 120 seconds for ideation");
+                        _logger.LogWarning("LLM call timed out after 600 seconds for ideation");
                         lastException = new TimeoutException("AI provider took too long to respond. Try a smaller/faster model or simplify your topic.");
                         continue; // Try next attempt
                     }
@@ -472,12 +472,12 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
                     if (jsonResponse == null && stageAdapterFailed && _ollamaDirectClient != null)
                     {
                         _logger.LogInformation("Falling back to direct Ollama path with heartbeat logging for ideation");
-                        jsonResponse = await GenerateWithOllamaDirectAsync(
+                        jsonResponse = await GenerateIdeationWithOllamaDirectAsync(
                             currentSystemPrompt,
                             currentUserPrompt,
                             ideationParams,
                             request,
-                            ct).ConfigureAwait(false);
+                            linkedCts.Token).ConfigureAwait(false);
                         providerUsed = "Ollama";
                         _logger.LogInformation("Successfully generated ideation response via direct Ollama API call");
                     }
@@ -4382,6 +4382,116 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
             // Ignore exceptions during property access
         }
         return defaultValue;
+    }
+
+    /// <summary>
+    /// Generate ideation using Ollama API directly with heartbeat logging.
+    /// Matches TranslationService pattern for reliability.
+    /// </summary>
+    private async Task<string> GenerateIdeationWithOllamaDirectAsync(
+        string systemPrompt,
+        string userPrompt,
+        LlmParameters parameters,
+        BrainstormRequest request,
+        CancellationToken ct)
+    {
+        if (_ollamaDirectClient == null)
+        {
+            throw ProviderException.NetworkError("Ollama", ProviderType.LLM);
+        }
+
+        var isAvailable = await _ollamaDirectClient.IsAvailableAsync(ct).ConfigureAwait(false);
+        if (!isAvailable)
+        {
+            throw new ProviderException(
+                "Ollama",
+                ProviderType.LLM,
+                "Ollama is not available for ideation",
+                ProviderErrorCode.ServiceUnavailable,
+                "Ollama is not running. Start with 'ollama serve'.",
+                isTransient: true,
+                suggestedActions: new[] { "Start Ollama: 'ollama serve'", "Install model: 'ollama pull llama3.1'" });
+        }
+
+        string? modelToUse = request.LlmModel ?? parameters.ModelOverride;
+        if (string.IsNullOrWhiteSpace(modelToUse))
+        {
+            var models = await _ollamaDirectClient.ListModelsAsync(ct).ConfigureAwait(false);
+            modelToUse = models.Count > 0 ? models[0] : throw new ProviderException(
+                "Ollama", 
+                ProviderType.LLM, 
+                "No models installed",
+                ProviderErrorCode.ServiceUnavailable, 
+                "Run: ollama pull llama3.1",
+                null, // correlationId
+                null, // httpStatusCode
+                false, // isTransient
+                new[] { "ollama pull llama3.1" });
+        }
+
+        _logger.LogInformation("Generating ideation with Ollama: model={Model}", modelToUse);
+
+        var options = new OllamaGenerationOptions
+        {
+            Temperature = parameters.Temperature,
+            TopP = parameters.TopP,
+            MaxTokens = parameters.MaxTokens,
+            NumGpu = -1,
+            NumCtx = 4096
+        };
+
+        var startTime = DateTime.UtcNow;
+        using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var heartbeatTask = Task.Run(async () =>
+        {
+            var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+            while (await timer.WaitForNextTickAsync(heartbeatCts.Token).ConfigureAwait(false))
+            {
+                var elapsed = (DateTime.UtcNow - startTime).TotalSeconds;
+                _logger.LogInformation("Ideation still processing... ({Elapsed:F0}s elapsed)", elapsed);
+            }
+        }, heartbeatCts.Token);
+
+        try
+        {
+            var response = await _ollamaDirectClient.GenerateAsync(
+                modelToUse, userPrompt, systemPrompt, options, ct).ConfigureAwait(false);
+            heartbeatCts.Cancel();
+            try { await heartbeatTask.ConfigureAwait(false); } catch { }
+
+            if (string.IsNullOrWhiteSpace(response))
+            {
+                throw new ProviderException(
+                    "Ollama", 
+                    ProviderType.LLM, 
+                    "Empty response",
+                    ProviderErrorCode.ServiceUnavailable, 
+                    "Model returned no output.",
+                    null, // correlationId
+                    null, // httpStatusCode
+                    true, // isTransient
+                    new[] { "Retry", "Try smaller model" });
+            }
+
+            _logger.LogInformation("Ollama ideation completed: {Length} chars", response.Length);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            heartbeatCts.Cancel();
+            _logger.LogError(ex, "Ollama ideation failed");
+            throw new ProviderException(
+                "Ollama", 
+                ProviderType.LLM,
+                $"Ideation failed: {ex.Message}", 
+                ProviderErrorCode.ServiceUnavailable,
+                "Ollama error.", 
+                null, // correlationId
+                null, // httpStatusCode
+                true, // isTransient
+                new[] { "Restart Ollama" }, 
+                ex);
+        }
     }
 }
 
