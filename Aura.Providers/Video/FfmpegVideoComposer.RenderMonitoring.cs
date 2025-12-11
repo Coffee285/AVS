@@ -68,6 +68,8 @@ public partial class FfmpegVideoComposer
                         if (match.Success && TimeSpan.TryParse(match.Groups[1].Value, out var time))
                         {
                             lastProgressTime = DateTime.Now;
+                            // CRITICAL FIX: Remove 99.5% cap - allow progress to reach 100%
+                            // Previously capped at 99.5%, preventing completion detection
                             lastProgress = Math.Clamp(
                                 (float)(time.TotalSeconds / totalDuration.TotalSeconds * 100),
                                 0, 100f);
@@ -128,8 +130,10 @@ public partial class FfmpegVideoComposer
                 var progress = getProgress();
                 var stuckDuration = (DateTime.Now - getLastProgressTime()).TotalSeconds;
                 
+                // CRITICAL FIX: Increase finalization threshold to prevent false "stuck" detection
                 // For finalization phase (90%+), give more time as muxing and flushing can take longer
-                var threshold = progress >= 90 ? 120 : 45;
+                // Changed from 120s to 180s to accommodate slower file finalization
+                var threshold = progress >= 90 ? 180 : 45;
                 if (stuckDuration > threshold && progress > 90)
                 {
                     _logger.LogWarning(

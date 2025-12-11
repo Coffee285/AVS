@@ -153,8 +153,6 @@ public class CompositionStage : PipelineStage
             throw new InvalidOperationException("Video rendering failed: output file not found");
         }
 
-        ReportProgress(progress, 95, "Video rendered successfully");
-
         Logger.LogInformation(
             "[{CorrelationId}] Video composition completed: {OutputPath}",
             context.CorrelationId,

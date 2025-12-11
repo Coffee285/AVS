@@ -46,6 +46,7 @@ public partial class JobRunner
     private readonly ConcurrentDictionary<string, IImageProvider?> _jobImageProviders = new();
     private readonly Services.ProgressAggregatorService? _progressAggregator;
     private readonly Services.CancellationOrchestrator? _cancellationOrchestrator;
+    private readonly Services.Export.IExportJobService? _exportJobService;
 
     // Stuck job detection: tracks last progress update for each job
     private readonly Dictionary<string, JobProgressTracking> _jobProgressTracking = new();
@@ -71,7 +72,8 @@ public partial class JobRunner
         Services.ProgressEstimator? progressEstimator = null,
         IMemoryPressureMonitor? memoryMonitor = null,
         Services.ProgressAggregatorService? progressAggregator = null,
-        Services.CancellationOrchestrator? cancellationOrchestrator = null)
+        Services.CancellationOrchestrator? cancellationOrchestrator = null,
+        Services.Export.IExportJobService? exportJobService = null)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(artifactManager);
@@ -91,6 +93,7 @@ public partial class JobRunner
         _memoryMonitor = memoryMonitor;
         _progressAggregator = progressAggregator;
         _cancellationOrchestrator = cancellationOrchestrator;
+        _exportJobService = exportJobService;
     }
 
     /// <summary>
@@ -1118,7 +1121,54 @@ public partial class JobRunner
 
         JobProgress?.Invoke(this, eventArgs);
 
+        // CRITICAL FIX: Sync terminal states to ExportJobService for frontend polling
+        // This bridges the two job tracking systems (JobRunner and ExportJobService)
+        if (_exportJobService != null && IsTerminalStatus(updated.Status))
+        {
+            var exportStatus = MapJobStatusToExportStatus(updated.Status);
+            
+            _logger.LogInformation(
+                "[Job {JobId}] Syncing terminal state to ExportJobService: Status={Status}, OutputPath={OutputPath}",
+                updated.Id, exportStatus, updated.OutputPath ?? "NULL");
+            
+            // Fire-and-forget update to ExportJobService (don't await to avoid blocking)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _exportJobService.UpdateJobStatusAsync(
+                        updated.Id,
+                        exportStatus,
+                        updated.Percent,
+                        updated.OutputPath,
+                        updated.ErrorMessage).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[Job {JobId}] Failed to sync status to ExportJobService", updated.Id);
+                }
+            });
+        }
+
         return updated;
+    }
+
+    /// <summary>
+    /// Maps JobStatus enum to string format expected by ExportJobService
+    /// </summary>
+    private static string MapJobStatusToExportStatus(JobStatus status)
+    {
+        return status switch
+        {
+            JobStatus.Done => "completed",
+            JobStatus.Succeeded => "completed",
+            JobStatus.Failed => "failed",
+            JobStatus.Canceled => "cancelled",
+            JobStatus.Running => "running",
+            JobStatus.Queued => "queued",
+            JobStatus.Paused => "running", // Map paused to running for simplicity
+            _ => "running"
+        };
     }
 
     /// <summary>

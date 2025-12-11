@@ -2,6 +2,7 @@ using Aura.Core.Artifacts;
 using Aura.Core.Captions;
 using Aura.Core.Configuration;
 using Aura.Core.Models;
+using Aura.Core.Models.Export;
 using Aura.Core.Orchestrator;
 using Aura.Core.Providers;
 using Aura.Core.Services;
@@ -220,6 +221,30 @@ public class JobsController : ControllerBase
             ).ConfigureAwait(false);
 
             Log.Information("[{CorrelationId}] Job created successfully with ID: {JobId}, Status: {Status}", correlationId, job.Id, job.Status);
+
+            // CRITICAL FIX: Create job in ExportJobService for SSE/polling support
+            // This ensures the frontend can track progress via both polling and SSE
+            if (_exportJobService != null)
+            {
+                try
+                {
+                    await _exportJobService.CreateJobAsync(new VideoJob
+                    {
+                        Id = job.Id,
+                        Status = "running",
+                        Progress = job.Percent,
+                        Stage = job.Stage,
+                        CreatedAt = job.CreatedUtc,
+                        StartedAt = job.StartedUtc
+                    }).ConfigureAwait(false);
+                    
+                    Log.Information("[{CorrelationId}] Job {JobId} initialized in ExportJobService", correlationId, job.Id);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "[{CorrelationId}] Failed to initialize job {JobId} in ExportJobService, SSE may not work", correlationId, job.Id);
+                }
+            }
 
             return Ok(new { jobId = job.Id, status = job.Status, stage = job.Stage, correlationId });
         }
