@@ -19,6 +19,12 @@ namespace Aura.Providers.Tts;
 
 public class WindowsTtsProvider : ITtsProvider
 {
+    // Audio format validation constants
+    private const short PreferredBitsPerSample = 16;
+    private const short FallbackBitsPerSample = 8;
+    private const int PreferredSampleRate = 44100; // 44.1kHz
+    private const int FallbackSampleRate = 22050; // 22.05kHz
+
     private readonly ILogger<WindowsTtsProvider> _logger;
     private readonly Aura.Core.Audio.WavValidator? _wavValidator;
 #if WINDOWS10_0_19041_0_OR_GREATER
@@ -291,18 +297,18 @@ public class WindowsTtsProvider : ITtsProvider
                         outputFilePath, validationResult.Format, validationResult.SampleRate, validationResult.Duration ?? 0);
 
                     // Validate format is compatible (16-bit PCM preferred for maximum compatibility)
-                    if (validationResult.BitsPerSample != 16 && validationResult.BitsPerSample != 8)
+                    if (validationResult.BitsPerSample != PreferredBitsPerSample && validationResult.BitsPerSample != FallbackBitsPerSample)
                     {
                         _logger.LogWarning(
-                            "Windows TTS produced {BitsPerSample}-bit audio. 16-bit PCM is preferred for compatibility.",
-                            validationResult.BitsPerSample);
+                            "Windows TTS produced {BitsPerSample}-bit audio. {PreferredBitsPerSample}-bit PCM is preferred for compatibility.",
+                            validationResult.BitsPerSample, PreferredBitsPerSample);
                     }
 
-                    if (validationResult.SampleRate != 44100 && validationResult.SampleRate != 22050)
+                    if (validationResult.SampleRate != PreferredSampleRate && validationResult.SampleRate != FallbackSampleRate)
                     {
                         _logger.LogWarning(
-                            "Windows TTS produced {SampleRate}Hz audio. 44100Hz or 22050Hz is preferred for compatibility.",
-                            validationResult.SampleRate);
+                            "Windows TTS produced {SampleRate}Hz audio. {PreferredSampleRate}Hz or {FallbackSampleRate}Hz is preferred for compatibility.",
+                            validationResult.SampleRate, PreferredSampleRate, FallbackSampleRate);
                     }
                 }
                 else

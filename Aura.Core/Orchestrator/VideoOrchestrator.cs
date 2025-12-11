@@ -36,6 +36,9 @@ public class VideoOrchestrator
     private const float StallProgressThreshold = 0.1f;
     private const int StallTimeoutSeconds = 60;
 
+    // Audio validation constants
+    private const long MinValidAudioFileSizeBytes = 1024; // 1KB minimum for valid audio file
+
     // Output path extraction constants
     private const string OutputDirectoryName = "AuraVideoStudio";
     private const string OutputSubdirectoryName = "Output";
@@ -1845,9 +1848,9 @@ public class VideoOrchestrator
 
                             // Validate audio file size (must be substantial)
                             var audioFileInfo = new FileInfo(audioPath);
-                            if (audioFileInfo.Length < 1024)
+                            if (audioFileInfo.Length < MinValidAudioFileSizeBytes)
                             {
-                                var error = $"TTS synthesis produced invalid audio: File size {audioFileInfo.Length} bytes is too small (expected >1KB)";
+                                var error = $"TTS synthesis produced invalid audio: File size {audioFileInfo.Length} bytes is too small (expected >{MinValidAudioFileSizeBytes} bytes)";
                                 _logger.LogError(error);
                                 throw new InvalidOperationException(error);
                             }
@@ -2006,10 +2009,10 @@ public class VideoOrchestrator
 
                     // Validate narration file is not empty or corrupted
                     var narrationFileInfo = new FileInfo(narrationPath);
-                    if (narrationFileInfo.Length < 1024)
+                    if (narrationFileInfo.Length < MinValidAudioFileSizeBytes)
                     {
                         var error = $"CRITICAL: Narration file at {narrationPath} is too small ({narrationFileInfo.Length} bytes). " +
-                            "This indicates TTS synthesis failed or produced invalid audio.";
+                            $"Expected at least {MinValidAudioFileSizeBytes} bytes. This indicates TTS synthesis failed or produced invalid audio.";
                         _logger.LogError(error);
                         throw new InvalidOperationException(error);
                     }
