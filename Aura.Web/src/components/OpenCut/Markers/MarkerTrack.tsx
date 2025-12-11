@@ -39,7 +39,7 @@ const useStyles = makeStyles({
     overflow: 'hidden',
   },
   labelArea: {
-    width: '140px',
+    width: openCutTokens.layout.trackLabelWidth,
     flexShrink: 0,
     borderRight: `1px solid ${tokens.colorNeutralStroke3}`,
     display: 'flex',

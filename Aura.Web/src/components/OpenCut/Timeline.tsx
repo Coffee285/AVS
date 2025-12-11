@@ -74,6 +74,7 @@ import {
   TimelineToolbar,
   TimelineContextMenu,
   TrackResizeHandle,
+  TrackHeader,
   type RippleClipPreview,
   type RippleDirection,
 } from './Timeline/index';
@@ -1805,11 +1806,7 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
       <div className={styles.content}>
         {/* Time Ruler */}
         <div className={styles.rulerArea}>
-          <div className={styles.rulerLabels}>
-            <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
-              Tracks
-            </Text>
-          </div>
+          <div className={styles.rulerLabels} />
           <div className={styles.rulerScrollable} ref={rulerScrollableRef}>
             <div className={styles.ruler} style={{ width: totalWidth }}>
               {rulerMarks.map((mark) => (
@@ -1844,20 +1841,22 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
           </div>
         </div>
 
-        {/* Marker Track */}
-        <MarkerTrack
-          markers={visibleMarkers}
-          selectedMarkerId={selectedMarkerId}
-          pixelsPerSecond={pixelsPerSecond}
-          totalWidth={totalWidth}
-          currentTime={currentTime}
-          onSelectMarker={handleSelectMarker}
-          onMoveMarker={handleMoveMarker}
-          onUpdateMarker={handleUpdateMarker}
-          onDeleteMarker={handleDeleteMarker}
-          onAddMarker={handleAddMarker}
-          onSeek={handleSeekToTime}
-        />
+        {/* Marker Track - Only show when markers exist */}
+        {visibleMarkers.length > 0 && (
+          <MarkerTrack
+            markers={visibleMarkers}
+            selectedMarkerId={selectedMarkerId}
+            pixelsPerSecond={pixelsPerSecond}
+            totalWidth={totalWidth}
+            currentTime={currentTime}
+            onSelectMarker={handleSelectMarker}
+            onMoveMarker={handleMoveMarker}
+            onUpdateMarker={handleUpdateMarker}
+            onDeleteMarker={handleDeleteMarker}
+            onAddMarker={handleAddMarker}
+            onSeek={handleSeekToTime}
+          />
+        )}
 
         {/* Tracks */}
         <div className={styles.tracksScrollable}>
@@ -1874,46 +1873,22 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
                   track.locked && styles.trackLocked
                 )}
                 style={{ height: track.height }}
-                onClick={() => handleTrackClick(track.id)}
                 onContextMenu={(e) => handleContextMenu(e, 'track', undefined, track.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    handleTrackClick(track.id);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-pressed={isSelected}
               >
                 <div className={styles.trackLabel}>
-                  <span className={styles.trackLabelIcon}>{TRACK_TYPE_ICONS[track.type]}</span>
-                  <span className={styles.trackLabelText}>{track.name}</span>
-                  <div className={styles.trackControls}>
-                    <Tooltip content={track.muted ? 'Unmute' : 'Mute'} relationship="label">
-                      <Button
-                        appearance="subtle"
-                        size="small"
-                        className={styles.trackControlButton}
-                        icon={track.muted ? <SpeakerMute24Regular /> : <Speaker224Regular />}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          timelineStore.muteTrack(track.id, !track.muted);
-                        }}
-                      />
-                    </Tooltip>
-                    <Tooltip content={track.locked ? 'Unlock' : 'Lock'} relationship="label">
-                      <Button
-                        appearance="subtle"
-                        size="small"
-                        className={styles.trackControlButton}
-                        icon={track.locked ? <LockClosed24Regular /> : <LockOpen24Regular />}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          timelineStore.lockTrack(track.id, !track.locked);
-                        }}
-                      />
-                    </Tooltip>
-                  </div>
+                  <TrackHeader
+                    track={track}
+                    isSelected={isSelected}
+                    onClick={() => handleTrackClick(track.id)}
+                    onMuteToggle={(e) => {
+                      e.stopPropagation();
+                      timelineStore.muteTrack(track.id, !track.muted);
+                    }}
+                    onLockToggle={(e) => {
+                      e.stopPropagation();
+                      timelineStore.lockTrack(track.id, !track.locked);
+                    }}
+                  />
                 </div>
                 <div className={styles.trackContentScrollable}>
                   <div

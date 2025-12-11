@@ -54,7 +54,7 @@ export const openCutTokens = {
     /** Standard hit target size for touch - matches Apple HIG 48px */
     hitTargetSize: '48px',
     /** Track label width in timeline */
-    trackLabelWidth: '180px',
+    trackLabelWidth: '160px',
     /** Sidebar minimum width */
     sidebarMinWidth: '220px',
     /** Sidebar maximum width */
