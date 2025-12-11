@@ -21,3 +21,4 @@ export { Skeleton, type SkeletonProps } from './Skeleton';
 export { Toast, type ToastProps } from './Toast';
 export { ToastContainer, type ToastContainerProps } from './ToastContainer';
 export { EnhancedTooltip, type EnhancedTooltipProps } from './EnhancedTooltip';
+export { ScrubbableInput, type ScrubbableInputProps } from './ScrubbableInput';
