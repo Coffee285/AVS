@@ -171,13 +171,37 @@ const useStyles = makeStyles({
     },
   },
 
-  // Progress bar fill
+  // Progress bar fill - uses transform for smooth, hardware-accelerated animation
   progressFill: {
     height: '100%',
     backgroundColor: tokens.colorBrandBackground,
-    transitionProperty: 'width',
-    transitionDuration: '100ms',
-    transitionTimingFunction: 'linear',
+    transformOrigin: 'left',
+    willChange: 'transform',
+    '@media (prefers-reduced-motion: reduce)': {
+      transitionProperty: 'transform',
+      transitionDuration: '0.1s',
+      transitionTimingFunction: 'linear',
+    },
+  },
+
+  // Applied when animation is active (not in reduced motion mode)
+  progressFillAnimated: {
+    '@keyframes progressShrink': {
+      from: {
+        transform: 'scaleX(1)',
+      },
+      to: {
+        transform: 'scaleX(0)',
+      },
+    },
+    animationName: 'progressShrink',
+    animationTimingFunction: 'linear',
+    animationFillMode: 'forwards',
+  },
+
+  // Applied when animation should be paused
+  progressFillPaused: {
+    animationPlayState: 'paused',
   },
 
   // Success progress fill
@@ -294,6 +318,7 @@ const TOASTER_ID = 'notifications-toaster';
 /**
  * Toast component with auto-dismiss progress bar and close button
  * Supports ESC key to dismiss and mouse hover to pause auto-dismiss
+ * Uses CSS animation for smooth, hardware-accelerated progress indication
  */
 function ToastWithProgress({
   children,
@@ -305,81 +330,89 @@ function ToastWithProgress({
   onDismiss?: () => void;
 }) {
   const styles = useStyles();
-  const [progress, setProgress] = useState(100);
   const [isPaused, setIsPaused] = useState(false);
-  const isPausedRef = useRef(false);
+  const [animationDuration, setAnimationDuration] = useState(timeout);
   const onDismissRef = useRef(onDismiss);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const startTimeRef = useRef<number>(0);
-  const pausedTimeRef = useRef<number>(0);
+  const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pauseStartTimeRef = useRef<number>(0);
   const totalPausedTimeRef = useRef<number>(0);
+  const progressBarRef = useRef<HTMLDivElement>(null);
 
-  // Keep refs in sync with props/state
-  useEffect(() => {
-    isPausedRef.current = isPaused;
-  }, [isPaused]);
+  // Detect reduced motion preference
+  const prefersReducedMotion =
+    typeof window !== 'undefined' &&
+    window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Keep onDismiss callback in sync
   useEffect(() => {
     onDismissRef.current = onDismiss;
   }, [onDismiss]);
 
+  // Setup auto-dismiss timer with pause tracking
   useEffect(() => {
     if (timeout <= 0) {
       return;
     }
 
-    // Reset progress and start fresh
-    setProgress(100);
-    startTimeRef.current = Date.now();
+    // Clear any existing timeout
+    if (dismissTimeoutRef.current) {
+      clearTimeout(dismissTimeoutRef.current);
+    }
+
+    // Reset state
     totalPausedTimeRef.current = 0;
-    pausedTimeRef.current = 0;
+    pauseStartTimeRef.current = 0;
+    setAnimationDuration(timeout);
 
-    const interval = 100;
-
-    const startTimer = () => {
-      timerRef.current = setInterval(() => {
-        if (!isPausedRef.current) {
-          const now = Date.now();
-          const elapsed = now - startTimeRef.current - totalPausedTimeRef.current;
-          const remaining = Math.max(0, timeout - elapsed);
-          const newProgress = (remaining / timeout) * 100;
-
-          if (remaining <= 0) {
-            if (timerRef.current) {
-              clearInterval(timerRef.current);
-              timerRef.current = null;
-            }
-            onDismissRef.current?.();
-          } else {
-            setProgress(newProgress);
-          }
-        } else {
-          // Track when pause started
-          if (pausedTimeRef.current === 0) {
-            pausedTimeRef.current = Date.now();
-          }
-        }
-      }, interval);
-    };
-
-    startTimer();
+    // Schedule dismiss
+    dismissTimeoutRef.current = setTimeout(() => {
+      onDismissRef.current?.();
+    }, timeout);
 
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+      if (dismissTimeoutRef.current) {
+        clearTimeout(dismissTimeoutRef.current);
+        dismissTimeoutRef.current = null;
       }
     };
   }, [timeout]);
 
-  // Handle pause/resume - update total paused time when resuming
+  // Handle pause - track when paused and calculate remaining time
   useEffect(() => {
-    if (!isPaused && pausedTimeRef.current > 0) {
-      const pausedDuration = Date.now() - pausedTimeRef.current;
-      totalPausedTimeRef.current += pausedDuration;
-      pausedTimeRef.current = 0;
+    if (isPaused) {
+      // Track when pause started
+      pauseStartTimeRef.current = Date.now();
+
+      // Clear the dismiss timeout
+      if (dismissTimeoutRef.current) {
+        clearTimeout(dismissTimeoutRef.current);
+        dismissTimeoutRef.current = null;
+      }
+    } else if (pauseStartTimeRef.current > 0) {
+      // Resuming from pause
+      const pauseDuration = Date.now() - pauseStartTimeRef.current;
+      totalPausedTimeRef.current += pauseDuration;
+
+      // Calculate remaining time
+      const remainingTime = timeout - totalPausedTimeRef.current;
+
+      if (remainingTime > 0) {
+        // Update animation duration to remaining time
+        setAnimationDuration(remainingTime);
+
+        // Reschedule dismiss
+        dismissTimeoutRef.current = setTimeout(() => {
+          onDismissRef.current?.();
+        }, remainingTime);
+      } else {
+        // Time already expired, dismiss immediately
+        onDismissRef.current?.();
+      }
+
+      pauseStartTimeRef.current = 0;
     }
-  }, [isPaused]);
+  }, [isPaused, timeout]);
 
   // ESC key handler
   useEffect(() => {
@@ -401,6 +434,16 @@ function ToastWithProgress({
     setIsPaused(false);
   };
 
+  // Determine progress fill class names
+  const progressFillClassName = prefersReducedMotion
+    ? styles.progressFill
+    : `${styles.progressFill} ${styles.progressFillAnimated} ${isPaused ? styles.progressFillPaused : ''}`;
+
+  // For reduced motion, use transform with JS-controlled value
+  const progressStyle = prefersReducedMotion
+    ? { transform: `scaleX(${isPaused ? 1 : 0})` }
+    : { animationDuration: `${animationDuration}ms` };
+
   return (
     // This div is for hover detection to pause toast auto-dismiss, not for interactive content
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -408,7 +451,7 @@ function ToastWithProgress({
       {children}
       {timeout > 0 && (
         <div className={styles.progressBar}>
-          <div className={styles.progressFill} style={{ width: `${progress}%` }} />
+          <div ref={progressBarRef} className={progressFillClassName} style={progressStyle} />
         </div>
       )}
     </div>
