@@ -537,7 +537,12 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
   const transitionsStore = useOpenCutTransitionsStore();
 
   const [isResizing, setIsResizing] = useState(false);
-  const [activeSnapPoint, setActiveSnapPoint] = useState<number | null>(null);
+  const [activeSnapPoint, setActiveSnapPoint] = useState<{
+    position: number;
+    type: 'clip' | 'playhead' | 'marker' | 'beat';
+    isActive: boolean;
+    distance: number;
+  } | null>(null);
   // Clip drag state
   const [isDraggingClip, setIsDraggingClip] = useState(false);
   const [dragClipId, setDragClipId] = useState<string | null>(null);
@@ -1133,16 +1138,57 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
         return proposedTime;
       }
 
-      const nearestSnapPoint = findNearestSnapPoint(proposedTime, clipId);
-      if (nearestSnapPoint !== null) {
-        setActiveSnapPoint(nearestSnapPoint);
-        return nearestSnapPoint;
+      // Get all snap points for this clip
+      const snapPoints = timelineStore.getSnapPoints(clipId);
+      const snapTolerance = timelineStore.snapTolerance;
+      const timeTolerance = snapTolerance / pixelsPerSecond;
+
+      // Magnetic zone: 10 pixels
+      const magneticZonePixels = 10;
+      const magneticZone = magneticZonePixels / pixelsPerSecond;
+
+      let nearestPoint: number | null = null;
+      let nearestDistance = Infinity;
+
+      for (const snapPoint of snapPoints) {
+        const distance = Math.abs(proposedTime - snapPoint);
+        if (distance < timeTolerance && distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestPoint = snapPoint;
+        }
+      }
+
+      if (nearestPoint !== null) {
+        const distanceInPixels = nearestDistance * pixelsPerSecond;
+
+        // Determine snap type based on snap point value
+        let snapType: 'clip' | 'playhead' | 'marker' | 'beat' = 'clip';
+        if (nearestPoint === currentTime) {
+          snapType = 'playhead';
+        } else if (nearestPoint === 0) {
+          snapType = 'clip'; // Timeline start
+        }
+
+        setActiveSnapPoint({
+          position: nearestPoint,
+          type: snapType,
+          isActive: distanceInPixels < magneticZonePixels,
+          distance: nearestDistance,
+        });
+
+        // Apply magnetic pull with easing for smooth snap
+        if (distanceInPixels < magneticZonePixels) {
+          const snapStrength = 1 - distanceInPixels / magneticZonePixels;
+          return proposedTime + (nearestPoint - proposedTime) * snapStrength;
+        }
+
+        return nearestPoint;
       }
 
       setActiveSnapPoint(null);
       return proposedTime;
     },
-    [snapToClips, findNearestSnapPoint]
+    [snapToClips, timelineStore, pixelsPerSecond, currentTime]
   );
 
   const handleClipDragEnd = useCallback(() => {
@@ -1913,9 +1959,12 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
                     {/* Snap indicator - shows visual feedback during clip snapping */}
                     {snapEnabled && snapToClips && activeSnapPoint !== null && (
                       <SnapIndicator
-                        position={activeSnapPoint * pixelsPerSecond}
+                        position={activeSnapPoint.position * pixelsPerSecond}
                         visible={true}
-                        snapType="clip-edge"
+                        snapType={activeSnapPoint.type}
+                        distance={activeSnapPoint.distance}
+                        pixelsPerSecond={pixelsPerSecond}
+                        isActive={activeSnapPoint.isActive}
                       />
                     )}
 

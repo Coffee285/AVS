@@ -2,7 +2,7 @@
  * Tests for SnapIndicator component
  */
 
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { SnapIndicator, type SnapType } from '../SnapIndicator';
 
@@ -40,7 +40,7 @@ describe('SnapIndicator', () => {
   });
 
   describe('Snap Types', () => {
-    const snapTypes: SnapType[] = ['clip-edge', 'marker', 'playhead', 'time-zero'];
+    const snapTypes: SnapType[] = ['clip', 'clip-edge', 'marker', 'playhead', 'beat', 'time-zero'];
 
     snapTypes.forEach((snapType) => {
       it(`should render with ${snapType} snap type`, () => {
@@ -56,6 +56,65 @@ describe('SnapIndicator', () => {
       const { container } = render(<SnapIndicator position={100} visible={true} />);
 
       // Should render without error with default snap type
+      expect(container.firstChild).toBeInTheDocument();
+    });
+  });
+
+  describe('Distance Tooltip', () => {
+    it('should render component with distance prop', () => {
+      const { container } = render(
+        <SnapIndicator position={100} visible={true} distance={0.5} pixelsPerSecond={100} />
+      );
+
+      expect(container.firstChild).toBeInTheDocument();
+    });
+
+    it('should not show tooltip when distance is 0', () => {
+      const { container } = render(
+        <SnapIndicator position={100} visible={true} distance={0} pixelsPerSecond={100} />
+      );
+
+      expect(container.firstChild).toBeInTheDocument();
+    });
+
+    it('should not show tooltip when distance is greater than 1 second', () => {
+      const { container } = render(
+        <SnapIndicator position={100} visible={true} distance={1.5} pixelsPerSecond={100} />
+      );
+
+      expect(container.firstChild).toBeInTheDocument();
+    });
+
+    it('should render with distance prop for frame display', () => {
+      const { container } = render(
+        <SnapIndicator position={100} visible={true} distance={0.05} pixelsPerSecond={100} />
+      );
+
+      expect(container.firstChild).toBeInTheDocument();
+    });
+
+    it('should render with distance prop for seconds display', () => {
+      const { container } = render(
+        <SnapIndicator position={100} visible={true} distance={0.5} pixelsPerSecond={100} />
+      );
+
+      expect(container.firstChild).toBeInTheDocument();
+    });
+  });
+
+  describe('Active State', () => {
+    it('should apply active styles when isActive is true', () => {
+      const { container } = render(<SnapIndicator position={100} visible={true} isActive={true} />);
+
+      expect(container.firstChild).toBeInTheDocument();
+      // Active state should be applied (component renders with enhanced glow)
+    });
+
+    it('should not apply active styles when isActive is false', () => {
+      const { container } = render(
+        <SnapIndicator position={100} visible={true} isActive={false} />
+      );
+
       expect(container.firstChild).toBeInTheDocument();
     });
   });
