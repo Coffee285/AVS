@@ -31,14 +31,20 @@ import {
   Add24Regular,
   Delete24Regular,
   Folder24Regular,
+  FolderOpen24Regular,
   Grid24Regular,
   Image24Regular,
   Info24Regular,
   MoreHorizontal24Regular,
   MusicNote224Regular,
+  Rename24Regular,
   Search24Regular,
   TextBulletListSquare24Regular,
   Video24Regular,
+  ArrowExportLtr24Regular,
+  ArrowSwap24Regular,
+  LinkSquare24Regular,
+  LinkMultiple24Regular,
 } from '@fluentui/react-icons';
 import type { DragEvent, FC, MouseEvent as ReactMouseEvent } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -46,6 +52,7 @@ import { useOpenCutMediaStore, type OpenCutMediaFile } from '../../stores/opencu
 import { useOpenCutTimelineStore } from '../../stores/opencutTimeline';
 import { openCutTokens } from '../../styles/designTokens';
 import { EmptyState } from './EmptyState';
+import { BaseContextMenu, ContextMenuItem, ContextMenuDivider } from './ContextMenu';
 
 export interface MediaPanelProps {
   className?: string;
@@ -322,6 +329,8 @@ export const MediaPanel: FC<MediaPanelProps> = ({ className }) => {
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(
     null
   );
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaStore = useOpenCutMediaStore();
@@ -496,6 +505,91 @@ export const MediaPanel: FC<MediaPanelProps> = ({ className }) => {
     },
     [closeContextMenu, timelineStore]
   );
+
+  const handleRevealInExplorer = useCallback(
+    async (media: OpenCutMediaFile) => {
+      if (media.url) {
+        try {
+          await navigator.clipboard.writeText(media.url);
+          console.info('Media path copied to clipboard:', media.url);
+        } catch (error: unknown) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          console.error('Failed to copy path:', errorMsg);
+        }
+      }
+      closeContextMenu();
+    },
+    [closeContextMenu]
+  );
+
+  const handleRenameMedia = useCallback(
+    (media: OpenCutMediaFile) => {
+      setIsRenaming(true);
+      setRenameValue(media.name);
+      closeContextMenu();
+    },
+    [closeContextMenu]
+  );
+
+  const handleReplaceFootage = useCallback(
+    (media: OpenCutMediaFile) => {
+      console.info('Replace footage for:', media.name);
+      closeContextMenu();
+    },
+    [closeContextMenu]
+  );
+
+  const handleMakeOffline = useCallback(
+    (media: OpenCutMediaFile) => {
+      console.info('Make offline:', media.name);
+      closeContextMenu();
+    },
+    [closeContextMenu]
+  );
+
+  const handleRelinkMedia = useCallback(
+    (media: OpenCutMediaFile) => {
+      console.info('Relink media:', media.name);
+      closeContextMenu();
+    },
+    [closeContextMenu]
+  );
+
+  const handleExportFrame = useCallback(
+    (media: OpenCutMediaFile) => {
+      console.info('Export frame from:', media.name);
+      closeContextMenu();
+    },
+    [closeContextMenu]
+  );
+
+  const handleExportAudio = useCallback(
+    (media: OpenCutMediaFile) => {
+      console.info('Export audio from:', media.name);
+      closeContextMenu();
+    },
+    [closeContextMenu]
+  );
+
+  const handleExportClip = useCallback(
+    (media: OpenCutMediaFile) => {
+      console.info('Export clip:', media.name);
+      closeContextMenu();
+    },
+    [closeContextMenu]
+  );
+
+  const handleShowProperties = useCallback(
+    (media: OpenCutMediaFile) => {
+      console.info('Show properties for:', media.name);
+      closeContextMenu();
+    },
+    [closeContextMenu]
+  );
+
+  const isMac = useMemo(() => {
+    return navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  }, []);
 
   const renderMediaItem = (file: OpenCutMediaFile) => {
     const isSelected = mediaStore.selectedMediaId === file.id;
@@ -709,36 +803,90 @@ export const MediaPanel: FC<MediaPanelProps> = ({ className }) => {
         )}
       </div>
 
-      {/* Context Menu */}
+      {/* Enhanced Professional Context Menu */}
       {contextMenuMedia && (
-        <Menu
+        <BaseContextMenu
           open={contextMenuOpen}
-          onOpenChange={(_, data) => {
-            setContextMenuOpen(data.open);
-            if (!data.open) {
-              closeContextMenu();
-            }
-          }}
+          position={contextMenuPosition}
+          onClose={closeContextMenu}
         >
-          <MenuPopover positioning={contextMenuPositioning}>
-            <MenuList>
-              <MenuItem
-                icon={<Add24Regular />}
-                onClick={() => handleAddToTimeline(contextMenuMedia)}
-              >
-                Add to Timeline
-              </MenuItem>
-              <MenuItem icon={<Info24Regular />}>Properties</MenuItem>
-              <MenuDivider />
-              <MenuItem
-                icon={<Delete24Regular />}
-                onClick={() => handleDeleteMedia(contextMenuMedia.id)}
-              >
-                Delete
-              </MenuItem>
-            </MenuList>
-          </MenuPopover>
-        </Menu>
+          <ContextMenuItem
+            label="Add to Timeline"
+            icon={<Add24Regular />}
+            onClick={() => handleAddToTimeline(contextMenuMedia)}
+          />
+
+          <ContextMenuItem
+            label={`Reveal in ${isMac ? 'Finder' : 'Explorer'}`}
+            icon={<FolderOpen24Regular />}
+            onClick={() => handleRevealInExplorer(contextMenuMedia)}
+          />
+
+          <ContextMenuItem
+            label="Rename"
+            icon={<Rename24Regular />}
+            shortcut="F2"
+            onClick={() => handleRenameMedia(contextMenuMedia)}
+          />
+
+          <ContextMenuDivider />
+
+          <ContextMenuItem
+            label="Replace Footage"
+            icon={<ArrowSwap24Regular />}
+            onClick={() => handleReplaceFootage(contextMenuMedia)}
+          />
+
+          <ContextMenuItem
+            label="Make Offline"
+            icon={<LinkSquare24Regular />}
+            onClick={() => handleMakeOffline(contextMenuMedia)}
+          />
+
+          <ContextMenuItem
+            label="Relink Media"
+            icon={<LinkMultiple24Regular />}
+            onClick={() => handleRelinkMedia(contextMenuMedia)}
+          />
+
+          <ContextMenuDivider />
+
+          <ContextMenuItem
+            label="Export Frame"
+            icon={<ArrowExportLtr24Regular />}
+            disabled={contextMenuMedia.type !== 'video'}
+            onClick={() => handleExportFrame(contextMenuMedia)}
+          />
+
+          <ContextMenuItem
+            label="Export Audio"
+            icon={<ArrowExportLtr24Regular />}
+            disabled={contextMenuMedia.type !== 'video' && contextMenuMedia.type !== 'audio'}
+            onClick={() => handleExportAudio(contextMenuMedia)}
+          />
+
+          <ContextMenuItem
+            label="Export Clip"
+            icon={<ArrowExportLtr24Regular />}
+            onClick={() => handleExportClip(contextMenuMedia)}
+          />
+
+          <ContextMenuDivider />
+
+          <ContextMenuItem
+            label="Properties"
+            icon={<Info24Regular />}
+            shortcut={isMac ? '⌘I' : 'Ctrl+I'}
+            onClick={() => handleShowProperties(contextMenuMedia)}
+          />
+
+          <ContextMenuItem
+            label="Delete"
+            icon={<Delete24Regular />}
+            shortcut="Del"
+            onClick={() => handleDeleteMedia(contextMenuMedia.id)}
+          />
+        </BaseContextMenu>
       )}
     </div>
   );
