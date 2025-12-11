@@ -177,14 +177,6 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorBrandBackground,
     transformOrigin: 'left',
     willChange: 'transform',
-    '@keyframes progressShrink': {
-      from: {
-        transform: 'scaleX(1)',
-      },
-      to: {
-        transform: 'scaleX(0)',
-      },
-    },
     '@media (prefers-reduced-motion: reduce)': {
       transitionProperty: 'transform',
       transitionDuration: '0.1s',
@@ -194,6 +186,14 @@ const useStyles = makeStyles({
 
   // Applied when animation is active (not in reduced motion mode)
   progressFillAnimated: {
+    '@keyframes progressShrink': {
+      from: {
+        transform: 'scaleX(1)',
+      },
+      to: {
+        transform: 'scaleX(0)',
+      },
+    },
     animationName: 'progressShrink',
     animationTimingFunction: 'linear',
     animationFillMode: 'forwards',

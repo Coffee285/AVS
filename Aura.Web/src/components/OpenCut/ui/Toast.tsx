@@ -146,6 +146,13 @@ const useStyles = makeStyles({
     height: '100%',
     transformOrigin: 'left',
     willChange: 'transform',
+    '@media (prefers-reduced-motion: reduce)': {
+      transitionProperty: 'transform',
+      transitionDuration: '0.1s',
+      transitionTimingFunction: 'linear',
+    },
+  },
+  progressFillAnimated: {
     '@keyframes progressShrink': {
       from: {
         transform: 'scaleX(1)',
@@ -154,13 +161,6 @@ const useStyles = makeStyles({
         transform: 'scaleX(0)',
       },
     },
-    '@media (prefers-reduced-motion: reduce)': {
-      transitionProperty: 'transform',
-      transitionDuration: '0.1s',
-      transitionTimingFunction: 'linear',
-    },
-  },
-  progressFillAnimated: {
     animationName: 'progressShrink',
     animationTimingFunction: 'linear',
     animationFillMode: 'forwards',
