@@ -294,20 +294,21 @@ public class JobsController : ControllerBase
 
                     if (exportJob != null)
                     {
-                        // Return export job status
-                        return Ok(new JobStatusResponse
+                        // Return export job status with lowercase field names
+                        return Ok(new
                         {
-                            Id = exportJob.Id,
-                            Status = MapJobStatus(exportJob.Status),
-                            Percent = exportJob.Progress,
-                            Stage = exportJob.Stage,
-                            ProgressMessage = exportJob.Message,
-                            CreatedAt = exportJob.CreatedAt,
-                            StartedAt = exportJob.StartedAt,
-                            CompletedAt = exportJob.CompletedAt,
-                            OutputPath = exportJob.OutputPath,
-                            ErrorMessage = exportJob.ErrorMessage,
-                            CorrelationId = correlationId
+                            id = exportJob.Id,
+                            status = MapJobStatus(exportJob.Status),
+                            progress = exportJob.Progress,  // Frontend expects 'progress'
+                            percent = exportJob.Progress,   // Backward compatibility
+                            stage = exportJob.Stage,
+                            progressMessage = exportJob.Message,
+                            createdAt = exportJob.CreatedAt,
+                            startedAt = exportJob.StartedAt,
+                            completedAt = exportJob.CompletedAt,
+                            outputPath = exportJob.OutputPath,
+                            errorMessage = exportJob.ErrorMessage,
+                            correlationId = correlationId
                         });
                     }
                 }
@@ -329,7 +330,8 @@ public class JobsController : ControllerBase
                 });
             }
 
-            // Return generation job status
+            // Return generation job status with lowercase field names for frontend compatibility
+            // Frontend expects 'progress' (not 'Percent'), 'status' (lowercase), etc.
             var response = new JobStatusResponse
             {
                 Id = job.Id,
@@ -356,7 +358,23 @@ public class JobsController : ControllerBase
                 "[{CorrelationId}] Job {JobId} status: {Status}, progress: {Progress}%",
                 correlationId, jobId, response.Status, response.Percent);
 
-            return Ok(response);
+            // Return with explicit lowercase field names using anonymous object for maximum compatibility
+            return Ok(new
+            {
+                id = response.Id,
+                status = response.Status,
+                progress = response.Percent,  // Frontend expects 'progress' not 'Percent'
+                percent = response.Percent,   // Keep 'percent' for backward compatibility
+                stage = response.Stage,
+                progressMessage = response.ProgressMessage,
+                createdAt = response.CreatedAt,
+                startedAt = response.StartedAt,
+                completedAt = response.CompletedAt,
+                outputPath = response.OutputPath,  // Lowercase 'outputPath'
+                errorMessage = response.ErrorMessage,
+                artifacts = response.Artifacts,
+                correlationId = response.CorrelationId
+            });
         }
         catch (Exception ex)
         {

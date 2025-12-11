@@ -153,6 +153,10 @@ public class CompositionStage : PipelineStage
             throw new InvalidOperationException("Video rendering failed: output file not found");
         }
 
+        // CRITICAL FIX: Report 100% completion explicitly before returning
+        // This ensures frontend polling sees the final progress update
+        ReportProgress(progress, 100, "Video export complete");
+
         Logger.LogInformation(
             "[{CorrelationId}] Video composition completed: {OutputPath}",
             context.CorrelationId,
