@@ -70,7 +70,7 @@ public partial class FfmpegVideoComposer
                             lastProgressTime = DateTime.Now;
                             lastProgress = Math.Clamp(
                                 (float)(time.TotalSeconds / totalDuration.TotalSeconds * 100),
-                                0, 99.5f);
+                                0, 100f);
                             
                             var elapsed = DateTime.Now - startTime;
                             progress.Report(new RenderProgress(
@@ -128,7 +128,9 @@ public partial class FfmpegVideoComposer
                 var progress = getProgress();
                 var stuckDuration = (DateTime.Now - getLastProgressTime()).TotalSeconds;
                 
-                if (stuckDuration > 45 && progress > 90)
+                // For finalization phase (90%+), give more time as muxing and flushing can take longer
+                var threshold = progress >= 90 ? 120 : 45;
+                if (stuckDuration > threshold && progress > 90)
                 {
                     _logger.LogWarning(
                         "[{JobId}] FFmpeg appears stuck at {Progress}% for {Duration}s",
@@ -211,7 +213,8 @@ public partial class FfmpegVideoComposer
                 throw new InvalidOperationException("Output file is empty");
         }
 
-        // Report 100% completion
+        // CRITICAL: Report 100% completion BEFORE returning
+        // This ensures the job status reaches 100% and completion is properly signaled
         progress.Report(new RenderProgress(
             100f,
             DateTime.Now - startTime,
@@ -219,7 +222,7 @@ public partial class FfmpegVideoComposer
             $"Render complete ({fileInfo.Length / 1024.0 / 1024.0:F2} MB)"));
 
         _logger.LogInformation(
-            "[{JobId}] ✅ Render verified: {Path} ({SizeMB:F2} MB)",
+            "[{JobId}] ✅ Render verified and finalized: {Path} ({SizeMB:F2} MB)",
             jobId, outputFilePath, fileInfo.Length / 1024.0 / 1024.0);
 
         return outputFilePath;
