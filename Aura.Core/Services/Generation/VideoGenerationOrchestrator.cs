@@ -176,9 +176,16 @@ public class VideoGenerationOrchestrator
                 // This ensures progress reaches 100% even if some tasks fail
                 var batchSucceeded = batchResults.Count(r => r.Succeeded);
                 var batchFailed = batchResults.Count(r => !r.Succeeded);
-                processedTasks += batchResults.Count; // All tasks that finished
+                
+                // Update progress counters - clamp processedTasks to totalTasks to prevent overflow
+                var tasksCompleted = Math.Min(processedTasks + batchResults.Count, totalTasks);
+                processedTasks = tasksCompleted;
                 succeededTasks += batchSucceeded;
                 failedTasks += batchFailed;
+
+                _logger.LogDebug(
+                    "Batch results: {Succeeded} succeeded, {Failed} failed. Progress: {Processed}/{Total}",
+                    batchSucceeded, batchFailed, processedTasks, totalTasks);
 
                 // Determine batch type for better status messages
                 var isVisualBatch = batch.All(n => n.TaskType == GenerationTaskType.ImageGeneration);

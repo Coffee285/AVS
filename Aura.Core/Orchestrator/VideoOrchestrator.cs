@@ -1822,15 +1822,28 @@ public class VideoOrchestrator
 
                 case GenerationTaskType.AudioGeneration:
                     // Generate audio from parsed scenes
-                    if (parsedScenes == null || generatedScript == null)
+                    _logger.LogInformation("[Audio] Task started - validating prerequisites");
+                    
+                    if (parsedScenes == null)
                     {
-                        throw new InvalidOperationException("Script must be generated before audio");
+                        var error = "CRITICAL: parsedScenes is null. Script must be generated before audio.";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
+                    }
+                    
+                    if (generatedScript == null)
+                    {
+                        var error = "CRITICAL: generatedScript is null. Script must be generated before audio.";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
                     }
 
+                    _logger.LogInformation("[Audio] Prerequisites validated. ParsedScenes: {SceneCount}", parsedScenes.Count);
+                    
                     var scriptLines = ConvertScenesToScriptLines(parsedScenes);
 
                     // CRITICAL: Validate we have audio for ALL script lines (fast-fail if any line fails)
-                    _logger.LogInformation("Starting TTS synthesis for {LineCount} script lines. ALL lines must succeed.", scriptLines.Count);
+                    _logger.LogInformation("[Audio] Starting TTS synthesis for {LineCount} script lines. ALL lines must succeed.", scriptLines.Count);
 
                     // Generate audio with retry logic and validation
                     narrationPath = await _retryWrapper.ExecuteWithRetryAsync(
@@ -1894,18 +1907,33 @@ public class VideoOrchestrator
                     ).ConfigureAwait(false);
 
                     // FINAL VALIDATION: Ensure the narration file is valid before declaring success
+                    _logger.LogInformation("[Audio] Performing final validation on narration file: {Path}", narrationPath);
+                    
                     if (!File.Exists(narrationPath))
                     {
-                        var error = $"Audio generation completed but narration file not found at: {narrationPath}";
+                        var error = $"CRITICAL: Audio generation completed but narration file not found at: {narrationPath}. " +
+                            "This indicates TTS provider returned a path but did not create the file.";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
+                    }
+                    
+                    var audioFileInfo = new FileInfo(narrationPath);
+                    if (audioFileInfo.Length == 0)
+                    {
+                        var error = $"CRITICAL: Narration file is empty: {narrationPath}. " +
+                            "This indicates TTS provider created the file but failed to write audio data.";
                         _logger.LogError(error);
                         throw new InvalidOperationException(error);
                     }
 
                     _logger.LogInformation(
-                        "Narration generated and validated at: {Path} (Size: {Size} bytes, {LineCount} lines)", 
-                        narrationPath, new FileInfo(narrationPath).Length, scriptLines.Count);
+                        "[Audio] Narration generated and validated at: {Path} (Size: {Size} bytes, {LineCount} lines)", 
+                        narrationPath, audioFileInfo.Length, scriptLines.Count);
                     
+                    // Store narration path in state so composition can access it
                     state.NarrationPath = narrationPath;
+                    _logger.LogInformation("[Audio] Narration path stored in state: {Path}", state.NarrationPath);
+                    
                     return narrationPath;
 
                 case GenerationTaskType.ImageGeneration:
@@ -1978,10 +2006,26 @@ public class VideoOrchestrator
 
                 case GenerationTaskType.VideoComposition:
                     // Final render combining all assets
-                    if (parsedScenes == null || narrationPath == null)
+                    _logger.LogInformation("[Composition] Task started - validating prerequisites");
+                    
+                    if (parsedScenes == null)
                     {
-                        throw new InvalidOperationException("Script and audio must be generated before composition");
+                        var error = "CRITICAL: parsedScenes is null. Script must be generated before composition.";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
                     }
+                    
+                    if (narrationPath == null)
+                    {
+                        var error = "CRITICAL: narrationPath is null. Audio must be generated before composition. " +
+                            "This may indicate the audio generation stage failed silently or was skipped.";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
+                    }
+
+                    _logger.LogInformation(
+                        "[Composition] Prerequisites validated. Scenes: {SceneCount}, NarrationPath: {NarrationPath}",
+                        parsedScenes.Count, narrationPath);
 
                     // Report progress BEFORE starting render - this ensures frontend sees the transition
                     var renderStartMsg = "Starting video composition and rendering...";
@@ -1999,16 +2043,23 @@ public class VideoOrchestrator
 
                     // CRITICAL VALIDATION: Ensure narration file exists and is valid before composition
                     // This is the last checkpoint before FFmpeg render - catch issues early
+                    _logger.LogInformation("[Composition] Validating narration file: {Path}", narrationPath);
+                    
                     if (!File.Exists(narrationPath))
                     {
                         var error = $"CRITICAL: Narration file not found at: {narrationPath}. " +
-                            "Cannot proceed with video composition. This indicates TTS stage did not complete successfully.";
+                            "Cannot proceed with video composition. This indicates TTS stage did not complete successfully. " +
+                            "Check earlier logs for TTS synthesis errors or fallback to silent audio.";
                         _logger.LogError(error);
                         throw new InvalidOperationException(error);
                     }
+                    
+                    _logger.LogInformation("[Composition] Narration file exists: {Path}", narrationPath);
 
                     // Validate narration file is not empty or corrupted
+                    _logger.LogInformation("[Composition] Checking narration file size");
                     var narrationFileInfo = new FileInfo(narrationPath);
+                    
                     if (narrationFileInfo.Length < MinValidAudioFileSizeBytes)
                     {
                         var error = $"CRITICAL: Narration file at {narrationPath} is too small ({narrationFileInfo.Length} bytes). " +
@@ -2018,12 +2069,23 @@ public class VideoOrchestrator
                     }
 
                     _logger.LogInformation(
-                        "Narration file validation passed: {Path} ({Size} bytes)",
+                        "[Composition] Narration file validation passed: {Path} ({Size} bytes)",
                         narrationPath, narrationFileInfo.Length);
 
                     // Validate that all scenes have visual assets before render
-                    ValidateSceneAssets(parsedScenes, sceneAssets);
+                    _logger.LogInformation("[Composition] Validating scene assets");
+                    try
+                    {
+                        ValidateSceneAssets(parsedScenes, sceneAssets);
+                        _logger.LogInformation("[Composition] Scene assets validation passed");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "[Composition] Scene assets validation failed");
+                        throw;
+                    }
 
+                    _logger.LogInformation("[Composition] Creating timeline structure");
                     var timeline = new Providers.Timeline(
                         Scenes: parsedScenes,
                         SceneAssets: sceneAssets,
@@ -2032,6 +2094,11 @@ public class VideoOrchestrator
                         SubtitlesPath: null
                     );
                     state.Timeline = timeline;
+                    
+                    _logger.LogInformation(
+                        "[Composition] Timeline created successfully. Scenes: {SceneCount}, NarrationPath: {NarrationPath}, " +
+                        "SceneAssets: {AssetCount} scenes with assets",
+                        timeline.Scenes.Count, timeline.NarrationPath, timeline.SceneAssets.Count);
 
                     // Report timeline creation progress
                     var timelineCreatedMsg = "Timeline created, preparing FFmpeg render...";
@@ -2078,11 +2145,53 @@ public class VideoOrchestrator
                     });
 
                     _logger.LogInformation("[Render Start] Beginning FFmpeg render operation");
+                    _logger.LogInformation("[Render Start] RenderSpec: Resolution={Width}x{Height}, FPS={Fps}, Codec={Codec}, JobId={JobId}",
+                        renderSpec.Res.Width, renderSpec.Res.Height, renderSpec.Fps, renderSpec.Codec, renderSpec.JobId);
                     progress?.Report("Executing FFmpeg render...");
 
-                    var outputPath = await _videoComposer.RenderAsync(timeline, renderSpec, renderProgress, ct).ConfigureAwait(false);
+                    string outputPath;
+                    try
+                    {
+                        outputPath = await _videoComposer.RenderAsync(timeline, renderSpec, renderProgress, ct).ConfigureAwait(false);
+                        _logger.LogInformation("[Render Complete] FFmpeg returned output path: {Path}", outputPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, 
+                            "[Render FAILED] FFmpeg render threw exception. Type: {Type}, Message: {Message}",
+                            ex.GetType().Name, ex.Message);
+                        throw;
+                    }
 
-                    _logger.LogInformation("[Render Complete] Video rendered successfully to: {Path}", outputPath);
+                    // Validate the output file was actually created
+                    _logger.LogInformation("[Render Validation] Checking if output file exists: {Path}", outputPath);
+                    
+                    if (string.IsNullOrEmpty(outputPath))
+                    {
+                        var error = "CRITICAL: FFmpeg render returned null or empty output path";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
+                    }
+                    
+                    if (!File.Exists(outputPath))
+                    {
+                        var error = $"CRITICAL: FFmpeg render completed but output file does not exist: {outputPath}. " +
+                            "Check FFmpeg logs for errors during render.";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
+                    }
+                    
+                    var outputFileInfo = new FileInfo(outputPath);
+                    if (outputFileInfo.Length == 0)
+                    {
+                        var error = $"CRITICAL: FFmpeg render produced empty file: {outputPath}. " +
+                            "This indicates FFmpeg failed during encoding.";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
+                    }
+
+                    _logger.LogInformation("[Render Complete] Video rendered successfully to: {Path}, Size: {Size} bytes",
+                        outputPath, outputFileInfo.Length);
                     progress?.Report("Video rendering complete");
                     detailedProgress?.Report(ProgressBuilder.CreateRenderProgress(100, "Video rendering complete", correlationId: correlationId));
 
@@ -2092,8 +2201,10 @@ public class VideoOrchestrator
                     // CRITICAL FIX: Log the output path being returned to ensure it's captured
                     // The return value should automatically be stored in TaskResults["composition"]
                     _logger.LogInformation(
-                        "[Composition Complete] Output path: {Path}, Exists: {Exists}, Length: {Length} bytes",
-                        outputPath, File.Exists(outputPath), File.Exists(outputPath) ? new FileInfo(outputPath).Length : 0);
+                        "[Composition Complete] Output path: {Path}, Exists: {Exists}, Length: {Length} bytes, " +
+                        "Stored in state.FinalVideoPath: {StatePath}",
+                        outputPath, File.Exists(outputPath), File.Exists(outputPath) ? new FileInfo(outputPath).Length : 0,
+                        state.FinalVideoPath);
 
                     return outputPath;
 
