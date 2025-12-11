@@ -28,14 +28,23 @@ import {
 import {
   ArrowExportLtr24Regular,
   ArrowRepeatAll24Regular,
+  Copy24Regular,
   Grid24Regular,
+  Image24Regular,
+  Play24Regular,
+  Pause24Regular,
   Settings24Regular,
   Timer24Regular,
   Video24Regular,
   ZoomFit24Regular,
   ZoomIn24Regular,
   ZoomOut24Regular,
+  ChevronLeft24Regular,
+  ChevronRight24Regular,
+  FullScreenMaximize24Regular,
+  CheckmarkCircle24Regular,
 } from '@fluentui/react-icons';
+import { BaseContextMenu, ContextMenuItem, ContextMenuDivider } from './ContextMenu';
 import { motion } from 'framer-motion';
 import type { FC } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -294,6 +303,8 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ className, isLoading = fal
   const [loopPlayback, setLoopPlayback] = useState(false);
   const [zoom, setZoom] = useState<ZoomLevel>('fit');
   const [quality, setQuality] = useState<PreviewQuality>('full');
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
+  const [showGrid, setShowGrid] = useState(false);
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(
     null
@@ -687,6 +698,75 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ className, isLoading = fal
     [closeContextMenu]
   );
 
+  const handlePlaybackSpeedChange = useCallback(
+    (speed: number) => {
+      setPlaybackSpeed(speed);
+      const video = videoRef.current;
+      if (video) {
+        video.playbackRate = speed;
+      }
+      closeContextMenu();
+    },
+    [closeContextMenu]
+  );
+
+  const handleExportFrame = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `frame-${formatTimecode(playbackStore.currentTime)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    closeContextMenu();
+  }, [closeContextMenu, playbackStore.currentTime]);
+
+  const handleSetPosterFrame = useCallback(() => {
+    console.info('Set poster frame at:', playbackStore.currentTime);
+    closeContextMenu();
+  }, [closeContextMenu, playbackStore.currentTime]);
+
+  const handleFrameStep = useCallback(
+    (direction: 'forward' | 'backward') => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      const fps = projectStore.frameRate || 30;
+      const frameDuration = 1 / fps;
+      const newTime =
+        direction === 'forward'
+          ? video.currentTime + frameDuration
+          : video.currentTime - frameDuration;
+
+      video.currentTime = Math.max(0, Math.min(newTime, video.duration || 0));
+      playbackStore.setCurrentTime(video.currentTime);
+      closeContextMenu();
+    },
+    [closeContextMenu, playbackStore, projectStore.frameRate]
+  );
+
+  const handleToggleGrid = useCallback(() => {
+    setShowGrid((prev) => !prev);
+    closeContextMenu();
+  }, [closeContextMenu]);
+
+  const isMac = useMemo(() => {
+    return navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  }, []);
+
   const handleCopyFrameToClipboard = useCallback(async () => {
     try {
       const video = videoRef.current;
@@ -911,58 +991,167 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ className, isLoading = fal
 
             <div className={styles.aspectRatioLabel}>16:9</div>
 
-            <Menu open={contextMenuOpen} onOpenChange={handleContextMenuOpenChange}>
-              <MenuPopover positioning={contextMenuPositioning}>
-                <MenuList>
-                  <MenuItem onClick={handleTogglePlayback}>
-                    {playbackStore.isPlaying ? 'Pause Playback' : 'Play Preview'}
-                  </MenuItem>
-                  <MenuItem onClick={handleToggleLoop}>
-                    {loopPlayback ? 'Disable Loop' : 'Enable Loop'}
-                  </MenuItem>
-                  <MenuItem onClick={handleToggleSafeAreas}>
-                    {showSafeAreas ? 'Hide Safe Areas' : 'Show Safe Areas'}
-                  </MenuItem>
-                  <MenuItem onClick={handleToggleTimecode}>
-                    {showTimecode ? 'Hide Timecode' : 'Show Timecode'}
-                  </MenuItem>
-                  <MenuDivider />
-                  <MenuItem onClick={() => handleZoomSelect('fit')}>
-                    Zoom: Fit {zoom === 'fit' ? '✓' : ''}
-                  </MenuItem>
-                  <MenuItem onClick={() => handleZoomSelect('fill')}>
-                    Zoom: Fill {zoom === 'fill' ? '✓' : ''}
-                  </MenuItem>
-                  <MenuItem onClick={() => handleZoomSelect('50')}>
-                    Zoom: 50% {zoom === '50' ? '✓' : ''}
-                  </MenuItem>
-                  <MenuItem onClick={() => handleZoomSelect('100')}>
-                    Zoom: 100% {zoom === '100' ? '✓' : ''}
-                  </MenuItem>
-                  <MenuItem onClick={() => handleZoomSelect('200')}>
-                    Zoom: 200% {zoom === '200' ? '✓' : ''}
-                  </MenuItem>
-                  <MenuDivider />
-                  <MenuItem onClick={() => handleQualitySelect('full')}>
-                    Quality: Full {quality === 'full' ? '✓' : ''}
-                  </MenuItem>
-                  <MenuItem onClick={() => handleQualitySelect('half')}>
-                    Quality: Half {quality === 'half' ? '✓' : ''}
-                  </MenuItem>
-                  <MenuItem onClick={() => handleQualitySelect('quarter')}>
-                    Quality: Quarter {quality === 'quarter' ? '✓' : ''}
-                  </MenuItem>
-                  <MenuDivider />
-                  <MenuItem onClick={handleFullscreenFromMenu}>Toggle Fullscreen</MenuItem>
-                  <MenuItem
-                    disabled={!canCopyFrame || !videoSrc}
-                    onClick={handleCopyFrameToClipboard}
-                  >
-                    Copy Current Frame
-                  </MenuItem>
-                </MenuList>
-              </MenuPopover>
-            </Menu>
+            {/* Enhanced Professional Context Menu */}
+            <BaseContextMenu
+              open={contextMenuOpen}
+              position={contextMenuPosition}
+              onClose={closeContextMenu}
+            >
+              <ContextMenuItem
+                label={playbackStore.isPlaying ? 'Pause' : 'Play'}
+                icon={playbackStore.isPlaying ? <Pause24Regular /> : <Play24Regular />}
+                shortcut="Space"
+                onClick={handleTogglePlayback}
+              />
+              <ContextMenuItem
+                label="Toggle Loop"
+                icon={<ArrowRepeatAll24Regular />}
+                shortcut={isMac ? '⌘L' : 'Ctrl+L'}
+                checked={loopPlayback}
+                onClick={handleToggleLoop}
+              />
+
+              <ContextMenuDivider />
+
+              <ContextMenuItem
+                label="25%"
+                checked={playbackSpeed === 0.25}
+                onClick={() => handlePlaybackSpeedChange(0.25)}
+              />
+              <ContextMenuItem
+                label="50%"
+                checked={playbackSpeed === 0.5}
+                onClick={() => handlePlaybackSpeedChange(0.5)}
+              />
+              <ContextMenuItem
+                label="100%"
+                checked={playbackSpeed === 1}
+                onClick={() => handlePlaybackSpeedChange(1)}
+              />
+              <ContextMenuItem
+                label="200%"
+                checked={playbackSpeed === 2}
+                onClick={() => handlePlaybackSpeedChange(2)}
+              />
+              <ContextMenuItem
+                label="400%"
+                checked={playbackSpeed === 4}
+                onClick={() => handlePlaybackSpeedChange(4)}
+              />
+
+              <ContextMenuDivider />
+
+              <ContextMenuItem
+                label="Export Frame"
+                icon={<ArrowExportLtr24Regular />}
+                shortcut={isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}
+                disabled={!videoSrc}
+                onClick={handleExportFrame}
+              />
+              <ContextMenuItem
+                label="Copy Frame"
+                icon={<Copy24Regular />}
+                shortcut={isMac ? '⌘⇧C' : 'Ctrl+Shift+C'}
+                disabled={!canCopyFrame || !videoSrc}
+                onClick={handleCopyFrameToClipboard}
+              />
+              <ContextMenuItem
+                label="Set Poster Frame"
+                icon={<CheckmarkCircle24Regular />}
+                disabled={!videoSrc}
+                onClick={handleSetPosterFrame}
+              />
+              <ContextMenuItem
+                label="Previous Frame"
+                icon={<ChevronLeft24Regular />}
+                shortcut="←"
+                disabled={!videoSrc}
+                onClick={() => handleFrameStep('backward')}
+              />
+              <ContextMenuItem
+                label="Next Frame"
+                icon={<ChevronRight24Regular />}
+                shortcut="→"
+                disabled={!videoSrc}
+                onClick={() => handleFrameStep('forward')}
+              />
+
+              <ContextMenuDivider />
+
+              <ContextMenuItem
+                label="Zoom: Fit"
+                icon={<ZoomFit24Regular />}
+                checked={zoom === 'fit'}
+                onClick={() => handleZoomSelect('fit')}
+              />
+              <ContextMenuItem
+                label="Zoom: Fill"
+                checked={zoom === 'fill'}
+                onClick={() => handleZoomSelect('fill')}
+              />
+              <ContextMenuItem
+                label="Zoom: 50%"
+                checked={zoom === '50'}
+                onClick={() => handleZoomSelect('50')}
+              />
+              <ContextMenuItem
+                label="Zoom: 100%"
+                checked={zoom === '100'}
+                onClick={() => handleZoomSelect('100')}
+              />
+              <ContextMenuItem
+                label="Zoom: 200%"
+                checked={zoom === '200'}
+                onClick={() => handleZoomSelect('200')}
+              />
+
+              <ContextMenuDivider />
+
+              <ContextMenuItem
+                label="Show Safe Areas"
+                checked={showSafeAreas}
+                onClick={handleToggleSafeAreas}
+              />
+              <ContextMenuItem
+                label="Show Timecode"
+                icon={<Timer24Regular />}
+                checked={showTimecode}
+                onClick={handleToggleTimecode}
+              />
+              <ContextMenuItem
+                label="Show Grid"
+                icon={<Grid24Regular />}
+                checked={showGrid}
+                onClick={handleToggleGrid}
+              />
+
+              <ContextMenuDivider />
+
+              <ContextMenuItem
+                label="Quality: Full"
+                checked={quality === 'full'}
+                onClick={() => handleQualitySelect('full')}
+              />
+              <ContextMenuItem
+                label="Quality: Half"
+                checked={quality === 'half'}
+                onClick={() => handleQualitySelect('half')}
+              />
+              <ContextMenuItem
+                label="Quality: Quarter"
+                checked={quality === 'quarter'}
+                onClick={() => handleQualitySelect('quarter')}
+              />
+
+              <ContextMenuDivider />
+
+              <ContextMenuItem
+                label="Toggle Fullscreen"
+                icon={<FullScreenMaximize24Regular />}
+                shortcut="F"
+                onClick={handleFullscreenFromMenu}
+              />
+            </BaseContextMenu>
           </motion.div>
         </div>
       </div>
