@@ -49,7 +49,7 @@ public partial class IdeationController : ControllerBase
 
         // Add request-level timeout for ideation to prevent long hangs
         using var requestTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        requestTimeoutCts.CancelAfter(TimeSpan.FromSeconds(60)); // 60 second timeout for brainstorm
+        requestTimeoutCts.CancelAfter(TimeSpan.FromSeconds(1200)); // 20 minutes - matches script generation backend tolerance
 
         try
         {
