@@ -151,9 +151,7 @@ const VerificationPage = lazy(() => import('../pages/Verification/VerificationPa
 const VideoEditorPage = lazy(() =>
   import('../pages/VideoEditorPage').then((m) => ({ default: m.VideoEditorPage }))
 );
-const OpenCutPage = lazy(() =>
-  import('../pages/OpenCutPage').then((m) => ({ default: m.OpenCutPage }))
-);
+const OpenCutPage = lazy(() => import('../pages/OpenCutPage'));
 const VoiceEnhancementPage = lazy(() => import('../pages/VoiceEnhancement/VoiceEnhancementPage'));
 const CreateWizard = lazy(() =>
   import('../pages/Wizard/CreateWizard').then((m) => ({ default: m.CreateWizard }))

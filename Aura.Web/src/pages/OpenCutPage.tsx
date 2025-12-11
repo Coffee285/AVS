@@ -52,3 +52,5 @@ export function OpenCutPage() {
     </div>
   );
 }
+
+export default OpenCutPage;

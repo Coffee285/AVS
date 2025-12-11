@@ -98,12 +98,21 @@ type LeftPanelTab = 'media' | 'effects' | 'transitions' | 'graphics' | 'template
 
 export function OpenCutEditor() {
   const styles = useStyles();
+
+  // Use Zustand stores - getting the full store object is safe as long as
+  // we don't put them in dependency arrays
   const projectStore = useOpenCutProjectStore();
   const layoutStore = useOpenCutLayoutStore();
   const captionsStore = useOpenCutCaptionsStore();
   const playbackStore = useOpenCutPlaybackStore();
   const timelineStore = useOpenCutTimelineStore();
   const toastsStore = useOpenCutToastsStore();
+
+  // Select specific values that trigger re-renders when they change
+  const leftPanelWidth = useOpenCutLayoutStore((state) => state.leftPanelWidth);
+  const rightPanelWidth = useOpenCutLayoutStore((state) => state.rightPanelWidth);
+  const leftPanelCollapsed = useOpenCutLayoutStore((state) => state.leftPanelCollapsed);
+  const rightPanelCollapsed = useOpenCutLayoutStore((state) => state.rightPanelCollapsed);
 
   const [leftPanelTab, setLeftPanelTab] = useState<LeftPanelTab>('media');
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
@@ -193,12 +202,14 @@ export function OpenCutEditor() {
     if (!projectStore.activeProject) {
       projectStore.createProject('Untitled Project');
     }
-  }, [projectStore]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Calculate intelligent layout based on window size
   const calculateLayout = useCallback(() => {
     layoutStore.calculateInitialLayout(window.innerHeight);
-  }, [layoutStore]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Apply layout on mount and window resize
   useEffect(() => {
@@ -233,22 +244,23 @@ export function OpenCutEditor() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [layoutStore]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLeftPanelResize = useCallback(
     (deltaX: number) => {
-      const newWidth = layoutStore.leftPanelWidth + deltaX;
+      const newWidth = leftPanelWidth + deltaX;
       layoutStore.setLeftPanelWidth(newWidth);
     },
-    [layoutStore]
+    [leftPanelWidth, layoutStore.setLeftPanelWidth]
   );
 
   const handleRightPanelResize = useCallback(
     (deltaX: number) => {
-      const newWidth = layoutStore.rightPanelWidth + deltaX;
+      const newWidth = rightPanelWidth + deltaX;
       layoutStore.setRightPanelWidth(newWidth);
     },
-    [layoutStore]
+    [rightPanelWidth, layoutStore.setRightPanelWidth]
   );
 
   const handleLeftPanelTabChange = useCallback((_: unknown, data: { value: unknown }) => {
@@ -288,10 +300,10 @@ export function OpenCutEditor() {
       {/* Main Content Area */}
       <div className={styles.mainContent}>
         {/* Left Panel - Media/Effects/Transitions */}
-        {layoutStore.leftPanelCollapsed ? (
+        {leftPanelCollapsed ? (
           <CollapsedPanel type="media" onExpand={() => layoutStore.setLeftPanelCollapsed(false)} />
         ) : (
-          <div className={styles.leftPanel} style={{ width: layoutStore.leftPanelWidth }}>
+          <div className={styles.leftPanel} style={{ width: leftPanelWidth }}>
             <div className={styles.leftPanelTabs}>
               <TabList
                 selectedValue={leftPanelTab}
@@ -313,7 +325,7 @@ export function OpenCutEditor() {
         {/* Left Panel Divider */}
         <PanelDivider
           direction="left"
-          isCollapsed={layoutStore.leftPanelCollapsed}
+          isCollapsed={leftPanelCollapsed}
           onResize={handleLeftPanelResize}
           onDoubleClick={layoutStore.toggleLeftPanel}
         />
@@ -326,19 +338,19 @@ export function OpenCutEditor() {
         {/* Right Panel Divider */}
         <PanelDivider
           direction="right"
-          isCollapsed={layoutStore.rightPanelCollapsed}
+          isCollapsed={rightPanelCollapsed}
           onResize={handleRightPanelResize}
           onDoubleClick={layoutStore.toggleRightPanel}
         />
 
         {/* Right Panel - Properties */}
-        {layoutStore.rightPanelCollapsed ? (
+        {rightPanelCollapsed ? (
           <CollapsedPanel
             type="properties"
             onExpand={() => layoutStore.setRightPanelCollapsed(false)}
           />
         ) : (
-          <div className={styles.rightPanel} style={{ width: layoutStore.rightPanelWidth }}>
+          <div className={styles.rightPanel} style={{ width: rightPanelWidth }}>
             <PropertiesPanel />
           </div>
         )}
