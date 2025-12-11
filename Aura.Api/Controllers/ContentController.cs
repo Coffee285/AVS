@@ -216,6 +216,7 @@ public class ContentController : ControllerBase
                 Scenes: scenes,
                 SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
                 NarrationPath: request.NarrationPath ?? "",
+                SceneAudioPaths: null,
                 MusicPath: request.MusicPath ?? "",
                 SubtitlesPath: null
             );

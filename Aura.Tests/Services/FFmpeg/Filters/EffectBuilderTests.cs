@@ -367,4 +367,117 @@ public class EffectBuilderTests
         Assert.Contains("d=2.000", result);
         Assert.Contains("color=white", result);
     }
+
+    // Ken Burns parameter validation tests
+    [Theory]
+    [InlineData(-1.0)]
+    [InlineData(0.0)]
+    [InlineData(301.0)]
+    public void BuildKenBurns_WithInvalidDuration_ShouldThrowArgumentOutOfRangeException(double duration)
+    {
+        // Arrange & Act & Assert
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            EffectBuilder.BuildKenBurns(duration));
+        Assert.Equal("duration", exception.ParamName);
+        Assert.Contains("Duration must be between 0 and 300 seconds", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    [InlineData(121)]
+    public void BuildKenBurns_WithInvalidFps_ShouldThrowArgumentOutOfRangeException(int fps)
+    {
+        // Arrange & Act & Assert
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            EffectBuilder.BuildKenBurns(5.0, fps));
+        Assert.Equal("fps", exception.ParamName);
+        Assert.Contains("FPS must be between 1 and 120", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(0.4)]
+    [InlineData(3.1)]
+    public void BuildKenBurns_WithInvalidZoomStart_ShouldThrowArgumentOutOfRangeException(double zoomStart)
+    {
+        // Arrange & Act & Assert
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            EffectBuilder.BuildKenBurns(5.0, 30, zoomStart));
+        Assert.Equal("zoomStart", exception.ParamName);
+        Assert.Contains("Zoom start must be between 0.5 and 3.0", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(0.4)]
+    [InlineData(3.1)]
+    public void BuildKenBurns_WithInvalidZoomEnd_ShouldThrowArgumentOutOfRangeException(double zoomEnd)
+    {
+        // Arrange & Act & Assert
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            EffectBuilder.BuildKenBurns(5.0, 30, 1.0, zoomEnd));
+        Assert.Equal("zoomEnd", exception.ParamName);
+        Assert.Contains("Zoom end must be between 0.5 and 3.0", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(-1.1)]
+    [InlineData(1.1)]
+    public void BuildKenBurns_WithInvalidPanX_ShouldThrowArgumentOutOfRangeException(double panX)
+    {
+        // Arrange & Act & Assert
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            EffectBuilder.BuildKenBurns(5.0, 30, 1.0, 1.2, panX));
+        Assert.Equal("panX", exception.ParamName);
+        Assert.Contains("Pan X must be between -1.0 and 1.0", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(-1.1)]
+    [InlineData(1.1)]
+    public void BuildKenBurns_WithInvalidPanY_ShouldThrowArgumentOutOfRangeException(double panY)
+    {
+        // Arrange & Act & Assert
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            EffectBuilder.BuildKenBurns(5.0, 30, 1.0, 1.2, 0.0, panY));
+        Assert.Equal("panY", exception.ParamName);
+        Assert.Contains("Pan Y must be between -1.0 and 1.0", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(0, 1080)]
+    [InlineData(1920, 0)]
+    [InlineData(-1, 1080)]
+    [InlineData(1920, -1)]
+    public void BuildKenBurns_WithInvalidDimensions_ShouldThrowArgumentException(int width, int height)
+    {
+        // Arrange & Act & Assert
+        var exception = Assert.Throws<ArgumentException>(() =>
+            EffectBuilder.BuildKenBurns(5.0, 30, 1.0, 1.2, 0.0, 0.0, width, height));
+        Assert.Contains("Width and height must be positive values", exception.Message);
+    }
+
+    [Fact]
+    public void BuildKenBurns_WithValidParameters_ShouldSucceed()
+    {
+        // Arrange & Act
+        var result = EffectBuilder.BuildKenBurns(5.0, 30, 1.0, 1.2, 0.5, 0.5, 1920, 1080);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Contains("zoompan", result);
+    }
+
+    [Theory]
+    [InlineData(0.5)]  // Minimum zoom
+    [InlineData(3.0)]  // Maximum zoom
+    [InlineData(1.0)]  // Standard zoom
+    public void BuildKenBurns_WithValidZoomValues_ShouldSucceed(double zoom)
+    {
+        // Arrange & Act
+        var result = EffectBuilder.BuildKenBurns(5.0, 30, zoom, zoom);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Contains("zoompan", result);
+    }
 }
