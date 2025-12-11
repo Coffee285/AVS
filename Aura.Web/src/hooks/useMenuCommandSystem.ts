@@ -8,6 +8,7 @@
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { zoomIn, zoomOut, resetZoom } from '../constants/zoom';
 import { loggingService } from '../services/loggingService';
 import type { MenuCommandPayload } from '../services/menuCommandDispatcher';
 import { AppContext, menuCommandDispatcher } from '../services/menuCommandDispatcher';
@@ -149,7 +150,9 @@ export function useMenuCommandSystem() {
       const unsubImportImages = menuCommandDispatcher.registerHandler({
         commandId: 'menu:importImages',
         handler: (payload: MenuCommandPayload) => {
-          loggingService.info('Executing: Import Images', { correlationId: payload._correlationId });
+          loggingService.info('Executing: Import Images', {
+            correlationId: payload._correlationId,
+          });
           navigate(MENU_EVENT_ROUTES.onImportImages);
         },
         context: AppContext.PROJECT_LOADED,
@@ -321,6 +324,49 @@ export function useMenuCommandSystem() {
       });
       handlerCleanupFunctions.push(unsubCheckForUpdates);
 
+      // View Menu Commands - Zoom Controls
+      const unsubZoomIn = menuCommandDispatcher.registerHandler({
+        commandId: 'menu:zoomIn',
+        handler: (payload: MenuCommandPayload) => {
+          const newZoom = zoomIn();
+          loggingService.info('Executing: Zoom In', {
+            correlationId: payload._correlationId,
+            newZoom,
+          });
+        },
+        context: AppContext.GLOBAL,
+        feature: 'zoom',
+      });
+      handlerCleanupFunctions.push(unsubZoomIn);
+
+      const unsubZoomOut = menuCommandDispatcher.registerHandler({
+        commandId: 'menu:zoomOut',
+        handler: (payload: MenuCommandPayload) => {
+          const newZoom = zoomOut();
+          loggingService.info('Executing: Zoom Out', {
+            correlationId: payload._correlationId,
+            newZoom,
+          });
+        },
+        context: AppContext.GLOBAL,
+        feature: 'zoom',
+      });
+      handlerCleanupFunctions.push(unsubZoomOut);
+
+      const unsubResetZoom = menuCommandDispatcher.registerHandler({
+        commandId: 'menu:resetZoom',
+        handler: (payload: MenuCommandPayload) => {
+          const newZoom = resetZoom();
+          loggingService.info('Executing: Reset Zoom', {
+            correlationId: payload._correlationId,
+            newZoom,
+          });
+        },
+        context: AppContext.GLOBAL,
+        feature: 'zoom',
+      });
+      handlerCleanupFunctions.push(unsubResetZoom);
+
       // Wire up Electron menu listeners to dispatcher
       menuListenerUnsubscribers.push(
         menu.onNewProject(() => void menuCommandDispatcher.dispatch('menu:newProject', {}))
@@ -357,9 +403,13 @@ export function useMenuCommandSystem() {
       menuListenerUnsubscribers.push(
         menu.onExportTimeline(() => void menuCommandDispatcher.dispatch('menu:exportTimeline', {}))
       );
-      menuListenerUnsubscribers.push(menu.onFind(() => void menuCommandDispatcher.dispatch('menu:find', {})));
       menuListenerUnsubscribers.push(
-        menu.onOpenPreferences(() => void menuCommandDispatcher.dispatch('menu:openPreferences', {}))
+        menu.onFind(() => void menuCommandDispatcher.dispatch('menu:find', {}))
+      );
+      menuListenerUnsubscribers.push(
+        menu.onOpenPreferences(
+          () => void menuCommandDispatcher.dispatch('menu:openPreferences', {})
+        )
       );
       menuListenerUnsubscribers.push(
         menu.onOpenProviderSettings(
@@ -391,7 +441,18 @@ export function useMenuCommandSystem() {
         )
       );
       menuListenerUnsubscribers.push(
-        menu.onCheckForUpdates(() => void menuCommandDispatcher.dispatch('menu:checkForUpdates', {}))
+        menu.onCheckForUpdates(
+          () => void menuCommandDispatcher.dispatch('menu:checkForUpdates', {})
+        )
+      );
+      menuListenerUnsubscribers.push(
+        menu.onZoomIn(() => void menuCommandDispatcher.dispatch('menu:zoomIn', {}))
+      );
+      menuListenerUnsubscribers.push(
+        menu.onZoomOut(() => void menuCommandDispatcher.dispatch('menu:zoomOut', {}))
+      );
+      menuListenerUnsubscribers.push(
+        menu.onResetZoom(() => void menuCommandDispatcher.dispatch('menu:resetZoom', {}))
       );
 
       loggingService.info('Menu command system initialized', {

@@ -27,6 +27,7 @@ import { GraphicsProvider } from './contexts/GraphicsContext';
 import { ProjectProvider } from './contexts/ProjectContext';
 import { useGlobalUndoShortcuts } from './hooks/useGlobalUndoShortcuts';
 import { useWindowsNativeUI } from './hooks/useWindowsNativeUI';
+import { useZoomShortcuts } from './hooks/useZoomShortcuts';
 import { FirstRunWizard } from './pages/Onboarding/FirstRunWizard';
 import { resetCircuitBreaker } from './services/api/apiClient';
 import { PersistentCircuitBreaker } from './services/api/circuitBreakerPersistence';
@@ -115,6 +116,7 @@ function App() {
   const toasterId = 'notifications-toaster';
 
   useGlobalUndoShortcuts();
+  useZoomShortcuts();
 
   // Note: useElectronMenuEvents is now called inside AppRouterContent
   // because it requires Router context (uses useNavigate())
