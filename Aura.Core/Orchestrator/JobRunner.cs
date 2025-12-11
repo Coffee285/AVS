@@ -1156,23 +1156,21 @@ public partial class JobRunner
                 {
                     // For non-terminal states, sync progress asynchronously (fire-and-forget)
                     // This keeps SSE subscribers updated without blocking the job runner
-                    _ = Task.Run(async () =>
-                    {
-                        try
+                    // Using a continuation to handle errors without blocking or consuming thread pool
+                    _exportJobService.UpdateJobProgressAsync(
+                        updated.Id,
+                        updated.Percent,
+                        updated.Stage)
+                        .ContinueWith(task =>
                         {
-                            await _exportJobService.UpdateJobProgressAsync(
-                                updated.Id,
-                                updated.Percent,
-                                updated.Stage);
-                        }
-                        catch (Exception progressEx)
-                        {
-                            // Log but don't throw - progress sync failures shouldn't break job execution
-                            _logger.LogWarning(progressEx, 
-                                "[Job {JobId}] Failed to sync progress {Percent}% to ExportJobService", 
-                                updated.Id, updated.Percent);
-                        }
-                    });
+                            if (task.IsFaulted && task.Exception != null)
+                            {
+                                // Log but don't throw - progress sync failures shouldn't break job execution
+                                _logger.LogWarning(task.Exception.InnerException ?? task.Exception,
+                                    "[Job {JobId}] Failed to sync progress {Percent}% to ExportJobService",
+                                    updated.Id, updated.Percent);
+                            }
+                        }, TaskContinuationOptions.OnlyOnFaulted);
                 }
             }
             catch (Exception ex)
