@@ -183,5 +183,6 @@ public record Timeline(
     IReadOnlyList<Scene> Scenes,
     IReadOnlyDictionary<int, IReadOnlyList<Asset>> SceneAssets,
     string NarrationPath,
+    IReadOnlyDictionary<int, string>? SceneAudioPaths,
     string MusicPath,
     string? SubtitlesPath);

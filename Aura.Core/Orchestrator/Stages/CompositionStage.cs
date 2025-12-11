@@ -65,6 +65,7 @@ public class CompositionStage : PipelineStage
             Scenes: context.ParsedScenes,
             SceneAssets: context.SceneAssets,
             NarrationPath: context.NarrationPath,
+            SceneAudioPaths: null,
             MusicPath: context.MusicPath ?? string.Empty,
             SubtitlesPath: context.SubtitlesPath
         );

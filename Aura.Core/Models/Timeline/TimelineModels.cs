@@ -229,7 +229,8 @@ public class EditableTimeline
         return new Timeline(
             Scenes: new List<TimelineScene>(Scenes),
             BackgroundMusicPath: BackgroundMusicPath,
-            Subtitles: Subtitles);
+            Subtitles: Subtitles,
+            SceneAudioPaths: null);
     }
 }
 
@@ -239,7 +240,8 @@ public class EditableTimeline
 public record Timeline(
     List<TimelineScene> Scenes,
     string? BackgroundMusicPath,
-    SubtitleTrack Subtitles)
+    SubtitleTrack Subtitles,
+    IReadOnlyDictionary<int, string>? SceneAudioPaths = null)
 {
     public TimeSpan TotalDuration => 
         Scenes.Count > 0 
