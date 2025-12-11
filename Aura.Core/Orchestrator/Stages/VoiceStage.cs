@@ -136,18 +136,17 @@ public class VoiceStage : PipelineStage
                 var totalDuration = scriptLines.Sum(line => line.Duration.TotalSeconds);
                 var duration = TimeSpan.FromSeconds(Math.Max(1, totalDuration));
                 
-                // Generate silent audio file
+                // Generate silent audio file using shared temp path structure
+                var silentAudioDir = Path.Combine(Path.GetTempPath(), "AuraVideoStudio", "TTS");
+                Directory.CreateDirectory(silentAudioDir);
+                
                 var silentAudioPath = Path.Combine(
-                    Path.GetTempPath(), 
-                    "AuraVideoStudio", 
-                    "TTS", 
+                    silentAudioDir,
                     $"silent-fallback-{Guid.NewGuid()}.wav");
                 
-                Directory.CreateDirectory(Path.GetDirectoryName(silentAudioPath)!);
-                
-                var silentWavGenerator = new Aura.Core.Audio.SilentWavGenerator(
-                    Logger as ILogger<Aura.Core.Audio.SilentWavGenerator> ?? 
-                    Microsoft.Extensions.Logging.Abstractions.NullLogger<Aura.Core.Audio.SilentWavGenerator>.Instance);
+                // Create logger for SilentWavGenerator
+                var silentWavLogger = CreateSilentWavGeneratorLogger();
+                var silentWavGenerator = new Aura.Core.Audio.SilentWavGenerator(silentWavLogger);
                 
                 await silentWavGenerator.GenerateAsync(silentAudioPath, duration, ct: ct).ConfigureAwait(false);
                 
@@ -332,6 +331,22 @@ public class VoiceStage : PipelineStage
             return 0;
 
         return text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Length;
+    }
+
+    /// <summary>
+    /// Creates a logger for SilentWavGenerator fallback.
+    /// Handles the complexity of logger casting and null coalescing.
+    /// </summary>
+    private ILogger<Aura.Core.Audio.SilentWavGenerator> CreateSilentWavGeneratorLogger()
+    {
+        // Try to cast the base logger to the specific type
+        if (Logger is ILogger<Aura.Core.Audio.SilentWavGenerator> typedLogger)
+        {
+            return typedLogger;
+        }
+
+        // Fall back to NullLogger if casting fails
+        return Microsoft.Extensions.Logging.Abstractions.NullLogger<Aura.Core.Audio.SilentWavGenerator>.Instance;
     }
 }
 
