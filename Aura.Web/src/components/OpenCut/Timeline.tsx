@@ -73,6 +73,7 @@ import {
   SnapIndicator,
   TimelineToolbar,
   TimelineContextMenu,
+  TrackResizeHandle,
   type RippleClipPreview,
   type RippleDirection,
 } from './Timeline/index';
@@ -231,9 +232,10 @@ const useStyles = makeStyles({
   },
   track: {
     display: 'flex',
-    minHeight: '52px',
+    minHeight: '24px',
     borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
-    transition: `background-color ${openCutTokens.animation.duration.fast} ${openCutTokens.animation.easing.easeOut}`,
+    transition: `background-color ${openCutTokens.animation.duration.fast} ${openCutTokens.animation.easing.easeOut}, height ${openCutTokens.animation.duration.fast} ${openCutTokens.animation.easing.easeOut}`,
+    position: 'relative',
     ':hover': {
       backgroundColor: tokens.colorNeutralBackground1Hover,
     },
@@ -1518,7 +1520,7 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
     return gaps;
   }, [magneticTimelineEnabled, tracks, findGaps, clips]);
 
-  const renderClip = (clip: TimelineClip) => {
+  const renderClip = (clip: TimelineClip, trackHeight: number) => {
     const isSelected = selectedClipIds.includes(clip.id);
     const isBeingDragged = isDraggingClip && dragClipId === clip.id;
     // Use drag position during drag, otherwise use clip's actual position
@@ -1543,6 +1545,9 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
       WAVEFORM_MIN_SAMPLES,
       Math.min(WAVEFORM_MAX_SAMPLES, Math.floor(clipWidth / WAVEFORM_PIXELS_PER_SAMPLE))
     );
+
+    // Calculate waveform height based on track height (leave 8px padding for clip borders/spacing)
+    const waveformHeight = Math.max(16, trackHeight - 8);
 
     return (
       <motion.div
@@ -1580,7 +1585,7 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
               mediaId={clip.mediaId ?? clip.id}
               audioUrl={mediaFile.url}
               width={Math.max(clipWidth, 30)}
-              height={48}
+              height={waveformHeight}
               color={waveformColor}
               trimStart={clip.inPoint}
               trimEnd={0}
@@ -1868,6 +1873,7 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
                   isSelected && styles.trackSelected,
                   track.locked && styles.trackLocked
                 )}
+                style={{ height: track.height }}
                 onClick={() => handleTrackClick(track.id)}
                 onContextMenu={(e) => handleContextMenu(e, 'track', undefined, track.id)}
                 onKeyDown={(e) => {
@@ -1922,7 +1928,7 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
                     onDrop={(e) => handleTrackDrop(track.id, e)}
                     onContextMenu={(e) => handleContextMenu(e, 'track', undefined, track.id)}
                   >
-                    {trackClips.map(renderClip)}
+                    {trackClips.map((clip) => renderClip(clip, track.height))}
 
                     {/* Gap indicators */}
                     {magneticTimelineEnabled &&
@@ -1988,6 +1994,9 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
                       )}
                   </div>
                 </div>
+
+                {/* Track resize handle */}
+                <TrackResizeHandle trackId={track.id} currentHeight={track.height} />
               </div>
             );
           })}
