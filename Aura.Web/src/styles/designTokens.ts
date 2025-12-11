@@ -375,8 +375,8 @@ export const openCutTokens = {
     innerShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.5)',
     /** Canvas shadow for elevation */
     canvasShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
-    /** Padding around preview content */
-    containerPadding: '16px',
+    /** Padding around preview content - minimal for maximum canvas space */
+    containerPadding: '4px',
     /** Empty state icon size */
     emptyIconSize: '48px',
     /** Empty state icon background */
