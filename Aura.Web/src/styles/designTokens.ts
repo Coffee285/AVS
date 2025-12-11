@@ -301,6 +301,37 @@ export const openCutTokens = {
     /** Crosshair cursor for precision selection */
     crosshair: 'crosshair',
   },
+
+  /**
+   * Preview-specific design tokens for intelligent scaling and presentation.
+   * Optimized for professional video preview with minimal letterboxing.
+   */
+  preview: {
+    /** Very dark background for preview area - provides maximum contrast */
+    backgroundDark: '#0a0a0a',
+    /** Pure black for canvas background */
+    canvasBackground: '#000000',
+    /** Subtle inner shadow for depth perception */
+    innerShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.5)',
+    /** Canvas shadow for elevation */
+    canvasShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
+    /** Padding around preview content */
+    containerPadding: '16px',
+    /** Empty state icon size */
+    emptyIconSize: '48px',
+    /** Empty state icon background */
+    emptyIconBackground: 'rgba(255, 255, 255, 0.05)',
+    /** Empty state icon color */
+    emptyIconColor: 'rgba(255, 255, 255, 0.3)',
+    /** Empty state text color */
+    emptyTextColor: 'rgba(255, 255, 255, 0.5)',
+    /** Empty state text size */
+    emptyTextSize: '12px',
+    /** Transition duration for smooth resizing */
+    transitionDuration: '0.2s',
+    /** Transition easing function */
+    transitionEasing: 'ease',
+  },
 } as const;
 
 /**
