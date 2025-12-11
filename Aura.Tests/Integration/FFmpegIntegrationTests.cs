@@ -85,6 +85,7 @@ public class FFmpegIntegrationTests : IDisposable
             Scenes: new List<Scene> { providerScene },
             SceneAssets: sceneAssets,
             NarrationPath: audioPath,
+            SceneAudioPaths: null,
             MusicPath: "",
             SubtitlesPath: null);
 

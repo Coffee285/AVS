@@ -288,6 +288,7 @@ public class VideoGenerationPipelineCompleteE2ETests : IDisposable
             Scenes: new List<Scene> { testScene },
             SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
             NarrationPath: Path.Combine(_testOutputDir, "test-audio.wav"),
+            SceneAudioPaths: null,
             MusicPath: "",
             SubtitlesPath: null
         );

@@ -221,6 +221,7 @@ public class RepurposingServiceTests
             scenes,
             new Dictionary<int, IReadOnlyList<Asset>>(),
             "/test/narration.wav",
+            null,
             "/test/music.mp3",
             null);
     }

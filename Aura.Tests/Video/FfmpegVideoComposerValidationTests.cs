@@ -57,6 +57,7 @@ public class FfmpegVideoComposerValidationTests : IDisposable
             },
             SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
             NarrationPath: "/path/to/nonexistent/audio.wav",
+            SceneAudioPaths: null,
             MusicPath: "",
             SubtitlesPath: null);
 
@@ -101,6 +102,7 @@ public class FfmpegVideoComposerValidationTests : IDisposable
             },
             SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
             NarrationPath: emptyAudioPath,
+            SceneAudioPaths: null,
             MusicPath: "",
             SubtitlesPath: null);
 
