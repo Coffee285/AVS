@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -733,19 +734,51 @@ public class VideoGenerationOrchestrator
                 continue;
             }
 
-            // For audio tasks, we cannot provide a fallback - fail fast with clear error
+            // For audio tasks, generate silent audio as fallback
             if (node.TaskType == GenerationTaskType.AudioGeneration)
             {
                 var errorDetail = failed.ErrorMessage ?? "Unknown error";
-                _logger.LogError("Audio task {TaskId} failed and cannot be recovered. Error: {Error}", 
+                _logger.LogWarning("Audio task {TaskId} failed with error: {Error}. Generating silent audio as fallback.", 
                     failed.TaskId, errorDetail);
                 
-                // Mark the task result as failed with detailed error
-                var detailedErrorMessage = $"Audio generation failed: {errorDetail}. This is a critical error - video cannot be created without audio.";
-                _taskResults[node.TaskId] = new TaskResult(node.TaskId, false, null, detailedErrorMessage);
-                
-                // Return false immediately to trigger job failure
-                return false;
+                try
+                {
+                    // Generate silent audio file as fallback
+                    var silentAudioPath = Path.Combine(Path.GetTempPath(), "AuraVideoStudio", "Audio", $"silent_{node.TaskId}_{Guid.NewGuid()}.wav");
+                    var directory = Path.GetDirectoryName(silentAudioPath);
+                    if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+                    
+                    // Create a simple silent WAV file (5 seconds duration as default)
+                    var silentGenerator = new Aura.Core.Audio.SilentWavGenerator(
+                        Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance.CreateLogger<Aura.Core.Audio.SilentWavGenerator>());
+                    await silentGenerator.GenerateFiveSecondsAsync(silentAudioPath, ct).ConfigureAwait(false);
+                    
+                    _logger.LogInformation("Generated silent audio fallback at {Path} for failed audio task {TaskId}", 
+                        silentAudioPath, node.TaskId);
+                    
+                    // Mark as completed with silent audio path as result
+                    node.Status = TaskStatus.Completed;
+                    node.Result = silentAudioPath;
+                    node.ErrorMessage = null;
+                    node.CompletedAt = DateTime.UtcNow;
+                    
+                    _taskResults[node.TaskId] = new TaskResult(node.TaskId, true, silentAudioPath, 
+                        $"Using silent audio fallback due to TTS failure: {errorDetail}");
+                    anyRecovered = true;
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to generate silent audio fallback for task {TaskId}", node.TaskId);
+                    
+                    // If even the fallback fails, mark as unrecoverable
+                    var detailedErrorMessage = $"Audio generation failed: {errorDetail}. Silent audio fallback also failed: {ex.Message}";
+                    _taskResults[node.TaskId] = new TaskResult(node.TaskId, false, null, detailedErrorMessage);
+                    return false;
+                }
             }
 
             // For other critical tasks (script, composition), attempt actual retry
