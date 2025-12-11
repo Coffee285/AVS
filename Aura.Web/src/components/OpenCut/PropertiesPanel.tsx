@@ -29,20 +29,22 @@ import {
   Pin24Regular,
   Speaker224Regular,
   TextFont24Regular,
-  Blur24Regular,
   Sparkle24Regular,
+  ChevronRight16Regular,
+  Save16Regular,
 } from '@fluentui/react-icons';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useCallback } from 'react';
-import type { FC } from 'react';
+import type { FC, ReactNode } from 'react';
 import { useOpenCutKeyframesStore } from '../../stores/opencutKeyframes';
 import { useOpenCutMediaStore } from '../../stores/opencutMedia';
 import { useOpenCutPlaybackStore } from '../../stores/opencutPlayback';
+import { useOpenCutProjectStore } from '../../stores/opencutProject';
 import { useTextAnimationsStore } from '../../stores/opencutTextAnimations';
 import { useOpenCutTimelineStore, type BlendMode } from '../../stores/opencutTimeline';
 import { useOpenCutTransitionsStore } from '../../stores/opencutTransitions';
 import { openCutTokens } from '../../styles/designTokens';
 import { EffectStack } from './Effects';
-import { EmptyState } from './EmptyState';
 import { KeyframeDiamond } from './KeyframeEditor';
 import { SpeedControls } from './Speed/SpeedControls';
 import { AnimationPresetPicker, AnimationEditor } from './TextAnimations';
@@ -222,6 +224,35 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground1,
     fontSize: openCutTokens.typography.fontSize.sm,
   },
+  propertySection: {
+    display: 'flex',
+    flexDirection: 'column',
+    marginBottom: openCutTokens.spacing.sm,
+  },
+  propertySectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: openCutTokens.spacing.xs,
+    padding: `${openCutTokens.spacing.xs} 0`,
+    backgroundColor: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    width: '100%',
+    textAlign: 'left',
+    ':hover': {
+      opacity: 0.8,
+    },
+  },
+  propertySectionChevron: {
+    transition: `transform ${openCutTokens.animation.duration.fast} ${openCutTokens.animation.easing.easeOut}`,
+    color: tokens.colorNeutralForeground3,
+  },
+  propertySectionChevronOpen: {
+    transform: 'rotate(90deg)',
+  },
+  propertySectionContent: {
+    overflow: 'hidden',
+  },
 });
 
 const BLEND_MODES: { value: BlendMode; label: string }[] = [
@@ -263,16 +294,77 @@ function formatDuration(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+const PropertySection: FC<{
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}> = ({ title, defaultOpen = true, children }) => {
+  const styles = useStyles();
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <div className={styles.propertySection}>
+      <button
+        className={styles.propertySectionHeader}
+        onClick={() => setIsOpen(!isOpen)}
+        type="button"
+      >
+        <ChevronRight16Regular
+          className={mergeClasses(
+            styles.propertySectionChevron,
+            isOpen && styles.propertySectionChevronOpen
+          )}
+        />
+        <Text size={200} weight="semibold">
+          {title}
+        </Text>
+      </button>
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className={styles.propertySectionContent}
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const PropertyRow: FC<{
+  label: string;
+  children: ReactNode;
+}> = ({ label, children }) => {
+  const styles = useStyles();
+
+  return (
+    <div className={styles.propertyRow}>
+      <Text size={200} className={styles.propertyLabel}>
+        {label}
+      </Text>
+      {children}
+    </div>
+  );
+};
+
 export const PropertiesPanel: FC<PropertiesPanelProps> = ({ className }) => {
   const styles = useStyles();
   const mediaStore = useOpenCutMediaStore();
   const timelineStore = useOpenCutTimelineStore();
   const keyframesStore = useOpenCutKeyframesStore();
   const playbackStore = useOpenCutPlaybackStore();
+  const projectStore = useOpenCutProjectStore();
   const transitionsStore = useOpenCutTransitionsStore();
   const textAnimationsStore = useTextAnimationsStore();
 
   const [aspectLocked, setAspectLocked] = useState(true);
+  const [playbackQuality, setPlaybackQuality] = useState<'quarter' | 'half' | 'full'>('full');
+  const [loopPlayback, setLoopPlayback] = useState(false);
 
   const selectedMedia = mediaStore.selectedMediaId
     ? mediaStore.getMediaById(mediaStore.selectedMediaId)
@@ -293,14 +385,6 @@ export const PropertiesPanel: FC<PropertiesPanelProps> = ({ className }) => {
       return !!kf;
     },
     [selectedClip, keyframesStore, currentTime]
-  );
-
-  const hasKeyframes = useCallback(
-    (property: string): boolean => {
-      if (!selectedClip) return false;
-      return keyframesStore.hasKeyframes(selectedClip.id, property);
-    },
-    [selectedClip, keyframesStore]
   );
 
   const handleKeyframeToggle = useCallback(
@@ -356,6 +440,72 @@ export const PropertiesPanel: FC<PropertiesPanelProps> = ({ className }) => {
     },
     [selectedClip, timelineStore]
   );
+
+  const renderProjectProperties = () => {
+    const activeProject = projectStore.activeProject;
+    const totalDuration = timelineStore.getTotalDuration();
+    const aspectRatio = activeProject
+      ? `${activeProject.canvasWidth}:${activeProject.canvasHeight}`
+      : '16:9';
+    const frameRate = activeProject?.fps || 30;
+    const width = activeProject?.canvasWidth || 1920;
+    const height = activeProject?.canvasHeight || 1080;
+
+    return (
+      <>
+        <PropertySection title="Project" defaultOpen={true}>
+          <PropertyRow label="Resolution">
+            <Text size={200}>
+              {width} × {height}
+            </Text>
+          </PropertyRow>
+          <PropertyRow label="Frame Rate">
+            <Text size={200}>{frameRate} fps</Text>
+          </PropertyRow>
+          <PropertyRow label="Duration">
+            <Text size={200}>{formatDuration(totalDuration)}</Text>
+          </PropertyRow>
+          <PropertyRow label="Aspect Ratio">
+            <Text size={200}>{aspectRatio}</Text>
+          </PropertyRow>
+        </PropertySection>
+
+        <PropertySection title="Playback" defaultOpen={true}>
+          <PropertyRow label="Quality">
+            <Dropdown
+              size="small"
+              value={playbackQuality}
+              onOptionSelect={(_, data) =>
+                setPlaybackQuality(data.optionValue as 'quarter' | 'half' | 'full')
+              }
+              style={{ minWidth: '90px' }}
+            >
+              <Option value="quarter">1/4</Option>
+              <Option value="half">1/2</Option>
+              <Option value="full">Full</Option>
+            </Dropdown>
+          </PropertyRow>
+          <div className={styles.switchRow}>
+            <Text size={200} className={styles.propertyLabel}>
+              Loop
+            </Text>
+            <Switch checked={loopPlayback} onChange={(_, data) => setLoopPlayback(data.checked)} />
+          </div>
+        </PropertySection>
+
+        <PropertySection title="Quick Access" defaultOpen={true}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: openCutTokens.spacing.xs }}>
+            <Button size="small" icon={<Settings24Regular />} appearance="subtle">
+              Project Settings...
+            </Button>
+            <Button size="small" icon={<Save16Regular />} appearance="subtle">
+              Save Project
+            </Button>
+          </div>
+        </PropertySection>
+      </>
+    );
+  };
 
   const renderTransformSection = () => {
     if (!selectedClip) return null;
@@ -1048,12 +1198,7 @@ export const PropertiesPanel: FC<PropertiesPanelProps> = ({ className }) => {
 
       <div className={styles.content}>
         {!hasSelection ? (
-          <EmptyState
-            icon={<TextT24Regular />}
-            title="No selection"
-            description="Select an element on the timeline or in the media library to view its properties"
-            size="medium"
-          />
+          renderProjectProperties()
         ) : (
           <div className={styles.selectedMediaInfo}>
             {renderFileInfoSection()}
