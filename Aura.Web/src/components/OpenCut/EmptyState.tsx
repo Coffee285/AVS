@@ -35,19 +35,19 @@ const useStyles = makeStyles({
     justifyContent: 'center',
     textAlign: 'center',
     height: '100%',
-    minHeight: '140px',
+    minHeight: '100px',
   },
   containerSmall: {
+    padding: openCutTokens.spacing.sm,
+    gap: openCutTokens.spacing.xs,
+  },
+  containerMedium: {
     padding: openCutTokens.spacing.md,
     gap: openCutTokens.spacing.sm,
   },
-  containerMedium: {
+  containerLarge: {
     padding: openCutTokens.spacing.lg,
     gap: openCutTokens.spacing.md,
-  },
-  containerLarge: {
-    padding: openCutTokens.spacing.xxl,
-    gap: openCutTokens.spacing.lg,
   },
   iconWrapper: {
     display: 'flex',
@@ -62,27 +62,27 @@ const useStyles = makeStyles({
     },
   },
   iconSmall: {
-    width: '40px',
-    height: '40px',
+    width: '32px',
+    height: '32px',
     '& svg': {
-      width: '20px',
-      height: '20px',
+      width: '16px',
+      height: '16px',
     },
   },
   iconMedium: {
-    width: '56px',
-    height: '56px',
+    width: '48px',
+    height: '48px',
     '& svg': {
-      width: '28px',
-      height: '28px',
+      width: '24px',
+      height: '24px',
     },
   },
   iconLarge: {
-    width: '80px',
-    height: '80px',
+    width: '64px',
+    height: '64px',
     '& svg': {
-      width: '40px',
-      height: '40px',
+      width: '32px',
+      height: '32px',
     },
   },
   textContainer: {

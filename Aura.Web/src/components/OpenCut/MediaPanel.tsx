@@ -66,51 +66,42 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: `${openCutTokens.spacing.md} ${openCutTokens.spacing.lg}`,
+    padding: `${openCutTokens.spacing.sm} ${openCutTokens.spacing.md}`,
     borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
-    minHeight: openCutTokens.layout.panelHeaderHeight,
-    gap: openCutTokens.spacing.md,
+    minHeight: '40px',
+    gap: openCutTokens.spacing.sm,
   },
-  headerTitle: {
+  headerLeft: {
     display: 'flex',
     alignItems: 'center',
     gap: openCutTokens.spacing.sm,
   },
   headerIcon: {
     color: tokens.colorNeutralForeground3,
-    fontSize: '18px',
+    fontSize: '16px',
   },
-  headerActions: {
+  headerRight: {
     display: 'flex',
     alignItems: 'center',
     gap: openCutTokens.spacing.xs,
-  },
-  toolbar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: `${openCutTokens.spacing.sm} ${openCutTokens.spacing.md}`,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
-    gap: openCutTokens.spacing.sm,
-    minHeight: openCutTokens.layout.toolbarHeight,
-    backgroundColor: tokens.colorNeutralBackground3,
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   searchInput: {
-    flex: 1,
     minWidth: '80px',
-    maxWidth: '180px',
+    maxWidth: '140px',
   },
   viewControls: {
     display: 'flex',
     alignItems: 'center',
     gap: '2px',
     backgroundColor: tokens.colorNeutralBackground4,
-    borderRadius: tokens.borderRadiusMedium,
+    borderRadius: tokens.borderRadiusSmall,
     padding: '2px',
   },
   viewButton: {
-    minWidth: openCutTokens.layout.iconButtonSize,
-    minHeight: openCutTokens.layout.iconButtonSize,
+    minWidth: '24px',
+    minHeight: '24px',
     padding: '4px',
     borderRadius: tokens.borderRadiusSmall,
   },
@@ -118,21 +109,22 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
     boxShadow: tokens.shadow2,
   },
-  sortDropdown: {
-    minWidth: '90px',
-  },
   content: {
     flex: 1,
     overflow: 'auto',
-    padding: openCutTokens.spacing.md,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: openCutTokens.spacing.md,
+    padding: openCutTokens.spacing.sm,
+    position: 'relative',
+  },
+  contentDragOver: {
+    backgroundColor: tokens.colorBrandBackground2,
+    outline: `2px dashed ${tokens.colorBrandStroke1}`,
+    outlineOffset: '-4px',
   },
   mediaGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-    gap: openCutTokens.spacing.sm,
+    gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))',
+    gap: '6px',
+    padding: openCutTokens.spacing.sm,
   },
   mediaGridLarge: {
     gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
@@ -182,8 +174,9 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: openCutTokens.spacing.sm,
-    padding: openCutTokens.spacing.sm,
-    borderRadius: tokens.borderRadiusMedium,
+    padding: '4px 8px',
+    height: '28px',
+    borderRadius: tokens.borderRadiusSmall,
     cursor: openCutTokens.cursors.grab,
     transition: `all ${openCutTokens.animation.duration.fast} ${openCutTokens.animation.easing.easeOut}`,
     ':hover': {
@@ -197,10 +190,10 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorBrandBackground2,
   },
   mediaListThumbnail: {
-    width: '56px',
-    height: '32px',
+    width: '16px',
+    height: '16px',
     borderRadius: tokens.borderRadiusSmall,
-    backgroundColor: tokens.colorNeutralBackground4,
+    backgroundColor: 'transparent',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -211,18 +204,23 @@ const useStyles = makeStyles({
     flex: 1,
     minWidth: 0,
     display: 'flex',
-    flexDirection: 'column',
-    gap: '2px',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: openCutTokens.spacing.sm,
   },
   mediaListName: {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+    fontSize: '12px',
+    flex: 1,
   },
   mediaListMeta: {
     display: 'flex',
     gap: openCutTokens.spacing.sm,
     color: tokens.colorNeutralForeground3,
+    fontSize: '10px',
+    fontFamily: openCutTokens.typography.fontFamily.mono,
   },
   mediaItemImage: {
     width: '100%',
@@ -232,6 +230,10 @@ const useStyles = makeStyles({
   mediaItemIcon: {
     color: tokens.colorNeutralForeground3,
     fontSize: '20px',
+  },
+  mediaListIcon: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: '16px',
   },
   mediaItemOverlay: {
     position: 'absolute',
@@ -274,37 +276,21 @@ const useStyles = makeStyles({
   mediaItemActionsVisible: {
     opacity: 1,
   },
-  dropZone: {
-    border: `2px dashed ${tokens.colorNeutralStroke2}`,
-    borderRadius: tokens.borderRadiusLarge,
-    padding: openCutTokens.spacing.lg,
+  emptyHint: {
+    padding: '16px',
     textAlign: 'center',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: openCutTokens.spacing.sm,
-    transition: `all ${openCutTokens.animation.duration.normal} ${openCutTokens.animation.easing.easeOut}`,
-    backgroundColor: tokens.colorNeutralBackground3,
-    minHeight: '72px',
-    marginTop: 'auto',
   },
-  dropZoneActive: {
-    border: `2px dashed ${tokens.colorBrandStroke1}`,
-    backgroundColor: tokens.colorBrandBackground2,
-    transform: 'scale(1.01)',
-    cursor: openCutTokens.cursors.copy,
-  },
-  dropZoneIcon: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: '20px',
+  emptyHintText: {
+    color: tokens.colorNeutralForeground4,
+    fontSize: '11px',
   },
   importButton: {
-    minWidth: openCutTokens.layout.controlButtonSizeCompact,
-    minHeight: openCutTokens.layout.controlButtonSizeCompact,
+    minWidth: '28px',
+    minHeight: '28px',
   },
   emptyMessage: {
     textAlign: 'center',
-    padding: openCutTokens.spacing.lg,
+    padding: openCutTokens.spacing.md,
     color: tokens.colorNeutralForeground3,
   },
 });
@@ -358,6 +344,11 @@ export const MediaPanel: FC<MediaPanelProps> = ({ className }) => {
         }) as DOMRect,
     };
   }, [contextMenuPosition]);
+
+  const contextMenuPositioning = useMemo(
+    () => (contextMenuTarget ? { target: contextMenuTarget } : undefined),
+    [contextMenuTarget]
+  );
 
   // Filter and sort media files
   const filteredMedia = useMemo(() => {
@@ -532,26 +523,18 @@ export const MediaPanel: FC<MediaPanelProps> = ({ className }) => {
           aria-pressed={isSelected}
         >
           <div className={styles.mediaListThumbnail}>
-            {file.thumbnailUrl ? (
-              <img src={file.thumbnailUrl} alt={file.name} className={styles.mediaItemImage} />
-            ) : file.type === 'video' ? (
-              <Video24Regular className={styles.mediaItemIcon} />
+            {file.type === 'video' ? (
+              <Video24Regular className={styles.mediaListIcon} />
             ) : file.type === 'audio' ? (
-              <MusicNote224Regular className={styles.mediaItemIcon} />
+              <MusicNote224Regular className={styles.mediaListIcon} />
             ) : (
-              <Image24Regular className={styles.mediaItemIcon} />
+              <Image24Regular className={styles.mediaListIcon} />
             )}
           </div>
           <div className={styles.mediaListInfo}>
-            <Text size={200} weight="medium" className={styles.mediaListName}>
-              {file.name}
-            </Text>
+            <span className={styles.mediaListName}>{file.name}</span>
             <div className={styles.mediaListMeta}>
-              <Text size={100}>{file.type}</Text>
-              {file.duration !== undefined && (
-                <Text size={100}>{formatDuration(file.duration)}</Text>
-              )}
-              {file.file && <Text size={100}>{formatBytes(file.file.size)}</Text>}
+              {file.duration !== undefined && <span>{formatDuration(file.duration)}</span>}
             </div>
           </div>
           <Menu>
@@ -637,18 +620,52 @@ export const MediaPanel: FC<MediaPanelProps> = ({ className }) => {
   return (
     <div className={mergeClasses(styles.container, className)}>
       <div className={styles.header}>
-        <div className={styles.headerTitle}>
+        <div className={styles.headerLeft}>
           <Folder24Regular className={styles.headerIcon} />
-          <Text weight="semibold" size={400}>
+          <Text weight="semibold" size={300}>
             Media
           </Text>
           {mediaStore.mediaFiles.length > 0 && (
-            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+            <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
               ({mediaStore.mediaFiles.length})
             </Text>
           )}
         </div>
-        <div className={styles.headerActions}>
+        <div className={styles.headerRight}>
+          <Input
+            className={styles.searchInput}
+            contentBefore={<Search24Regular />}
+            placeholder="Search..."
+            size="small"
+            value={searchQuery}
+            onChange={(_, data) => setSearchQuery(data.value)}
+          />
+          <div className={styles.viewControls}>
+            <Tooltip content="Grid view" relationship="label">
+              <Button
+                appearance="subtle"
+                size="small"
+                className={mergeClasses(
+                  styles.viewButton,
+                  viewMode === 'grid' && styles.viewButtonActive
+                )}
+                icon={<Grid24Regular />}
+                onClick={() => setViewMode('grid')}
+              />
+            </Tooltip>
+            <Tooltip content="List view" relationship="label">
+              <Button
+                appearance="subtle"
+                size="small"
+                className={mergeClasses(
+                  styles.viewButton,
+                  viewMode === 'list' && styles.viewButtonActive
+                )}
+                icon={<TextBulletListSquare24Regular />}
+                onClick={() => setViewMode('list')}
+              />
+            </Tooltip>
+          </div>
           <Button
             appearance="subtle"
             icon={<Add24Regular />}
@@ -667,56 +684,8 @@ export const MediaPanel: FC<MediaPanelProps> = ({ className }) => {
         />
       </div>
 
-      {/* Toolbar */}
-      <div className={styles.toolbar}>
-        <Input
-          className={styles.searchInput}
-          contentBefore={<Search24Regular />}
-          placeholder="Search..."
-          size="small"
-          value={searchQuery}
-          onChange={(_, data) => setSearchQuery(data.value)}
-        />
-        <div className={styles.viewControls}>
-          <Tooltip content="Grid view" relationship="label">
-            <Button
-              appearance="subtle"
-              size="small"
-              className={mergeClasses(
-                styles.viewButton,
-                viewMode === 'grid' && styles.viewButtonActive
-              )}
-              icon={<Grid24Regular />}
-              onClick={() => setViewMode('grid')}
-            />
-          </Tooltip>
-          <Tooltip content="List view" relationship="label">
-            <Button
-              appearance="subtle"
-              size="small"
-              className={mergeClasses(
-                styles.viewButton,
-                viewMode === 'list' && styles.viewButtonActive
-              )}
-              icon={<TextBulletListSquare24Regular />}
-              onClick={() => setViewMode('list')}
-            />
-          </Tooltip>
-        </div>
-        <Dropdown
-          className={styles.sortDropdown}
-          value={sortBy.charAt(0).toUpperCase() + sortBy.slice(1)}
-          onOptionSelect={(_, data) => setSortBy(data.optionValue as SortBy)}
-          size="small"
-        >
-          <Option value="name">Name</Option>
-          <Option value="type">Type</Option>
-          <Option value="duration">Duration</Option>
-        </Dropdown>
-      </div>
-
       <div
-        className={styles.content}
+        className={mergeClasses(styles.content, isDragging && styles.contentDragOver)}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -724,17 +693,11 @@ export const MediaPanel: FC<MediaPanelProps> = ({ className }) => {
         aria-label="Media files drop zone"
       >
         {mediaStore.mediaFiles.length === 0 ? (
-          <EmptyState
-            icon={<Video24Regular />}
-            title="No media files"
-            description="Import videos, audio, or images to get started"
-            action={{
-              label: 'Import Media',
-              onClick: handleImportClick,
-              icon: <Add24Regular />,
-            }}
-            size="medium"
-          />
+          <div className={styles.emptyHint}>
+            <Text size={100} className={styles.emptyHintText}>
+              Drop files or click + to import
+            </Text>
+          </div>
         ) : filteredMedia.length === 0 ? (
           <div className={styles.emptyMessage}>
             <Text size={200}>No media matches your search</Text>
@@ -744,13 +707,6 @@ export const MediaPanel: FC<MediaPanelProps> = ({ className }) => {
         ) : (
           <div className={styles.mediaList}>{filteredMedia.map(renderMediaItem)}</div>
         )}
-
-        <div className={mergeClasses(styles.dropZone, isDragging && styles.dropZoneActive)}>
-          <Add24Regular className={styles.dropZoneIcon} />
-          <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-            Drop media files here
-          </Text>
-        </div>
       </div>
 
       {/* Context Menu */}
@@ -764,7 +720,7 @@ export const MediaPanel: FC<MediaPanelProps> = ({ className }) => {
             }
           }}
         >
-          <MenuPopover positioning={contextMenuTarget ? { target: contextMenuTarget } : undefined}>
+          <MenuPopover positioning={contextMenuPositioning}>
             <MenuList>
               <MenuItem
                 icon={<Add24Regular />}
