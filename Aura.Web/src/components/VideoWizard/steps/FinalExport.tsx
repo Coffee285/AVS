@@ -940,8 +940,14 @@ export const FinalExport: FC<FinalExportProps> = ({
             let lastProgress = -1;
             let lastStage = '';
             let stuckStartTime: number | null = null;
-            const STUCK_THRESHOLD_MS = 60 * 1000; // 60 seconds
             const STUCK_CHECK_INTERVAL = 5; // Check every 5 polls
+
+            // Stage-aware stuck detection thresholds (in milliseconds)
+            const getStuckThreshold = (progress: number): number => {
+              if (progress < 50) return 120 * 1000; // 2 minutes for early stages
+              if (progress < 90) return 90 * 1000; // 90 seconds for mid stages
+              return 60 * 1000; // 1 minute for final stages (90%+)
+            };
 
             while (!jobCompleted && pollAttempts < maxPollAttempts) {
               // EXPONENTIAL BACKOFF: Increase delay between polls
@@ -1007,7 +1013,7 @@ export const FinalExport: FC<FinalExportProps> = ({
                   pollDelay = 500;
                 }
 
-                // Check for stuck job (same progress/stage for too long)
+                // Check for stuck job (same progress/stage for too long) with stage-aware thresholds
                 if (pollAttempts % STUCK_CHECK_INTERVAL === 0) {
                   if (
                     jobProgress === lastProgress &&
@@ -1018,9 +1024,18 @@ export const FinalExport: FC<FinalExportProps> = ({
                       stuckStartTime = Date.now();
                     } else {
                       const stuckDuration = Date.now() - stuckStartTime;
-                      if (stuckDuration >= STUCK_THRESHOLD_MS) {
+                      const stuckThreshold = getStuckThreshold(jobProgress);
+
+                      if (stuckDuration >= stuckThreshold) {
+                        const stuckReason =
+                          jobProgress < 50
+                            ? 'Initialization taking longer than expected'
+                            : jobProgress < 90
+                              ? 'Encoding appears to have stalled'
+                              : 'Finalizing output - this may take a moment';
+
                         console.warn(
-                          `[FinalExport] Job appears stuck: ${currentStage} at ${jobProgress}% for ${Math.round(stuckDuration / 1000)}s`
+                          `[FinalExport] Job appears stuck: ${currentStage} at ${jobProgress}% for ${Math.round(stuckDuration / 1000)}s (threshold: ${stuckThreshold / 1000}s)`
                         );
 
                         const hasOutput = Boolean(extractOutputPath(typedJobData));
@@ -1039,9 +1054,7 @@ export const FinalExport: FC<FinalExportProps> = ({
                           console.info(
                             '[FinalExport] Job is past 70% but no output yet; flagging as stuck and continuing to poll'
                           );
-                          setExportStage(
-                            'Video generation appears stuck. You can continue waiting, retry, or cancel below.'
-                          );
+                          setExportStage(stuckReason);
 
                           // Set stuck state so UI can show recovery options
                           setIsJobStuck(true);
@@ -1055,7 +1068,7 @@ export const FinalExport: FC<FinalExportProps> = ({
                         }
 
                         throw new Error(
-                          `Video generation appears stuck at ${currentStage} stage (${jobProgress}% complete for over 60 seconds). ` +
+                          `${stuckReason}. Job at ${currentStage} stage (${jobProgress}% complete for over ${Math.round(stuckThreshold / 1000)} seconds). ` +
                             'The job may have encountered an issue. Please try again or check the logs.'
                         );
                       }
