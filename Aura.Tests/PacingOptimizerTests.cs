@@ -39,6 +39,7 @@ public class PacingOptimizerTests
             Scenes: scenes,
             SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
             NarrationPath: "",
+            SceneAudioPaths: null,
             MusicPath: "",
             SubtitlesPath: null
         );
@@ -72,6 +73,7 @@ public class PacingOptimizerTests
             Scenes: scenes,
             SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
             NarrationPath: "",
+            SceneAudioPaths: null,
             MusicPath: "",
             SubtitlesPath: null
         );
@@ -105,6 +107,7 @@ public class PacingOptimizerTests
             Scenes: scenes,
             SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
             NarrationPath: "",
+            SceneAudioPaths: null,
             MusicPath: "",
             SubtitlesPath: null
         );
@@ -139,6 +142,7 @@ public class PacingOptimizerTests
             Scenes: scenes,
             SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
             NarrationPath: "",
+            SceneAudioPaths: null,
             MusicPath: "",
             SubtitlesPath: null
         );
@@ -169,6 +173,7 @@ public class PacingOptimizerTests
             Scenes: scenes,
             SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
             NarrationPath: "",
+            SceneAudioPaths: null,
             MusicPath: "",
             SubtitlesPath: null
         );

@@ -120,6 +120,7 @@ public class TtsEndpointIntegrationTests
             Scenes: scenes,
             SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
             NarrationPath: narrationPath,
+            SceneAudioPaths: null,
             MusicPath: "",
             SubtitlesPath: "/tmp/test-captions.srt"
         );
