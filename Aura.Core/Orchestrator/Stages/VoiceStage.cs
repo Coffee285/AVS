@@ -140,9 +140,11 @@ public class VoiceStage : PipelineStage
                 var silentAudioDir = Path.Combine(Path.GetTempPath(), "AuraVideoStudio", "TTS");
                 Directory.CreateDirectory(silentAudioDir);
                 
-                var silentAudioPath = Path.Combine(
-                    silentAudioDir,
-                    $"silent-fallback-{Guid.NewGuid()}.wav");
+                // Ensure absolute path for silent audio fallback
+                var silentAudioPath = Path.GetFullPath(
+                    Path.Combine(
+                        silentAudioDir,
+                        $"silent-fallback-{Guid.NewGuid()}.wav"));
                 
                 // Create logger for SilentWavGenerator
                 var silentWavLogger = CreateSilentWavGeneratorLogger();
@@ -216,9 +218,14 @@ public class VoiceStage : PipelineStage
 
         // Store narration path in context
         context.NarrationPath = narrationPath;
+        
+        // Currently using concatenated audio, but infrastructure ready for per-scene audio
+        context.SceneAudioPaths = null;
+        
         context.SetStageOutput(StageName, new VoiceStageOutput
         {
             NarrationPath = narrationPath,
+            SceneAudioPaths = context.SceneAudioPaths,
             SceneCount = scenes.Count,
             TotalCharacters = scriptLines.Sum(sl => sl.Text?.Length ?? 0),
             Provider = _ttsProvider.GetType().Name,
@@ -356,6 +363,7 @@ public class VoiceStage : PipelineStage
 public record VoiceStageOutput
 {
     public required string NarrationPath { get; init; }
+    public Dictionary<int, string>? SceneAudioPaths { get; init; }
     public required int SceneCount { get; init; }
     public required int TotalCharacters { get; init; }
     public required string Provider { get; init; }
