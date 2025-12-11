@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Aura.Core.Audio;
 using Aura.Core.Models;
 using Aura.Core.Providers;
 using Aura.Providers.Audio;
@@ -19,15 +20,23 @@ namespace Aura.Providers.Tts;
 
 public class WindowsTtsProvider : ITtsProvider
 {
+    // Audio format validation constants
+    private const short PreferredBitsPerSample = 16;
+    private const short FallbackBitsPerSample = 8;
+    private const int PreferredSampleRate = 44100; // 44.1kHz
+    private const int FallbackSampleRate = 22050; // 22.05kHz
+
     private readonly ILogger<WindowsTtsProvider> _logger;
+    private readonly WavValidator? _wavValidator;
 #if WINDOWS10_0_19041_0_OR_GREATER
     private readonly SpeechSynthesizer _synthesizer;
 #endif
     private readonly string _outputDirectory;
 
-    public WindowsTtsProvider(ILogger<WindowsTtsProvider> logger)
+    public WindowsTtsProvider(ILogger<WindowsTtsProvider> logger, WavValidator? wavValidator = null)
     {
         _logger = logger;
+        _wavValidator = wavValidator;
 #if WINDOWS10_0_19041_0_OR_GREATER
         _synthesizer = new SpeechSynthesizer();
 #endif
@@ -268,6 +277,46 @@ public class WindowsTtsProvider : ITtsProvider
                     _logger.LogError("Merged narration file is too small: {Size} bytes", outputInfo.Length);
                     throw new InvalidOperationException($"Failed to create valid narration file (only {outputInfo.Length} bytes)");
                 }
+
+                // CRITICAL: Validate WAV format to catch Windows TTS format issues early
+                if (_wavValidator != null)
+                {
+                    _logger.LogDebug("Validating merged WAV file format: {Path}", outputFilePath);
+                    
+                    var validationResult = await _wavValidator.ValidateAsync(outputFilePath, ct).ConfigureAwait(false);
+                    
+                    if (!validationResult.IsValid)
+                    {
+                        var error = $"Windows TTS produced invalid WAV file: {validationResult.ErrorMessage}. " +
+                            $"This may indicate an issue with Windows Speech Synthesis or audio format compatibility.";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
+                    }
+
+                    _logger.LogInformation(
+                        "WAV validation passed: {Path} - Format: {Format}, SampleRate: {SampleRate}Hz, Duration: {Duration:F2}s",
+                        outputFilePath, validationResult.Format, validationResult.SampleRate, validationResult.Duration ?? 0);
+
+                    // Validate format is compatible (16-bit PCM preferred for maximum compatibility)
+                    if (validationResult.BitsPerSample != PreferredBitsPerSample && validationResult.BitsPerSample != FallbackBitsPerSample)
+                    {
+                        _logger.LogWarning(
+                            "Windows TTS produced {BitsPerSample}-bit audio. {PreferredBitsPerSample}-bit PCM is preferred for compatibility.",
+                            validationResult.BitsPerSample, PreferredBitsPerSample);
+                    }
+
+                    if (validationResult.SampleRate != PreferredSampleRate && validationResult.SampleRate != FallbackSampleRate)
+                    {
+                        _logger.LogWarning(
+                            "Windows TTS produced {SampleRate}Hz audio. {PreferredSampleRate}Hz or {FallbackSampleRate}Hz is preferred for compatibility.",
+                            validationResult.SampleRate, PreferredSampleRate, FallbackSampleRate);
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("WavValidator not available, skipping detailed audio format validation");
+                }
+
                 _logger.LogInformation("Narration file created successfully: {Path} ({Size} bytes)", outputFilePath, outputInfo.Length);
             }
             else
@@ -335,6 +384,21 @@ public class WindowsTtsProvider : ITtsProvider
             using (var fileStream = new FileStream(tempFile, FileMode.Create))
             {
                 await stream.AsStreamForRead().CopyToAsync(fileStream, 81920, timeoutCts.Token).ConfigureAwait(false);
+            }
+
+            // FAST-FAIL: Validate chunk immediately after synthesis to catch format issues early
+            if (_wavValidator != null && File.Exists(tempFile))
+            {
+                var quickValidation = await _wavValidator.QuickValidateAsync(tempFile, timeoutCts.Token).ConfigureAwait(false);
+                if (!quickValidation)
+                {
+                    _logger.LogError(
+                        "Windows TTS produced invalid WAV format for chunk {Identifier}. File may be corrupted or have wrong encoding.",
+                        identifier);
+                    throw new InvalidOperationException(
+                        $"Windows TTS synthesis produced invalid audio format for chunk '{identifier}'. " +
+                        "This may indicate a Windows Speech API issue or unsupported audio encoding.");
+                }
             }
             
             _logger.LogDebug("Synthesized chunk {Identifier}: {Text}",

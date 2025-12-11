@@ -36,6 +36,9 @@ public class VideoOrchestrator
     private const float StallProgressThreshold = 0.1f;
     private const int StallTimeoutSeconds = 60;
 
+    // Audio validation constants
+    private const long MinValidAudioFileSizeBytes = 1024; // 1KB minimum for valid audio file
+
     // Output path extraction constants
     private const string OutputDirectoryName = "AuraVideoStudio";
     private const string OutputSubdirectoryName = "Output";
@@ -69,6 +72,7 @@ public class VideoOrchestrator
     private readonly Services.AudioIntelligence.IVoiceEnhancementService? _voiceEnhancementService;
     private readonly Services.AudioIntelligence.IMusicMatchingService? _musicMatchingService;
     private readonly Services.AudioIntelligence.IIntelligentDuckingService? _intelligentDuckingService;
+    private readonly Audio.WavValidator? _wavValidator;
 
     public VideoOrchestrator(
         ILogger<VideoOrchestrator> logger,
@@ -98,7 +102,8 @@ public class VideoOrchestrator
         TopicAwareFallbackGenerator? fallbackGenerator = null,
         Services.AudioIntelligence.IVoiceEnhancementService? voiceEnhancementService = null,
         Services.AudioIntelligence.IMusicMatchingService? musicMatchingService = null,
-        Services.AudioIntelligence.IIntelligentDuckingService? intelligentDuckingService = null)
+        Services.AudioIntelligence.IIntelligentDuckingService? intelligentDuckingService = null,
+        Audio.WavValidator? wavValidator = null)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(llmProvider);
@@ -145,6 +150,7 @@ public class VideoOrchestrator
         _voiceEnhancementService = voiceEnhancementService;
         _musicMatchingService = musicMatchingService;
         _intelligentDuckingService = intelligentDuckingService;
+        _wavValidator = wavValidator;
 
         if (_assetTaggingService != null)
         {
@@ -1823,32 +1829,82 @@ public class VideoOrchestrator
 
                     var scriptLines = ConvertScenesToScriptLines(parsedScenes);
 
+                    // CRITICAL: Validate we have audio for ALL script lines (fast-fail if any line fails)
+                    _logger.LogInformation("Starting TTS synthesis for {LineCount} script lines. ALL lines must succeed.", scriptLines.Count);
+
                     // Generate audio with retry logic and validation
                     narrationPath = await _retryWrapper.ExecuteWithRetryAsync(
                         async (ctRetry) =>
                         {
                             var audioPath = await _ttsProvider.SynthesizeAsync(scriptLines, voiceSpec, ctRetry).ConfigureAwait(false);
 
-                            // Validate audio output
+                            // Validate audio output exists
+                            if (!File.Exists(audioPath))
+                            {
+                                var error = $"TTS synthesis failed: Audio file not created at {audioPath}";
+                                _logger.LogError(error);
+                                throw new InvalidOperationException(error);
+                            }
+
+                            // Validate audio file size (must be substantial)
+                            var audioFileInfo = new FileInfo(audioPath);
+                            if (audioFileInfo.Length < MinValidAudioFileSizeBytes)
+                            {
+                                var error = $"TTS synthesis produced invalid audio: File size {audioFileInfo.Length} bytes is too small (expected >{MinValidAudioFileSizeBytes} bytes)";
+                                _logger.LogError(error);
+                                throw new InvalidOperationException(error);
+                            }
+
+                            // Validate audio quality and duration
                             var minDuration = TimeSpan.FromSeconds(Math.Max(5, planSpec.TargetDuration.TotalSeconds * 0.3));
                             var audioValidation = _ttsValidator.ValidateAudioFile(audioPath, minDuration);
 
                             if (!audioValidation.IsValid)
                             {
-                                _logger.LogWarning("Audio validation failed: {Issues}", string.Join(", ", audioValidation.Issues));
+                                var issues = string.Join(", ", audioValidation.Issues);
+                                _logger.LogError("Audio validation failed: {Issues}", issues);
                                 throw new ValidationException("Audio quality validation failed", audioValidation.Issues);
+                            }
+
+                            // FAST-FAIL: Verify audio file is complete and valid WAV format
+                            // This catches scenarios where TTS provider creates file but it's corrupted
+                            if (_wavValidator != null)
+                            {
+                                var wavValidation = await _wavValidator.QuickValidateAsync(audioPath, ctRetry).ConfigureAwait(false);
+                                if (!wavValidation)
+                                {
+                                    throw new InvalidOperationException(
+                                        $"TTS audio file at {audioPath} has invalid WAV format. " +
+                                        "This may indicate a provider-specific audio format issue or corrupted file.");
+                                }
+                                _logger.LogDebug("Audio file WAV format validation passed for {Path}", audioPath);
+                            }
+                            else
+                            {
+                                _logger.LogDebug("WavValidator not available, skipping detailed WAV format validation");
                             }
 
                             // Register for cleanup (will be promoted to artifact later)
                             _cleanupManager.RegisterTempFile(audioPath);
 
-                        return audioPath;
+                            return audioPath;
                         },
                         "Audio Generation",
                         ct
                     ).ConfigureAwait(false);
 
-                    _logger.LogInformation("Narration generated and validated at: {Path}", narrationPath);
+                    // FINAL VALIDATION: Ensure the narration file is valid before declaring success
+                    if (!File.Exists(narrationPath))
+                    {
+                        var error = $"Audio generation completed but narration file not found at: {narrationPath}";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
+                    }
+
+                    _logger.LogInformation(
+                        "Narration generated and validated at: {Path} (Size: {Size} bytes, {LineCount} lines)", 
+                        narrationPath, new FileInfo(narrationPath).Length, scriptLines.Count);
+                    
                     state.NarrationPath = narrationPath;
                     return narrationPath;
 
@@ -1941,11 +1997,29 @@ public class VideoOrchestrator
                         sceneAssets.Values.Sum(assets => assets.Count),
                         narrationPath);
 
-                    // Validate all required inputs exist before starting render
+                    // CRITICAL VALIDATION: Ensure narration file exists and is valid before composition
+                    // This is the last checkpoint before FFmpeg render - catch issues early
                     if (!File.Exists(narrationPath))
                     {
-                        throw new InvalidOperationException($"Narration file not found at: {narrationPath}");
+                        var error = $"CRITICAL: Narration file not found at: {narrationPath}. " +
+                            "Cannot proceed with video composition. This indicates TTS stage did not complete successfully.";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
                     }
+
+                    // Validate narration file is not empty or corrupted
+                    var narrationFileInfo = new FileInfo(narrationPath);
+                    if (narrationFileInfo.Length < MinValidAudioFileSizeBytes)
+                    {
+                        var error = $"CRITICAL: Narration file at {narrationPath} is too small ({narrationFileInfo.Length} bytes). " +
+                            $"Expected at least {MinValidAudioFileSizeBytes} bytes. This indicates TTS synthesis failed or produced invalid audio.";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
+                    }
+
+                    _logger.LogInformation(
+                        "Narration file validation passed: {Path} ({Size} bytes)",
+                        narrationPath, narrationFileInfo.Length);
 
                     // Validate that all scenes have visual assets before render
                     ValidateSceneAssets(parsedScenes, sceneAssets);
