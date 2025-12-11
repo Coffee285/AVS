@@ -8,9 +8,10 @@
 import { makeStyles, tokens, Tooltip } from '@fluentui/react-components';
 import {
   Video16Regular,
-  Speaker116Regular,
+  MusicNote216Regular,
   TextT16Regular,
   Image16Regular,
+  Speaker216Regular,
   SpeakerMute16Regular,
   LockClosed16Regular,
   LockOpen16Regular,
@@ -107,7 +108,7 @@ const useStyles = makeStyles({
 
 const TRACK_TYPE_ICONS: Record<ClipType, React.ReactNode> = {
   video: <Video16Regular />,
-  audio: <Speaker116Regular />,
+  audio: <MusicNote216Regular />,
   text: <TextT16Regular />,
   image: <Image16Regular />,
 };
@@ -160,7 +161,7 @@ export const TrackHeader: FC<TrackHeaderProps> = ({
                 onClick={onMuteToggle}
                 aria-label={track.muted ? 'Unmute track' : 'Mute track'}
               >
-                {track.muted ? <SpeakerMute16Regular /> : <Speaker116Regular />}
+                {track.muted ? <SpeakerMute16Regular /> : <Speaker216Regular />}
               </button>
             </Tooltip>
             <Tooltip content={track.locked ? 'Unlock' : 'Lock'} relationship="label">
