@@ -15,3 +15,4 @@ export {
 } from './RipplePreview';
 export { TimelineContextMenu, type TimelineContextMenuProps } from './TimelineContextMenu';
 export { TrackResizeHandle } from './TrackResizeHandle';
+export { TrackHeader, type TrackHeaderProps } from './TrackHeader';
