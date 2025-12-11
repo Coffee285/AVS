@@ -1156,21 +1156,11 @@ public partial class JobRunner
                 {
                     // For non-terminal states, sync progress asynchronously (fire-and-forget)
                     // This keeps SSE subscribers updated without blocking the job runner
-                    // Using a continuation to handle errors without blocking or consuming thread pool
-                    _exportJobService.UpdateJobProgressAsync(
+                    // Errors are logged within UpdateJobProgressAsync itself, so we can safely ignore the task
+                    _ = _exportJobService.UpdateJobProgressAsync(
                         updated.Id,
                         updated.Percent,
-                        updated.Stage)
-                        .ContinueWith(task =>
-                        {
-                            if (task.IsFaulted && task.Exception != null)
-                            {
-                                // Log but don't throw - progress sync failures shouldn't break job execution
-                                _logger.LogWarning(task.Exception.InnerException ?? task.Exception,
-                                    "[Job {JobId}] Failed to sync progress {Percent}% to ExportJobService",
-                                    updated.Id, updated.Percent);
-                            }
-                        }, TaskContinuationOptions.OnlyOnFaulted);
+                        updated.Stage);
                 }
             }
             catch (Exception ex)
