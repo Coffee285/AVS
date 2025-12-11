@@ -528,9 +528,9 @@ public class VideoOrchestrator
                 }
             });
 
-            // Execute smart orchestration
+            // Execute smart orchestration, passing recovery results dictionary for task communication
             var result = await _smartOrchestrator.OrchestrateGenerationAsync(
-                brief, planSpec, systemProfile, taskExecutor, orchestrationProgress, ct
+                brief, planSpec, systemProfile, taskExecutor, orchestrationProgress, ct, executorContext.RecoveryResults
             ).ConfigureAwait(false);
 
             if (!result.Succeeded)
@@ -1846,65 +1846,79 @@ public class VideoOrchestrator
                     _logger.LogInformation("[Audio] Starting TTS synthesis for {LineCount} script lines. ALL lines must succeed.", scriptLines.Count);
 
                     // Generate audio with retry logic and validation
-                    narrationPath = await _retryWrapper.ExecuteWithRetryAsync(
-                        async (ctRetry) =>
-                        {
-                            var audioPath = await _ttsProvider.SynthesizeAsync(scriptLines, voiceSpec, ctRetry).ConfigureAwait(false);
-
-                            // Validate audio output exists
-                            if (!File.Exists(audioPath))
+                    try
+                    {
+                        narrationPath = await _retryWrapper.ExecuteWithRetryAsync(
+                            async (ctRetry) =>
                             {
-                                var error = $"TTS synthesis failed: Audio file not created at {audioPath}";
-                                _logger.LogError(error);
-                                throw new InvalidOperationException(error);
-                            }
+                                var audioPath = await _ttsProvider.SynthesizeAsync(scriptLines, voiceSpec, ctRetry).ConfigureAwait(false);
 
-                            // Validate audio file size (must be substantial)
-                            var audioFileInfo = new FileInfo(audioPath);
-                            if (audioFileInfo.Length < MinValidAudioFileSizeBytes)
-                            {
-                                var error = $"TTS synthesis produced invalid audio: File size {audioFileInfo.Length} bytes is too small (expected >{MinValidAudioFileSizeBytes} bytes)";
-                                _logger.LogError(error);
-                                throw new InvalidOperationException(error);
-                            }
-
-                            // Validate audio quality and duration
-                            var minDuration = TimeSpan.FromSeconds(Math.Max(5, planSpec.TargetDuration.TotalSeconds * 0.3));
-                            var audioValidation = _ttsValidator.ValidateAudioFile(audioPath, minDuration);
-
-                            if (!audioValidation.IsValid)
-                            {
-                                var issues = string.Join(", ", audioValidation.Issues);
-                                _logger.LogError("Audio validation failed: {Issues}", issues);
-                                throw new ValidationException("Audio quality validation failed", audioValidation.Issues);
-                            }
-
-                            // FAST-FAIL: Verify audio file is complete and valid WAV format
-                            // This catches scenarios where TTS provider creates file but it's corrupted
-                            if (_wavValidator != null)
-                            {
-                                var wavValidation = await _wavValidator.QuickValidateAsync(audioPath, ctRetry).ConfigureAwait(false);
-                                if (!wavValidation)
+                                // Validate audio output exists
+                                if (!File.Exists(audioPath))
                                 {
-                                    throw new InvalidOperationException(
-                                        $"TTS audio file at {audioPath} has invalid WAV format. " +
-                                        "This may indicate a provider-specific audio format issue or corrupted file.");
+                                    var error = $"TTS synthesis failed: Audio file not created at {audioPath}";
+                                    _logger.LogError(error);
+                                    throw new InvalidOperationException(error);
                                 }
-                                _logger.LogDebug("Audio file WAV format validation passed for {Path}", audioPath);
-                            }
-                            else
-                            {
-                                _logger.LogDebug("WavValidator not available, skipping detailed WAV format validation");
-                            }
 
-                            // Register for cleanup (will be promoted to artifact later)
-                            _cleanupManager.RegisterTempFile(audioPath);
+                                // Validate audio file size (must be substantial)
+                                var audioFileInfo = new FileInfo(audioPath);
+                                if (audioFileInfo.Length < MinValidAudioFileSizeBytes)
+                                {
+                                    var error = $"TTS synthesis produced invalid audio: File size {audioFileInfo.Length} bytes is too small (expected >{MinValidAudioFileSizeBytes} bytes)";
+                                    _logger.LogError(error);
+                                    throw new InvalidOperationException(error);
+                                }
 
-                            return audioPath;
-                        },
-                        "Audio Generation",
-                        ct
-                    ).ConfigureAwait(false);
+                                // Validate audio quality and duration
+                                var minDuration = TimeSpan.FromSeconds(Math.Max(5, planSpec.TargetDuration.TotalSeconds * 0.3));
+                                var audioValidation = _ttsValidator.ValidateAudioFile(audioPath, minDuration);
+
+                                if (!audioValidation.IsValid)
+                                {
+                                    var issues = string.Join(", ", audioValidation.Issues);
+                                    _logger.LogError("Audio validation failed: {Issues}", issues);
+                                    throw new ValidationException("Audio quality validation failed", audioValidation.Issues);
+                                }
+
+                                // FAST-FAIL: Verify audio file is complete and valid WAV format
+                                // This catches scenarios where TTS provider creates file but it's corrupted
+                                if (_wavValidator != null)
+                                {
+                                    var wavValidation = await _wavValidator.QuickValidateAsync(audioPath, ctRetry).ConfigureAwait(false);
+                                    if (!wavValidation)
+                                    {
+                                        throw new InvalidOperationException(
+                                            $"TTS audio file at {audioPath} has invalid WAV format. " +
+                                            "This may indicate a provider-specific audio format issue or corrupted file.");
+                                    }
+                                    _logger.LogDebug("Audio file WAV format validation passed for {Path}", audioPath);
+                                }
+                                else
+                                {
+                                    _logger.LogDebug("WavValidator not available, skipping detailed WAV format validation");
+                                }
+
+                                // Register for cleanup (will be promoted to artifact later)
+                                _cleanupManager.RegisterTempFile(audioPath);
+
+                                // CRITICAL: Update state immediately after successful generation
+                                // This ensures composition task can access narration path even if validation below throws
+                                state.NarrationPath = audioPath;
+                                _logger.LogInformation("[Audio] Narration path stored in state during generation: {Path}", state.NarrationPath);
+
+                                return audioPath;
+                            },
+                            "Audio Generation",
+                            ct
+                        ).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "[Audio] TTS synthesis failed, allowing orchestrator recovery to provide silent audio fallback");
+                        // Re-throw to allow orchestrator's recovery logic to handle with silent audio
+                        throw;
+                    }
 
                     // FINAL VALIDATION: Ensure the narration file is valid before declaring success
                     _logger.LogInformation("[Audio] Performing final validation on narration file: {Path}", narrationPath);
@@ -2015,17 +2029,47 @@ public class VideoOrchestrator
                         throw new InvalidOperationException(error);
                     }
                     
-                    if (narrationPath == null)
+                    // CRITICAL FIX: Retrieve narrationPath from multiple sources
+                    // When tasks execute asynchronously via VideoGenerationOrchestrator, closure variables
+                    // are not shared across task invocations. The audio task stores the path in state.NarrationPath.
+                    // Additionally, if audio task fails and orchestrator recovery creates silent audio,
+                    // the recovery result is stored in state.RecoveryResults["audio"].
+                    string? compositionNarrationPath = null;
+                    string narrationSource = "unknown";
+                    
+                    // Priority 1: Check state.NarrationPath (set by successful audio generation)
+                    if (!string.IsNullOrEmpty(state.NarrationPath))
+                    {
+                        compositionNarrationPath = state.NarrationPath;
+                        narrationSource = "state.NarrationPath";
+                    }
+                    // Priority 2: Check recovery results (set by orchestrator when audio fails and silent audio is used)
+                    else if (state.RecoveryResults.TryGetValue("audio", out var recoveryResult) && recoveryResult is string recoveryPath)
+                    {
+                        compositionNarrationPath = recoveryPath;
+                        narrationSource = "recovery results (silent audio fallback)";
+                        _logger.LogInformation("[Composition] Using recovered audio from silent fallback: {Path}", recoveryPath);
+                    }
+                    // Priority 3: Fall back to closure variable (works when tasks run synchronously)
+                    else if (narrationPath != null)
+                    {
+                        compositionNarrationPath = narrationPath;
+                        narrationSource = "closure variable";
+                    }
+                    
+                    if (compositionNarrationPath == null)
                     {
                         var error = "CRITICAL: narrationPath is null. Audio must be generated before composition. " +
-                            "This may indicate the audio generation stage failed silently or was skipped.";
+                            "This may indicate the audio generation stage failed silently or was skipped. " +
+                            "Checked state.NarrationPath, recovery results, and closure variable - all null.";
                         _logger.LogError(error);
                         throw new InvalidOperationException(error);
                     }
 
                     _logger.LogInformation(
-                        "[Composition] Prerequisites validated. Scenes: {SceneCount}, NarrationPath: {NarrationPath}",
-                        parsedScenes.Count, narrationPath);
+                        "[Composition] Prerequisites validated. Scenes: {SceneCount}, NarrationPath: {NarrationPath}, " +
+                        "Source: {Source}",
+                        parsedScenes.Count, compositionNarrationPath, narrationSource);
 
                     // Report progress BEFORE starting render - this ensures frontend sees the transition
                     var renderStartMsg = "Starting video composition and rendering...";
@@ -2039,30 +2083,30 @@ public class VideoOrchestrator
                         "Scenes: {SceneCount}, Assets: {AssetCount}, NarrationPath: {NarrationPath}",
                         parsedScenes.Count,
                         sceneAssets.Values.Sum(assets => assets.Count),
-                        narrationPath);
+                        compositionNarrationPath);
 
                     // CRITICAL VALIDATION: Ensure narration file exists and is valid before composition
                     // This is the last checkpoint before FFmpeg render - catch issues early
-                    _logger.LogInformation("[Composition] Validating narration file: {Path}", narrationPath);
+                    _logger.LogInformation("[Composition] Validating narration file: {Path}", compositionNarrationPath);
                     
-                    if (!File.Exists(narrationPath))
+                    if (!File.Exists(compositionNarrationPath))
                     {
-                        var error = $"CRITICAL: Narration file not found at: {narrationPath}. " +
+                        var error = $"CRITICAL: Narration file not found at: {compositionNarrationPath}. " +
                             "Cannot proceed with video composition. This indicates TTS stage did not complete successfully. " +
                             "Check earlier logs for TTS synthesis errors or fallback to silent audio.";
                         _logger.LogError(error);
                         throw new InvalidOperationException(error);
                     }
                     
-                    _logger.LogInformation("[Composition] Narration file exists: {Path}", narrationPath);
+                    _logger.LogInformation("[Composition] Narration file exists: {Path}", compositionNarrationPath);
 
                     // Validate narration file is not empty or corrupted
                     _logger.LogInformation("[Composition] Checking narration file size");
-                    var narrationFileInfo = new FileInfo(narrationPath);
+                    var narrationFileInfo = new FileInfo(compositionNarrationPath);
                     
                     if (narrationFileInfo.Length < MinValidAudioFileSizeBytes)
                     {
-                        var error = $"CRITICAL: Narration file at {narrationPath} is too small ({narrationFileInfo.Length} bytes). " +
+                        var error = $"CRITICAL: Narration file at {compositionNarrationPath} is too small ({narrationFileInfo.Length} bytes). " +
                             $"Expected at least {MinValidAudioFileSizeBytes} bytes. This indicates TTS synthesis failed or produced invalid audio.";
                         _logger.LogError(error);
                         throw new InvalidOperationException(error);
@@ -2070,7 +2114,7 @@ public class VideoOrchestrator
 
                     _logger.LogInformation(
                         "[Composition] Narration file validation passed: {Path} ({Size} bytes)",
-                        narrationPath, narrationFileInfo.Length);
+                        compositionNarrationPath, narrationFileInfo.Length);
 
                     // Validate that all scenes have visual assets before render
                     _logger.LogInformation("[Composition] Validating scene assets");
@@ -2089,7 +2133,7 @@ public class VideoOrchestrator
                     var timeline = new Providers.Timeline(
                         Scenes: parsedScenes,
                         SceneAssets: sceneAssets,
-                        NarrationPath: narrationPath,
+                        NarrationPath: compositionNarrationPath,
                         MusicPath: string.Empty,
                         SubtitlesPath: null
                     );
@@ -2222,6 +2266,12 @@ public class VideoOrchestrator
         public Providers.Timeline? Timeline { get; set; }
         public string? NarrationPath { get; set; }
         public string? FinalVideoPath { get; set; }
+        
+        /// <summary>
+        /// Recovery results from orchestrator when tasks fail and are recovered (e.g., silent audio).
+        /// Maps task ID to recovery result.
+        /// </summary>
+        public Dictionary<string, object> RecoveryResults { get; } = new();
     }
 
     /// <summary>
