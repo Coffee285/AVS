@@ -114,32 +114,92 @@ export const openCutTokens = {
 
   /**
    * Semantic color tokens for the OpenCut interface.
-   * Uses CSS custom properties from Fluent UI for theme compatibility.
+   * Professional dark theme matching industry standards like Adobe Premiere Pro.
    */
   colors: {
-    // Surface colors
-    /** Primary surface - main content area */
-    surfacePrimary: 'var(--colorNeutralBackground1)',
-    /** Secondary surface - panels and sidebars */
-    surfaceSecondary: 'var(--colorNeutralBackground2)',
-    /** Tertiary surface - nested containers */
-    surfaceTertiary: 'var(--colorNeutralBackground3)',
-    /** Elevated surface - cards and dialogs */
-    surfaceElevated: 'var(--colorNeutralBackground1)',
+    // Background layers (darker = further back in the stack)
+    bg: {
+      /** #0d0d0d - Deepest background behind everything */
+      deepest: '#0d0d0d',
+      /** #141414 - Main app background */
+      deep: '#141414',
+      /** #1a1a1a - Panel surfaces */
+      surface: '#1a1a1a',
+      /** #222222 - Elevated cards and menus */
+      elevated: '#222222',
+      /** #2a2a2a - Hover state backgrounds */
+      highlight: '#2a2a2a',
+    },
 
-    // Track type colors for timeline
-    /** Blue for video tracks */
-    trackVideo: '#3B82F6',
-    /** Green for audio tracks */
-    trackAudio: '#22C55E',
-    /** Purple for image tracks */
-    trackImage: '#A855F7',
-    /** Amber for text tracks */
-    trackText: '#F59E0B',
-    /** Pink for effect tracks */
-    trackEffect: '#EC4899',
+    // Foreground colors
+    fg: {
+      /** #e8e8e8 - Main text color */
+      primary: '#e8e8e8',
+      /** #a0a0a0 - Secondary text */
+      secondary: '#a0a0a0',
+      /** #666666 - Disabled/hints text */
+      tertiary: '#666666',
+      /** #0d0d0d - Text on accent colors */
+      inverse: '#0d0d0d',
+    },
 
-    // Timeline-specific colors
+    // Borders (subtle, using transparency)
+    border: {
+      /** Very subtle border */
+      subtle: 'rgba(255, 255, 255, 0.06)',
+      /** Default border */
+      default: 'rgba(255, 255, 255, 0.10)',
+      /** Strong border */
+      strong: 'rgba(255, 255, 255, 0.15)',
+    },
+
+    // Accent colors
+    accent: {
+      /** #5c9eff - Main accent blue */
+      primary: '#5c9eff',
+      /** #3d7bd9 - Darker accent */
+      secondary: '#3d7bd9',
+      /** Subtle selection background */
+      subtle: 'rgba(92, 158, 255, 0.15)',
+    },
+
+    // Clip colors with gradients
+    clips: {
+      video: {
+        /** Gradient for video clips */
+        bg: 'linear-gradient(180deg, #4a7c9b 0%, #3a6277 100%)',
+        /** Border color for video clips */
+        border: '#5a8caa',
+      },
+      audio: {
+        /** Gradient for audio clips */
+        bg: 'linear-gradient(180deg, #5a9b5e 0%, #4a7f4d 100%)',
+        /** Border color for audio clips */
+        border: '#6aab6e',
+      },
+      text: {
+        /** Gradient for text clips */
+        bg: 'linear-gradient(180deg, #9b7a5a 0%, #7f6349 100%)',
+        /** Border color for text clips */
+        border: '#ab8a6a',
+      },
+      image: {
+        /** Gradient for image clips */
+        bg: 'linear-gradient(180deg, #7a5a9b 0%, #634980 100%)',
+        /** Border color for image clips */
+        border: '#8a6aab',
+      },
+    },
+
+    // Semantic colors
+    /** #4caf50 - Success color */
+    success: '#4caf50',
+    /** #ff9800 - Warning color */
+    warning: '#ff9800',
+    /** #f44336 - Error color */
+    error: '#f44336',
+
+    // Legacy colors for backward compatibility (will be deprecated)
     /** Red for playhead */
     playhead: '#EF4444',
     /** Blue for selection highlight */
@@ -149,7 +209,7 @@ export const openCutTokens = {
     /** Orange for markers */
     marker: '#F97316',
 
-    // Interactive state colors
+    // Interactive state colors (legacy)
     /** Subtle hover state */
     hover: 'rgba(255, 255, 255, 0.05)',
     /** Active/pressed state */
