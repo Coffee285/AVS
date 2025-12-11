@@ -507,8 +507,8 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ className, isLoading = fal
       ? projectStore.activeProject.canvasWidth / projectStore.activeProject.canvasHeight
       : 16 / 9;
 
-    // Available space (with padding)
-    const padding = 16;
+    // Available space (with minimal padding for maximum canvas space)
+    const padding = 4;
     const availableWidth = container.width - padding * 2;
     const availableHeight = container.height - padding * 2;
     const containerAspectRatio = availableWidth / availableHeight;

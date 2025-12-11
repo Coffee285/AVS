@@ -286,8 +286,16 @@ export function OpenCutEditor() {
     }
   };
 
+  // Prevent generic browser context menus throughout the editor
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    // Only prevent if no specialized context menu handler has already handled it
+    // Child components with custom menus will stopPropagation
+    if (e.defaultPrevented) return;
+    e.preventDefault();
+  }, []);
+
   return (
-    <div className={styles.root}>
+    <div className={styles.root} onContextMenu={handleContextMenu}>
       {/* Toast notifications container */}
       <ToastContainer position="top-right" />
 
