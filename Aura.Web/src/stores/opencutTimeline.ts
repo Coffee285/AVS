@@ -10,6 +10,33 @@ import { create } from 'zustand';
 /** Clip types in the timeline */
 export type ClipType = 'video' | 'audio' | 'image' | 'text';
 
+/** Track height presets for different track types */
+export const TRACK_HEIGHTS = {
+  video: {
+    compact: 32,
+    default: 64,
+    expanded: 96,
+  },
+  audio: {
+    compact: 24,
+    default: 48,
+    expanded: 72,
+  },
+  image: {
+    compact: 32,
+    default: 64,
+    expanded: 96,
+  },
+  text: {
+    compact: 24,
+    default: 40,
+    expanded: 56,
+  },
+} as const;
+
+/** View mode for track heights */
+export type TrackHeightViewMode = 'compact' | 'default' | 'expanded';
+
 /** Transform properties for clips */
 export interface ClipTransform {
   scaleX: number;
@@ -145,6 +172,8 @@ export interface OpenCutTimelineActions {
   muteTrack: (trackId: string, muted: boolean) => void;
   soloTrack: (trackId: string, solo: boolean) => void;
   lockTrack: (trackId: string, locked: boolean) => void;
+  setTrackHeight: (trackId: string, height: number) => void;
+  setAllTracksViewMode: (viewMode: TrackHeightViewMode) => void;
 
   // Clip operations
   addClip: (clip: Omit<TimelineClip, 'id'>) => string;
@@ -281,7 +310,7 @@ export const useOpenCutTimelineStore = create<OpenCutTimelineStore>((set, get) =
       type: 'video',
       name: 'Video 1',
       order: 0,
-      height: 56,
+      height: TRACK_HEIGHTS.video.default,
       muted: false,
       solo: false,
       locked: false,
@@ -292,7 +321,7 @@ export const useOpenCutTimelineStore = create<OpenCutTimelineStore>((set, get) =
       type: 'audio',
       name: 'Audio 1',
       order: 1,
-      height: 56,
+      height: TRACK_HEIGHTS.audio.default,
       muted: false,
       solo: false,
       locked: false,
@@ -303,7 +332,7 @@ export const useOpenCutTimelineStore = create<OpenCutTimelineStore>((set, get) =
       type: 'text',
       name: 'Text 1',
       order: 2,
-      height: 56,
+      height: TRACK_HEIGHTS.text.default,
       muted: false,
       solo: false,
       locked: false,
@@ -337,7 +366,7 @@ export const useOpenCutTimelineStore = create<OpenCutTimelineStore>((set, get) =
         name ||
         `${type.charAt(0).toUpperCase() + type.slice(1)} ${tracks.filter((t) => t.type === type).length + 1}`,
       order: tracks.length,
-      height: 56,
+      height: TRACK_HEIGHTS[type].default,
       muted: false,
       solo: false,
       locked: false,
@@ -377,6 +406,20 @@ export const useOpenCutTimelineStore = create<OpenCutTimelineStore>((set, get) =
   muteTrack: (trackId, muted) => get().updateTrack(trackId, { muted }),
   soloTrack: (trackId, solo) => get().updateTrack(trackId, { solo }),
   lockTrack: (trackId, locked) => get().updateTrack(trackId, { locked }),
+
+  setTrackHeight: (trackId, height) => {
+    const clampedHeight = Math.max(24, Math.min(120, height));
+    get().updateTrack(trackId, { height: clampedHeight });
+  },
+
+  setAllTracksViewMode: (viewMode) => {
+    set((state) => ({
+      tracks: state.tracks.map((track) => ({
+        ...track,
+        height: TRACK_HEIGHTS[track.type][viewMode],
+      })),
+    }));
+  },
 
   // Clip operations
   addClip: (clipData) => {
