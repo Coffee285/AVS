@@ -48,6 +48,17 @@ public class SettingsController : ControllerBase
     }
 
     /// <summary>
+    /// Get all user settings (alias for backwards compatibility)
+    /// Frontend calls /api/settings/user in some places, this ensures compatibility
+    /// </summary>
+    [HttpGet("user")]
+    [ProducesResponseType(typeof(UserSettings), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetUserSettings(CancellationToken ct)
+    {
+        return await GetSettings(ct);
+    }
+
+    /// <summary>
     /// Update user settings
     /// </summary>
     [HttpPut]
