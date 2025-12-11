@@ -21,6 +21,61 @@ public class EffectBuilder
         int width = 1920,
         int height = 1080)
     {
+        // Validate parameters
+        if (duration <= 0 || duration > 300)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(duration),
+                duration,
+                "Duration must be between 0 and 300 seconds");
+        }
+
+        if (fps <= 0 || fps > 120)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(fps),
+                fps,
+                "FPS must be between 1 and 120");
+        }
+
+        if (zoomStart < 0.5 || zoomStart > 3.0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(zoomStart),
+                zoomStart,
+                "Zoom start must be between 0.5 and 3.0");
+        }
+
+        if (zoomEnd < 0.5 || zoomEnd > 3.0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(zoomEnd),
+                zoomEnd,
+                "Zoom end must be between 0.5 and 3.0");
+        }
+
+        if (panX < -1.0 || panX > 1.0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(panX),
+                panX,
+                "Pan X must be between -1.0 and 1.0");
+        }
+
+        if (panY < -1.0 || panY > 1.0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(panY),
+                panY,
+                "Pan Y must be between -1.0 and 1.0");
+        }
+
+        if (width <= 0 || height <= 0)
+        {
+            throw new ArgumentException(
+                "Width and height must be positive values");
+        }
+
         var durationStr = duration.ToString("F3", CultureInfo.InvariantCulture);
         var zoomStartStr = zoomStart.ToString("F3", CultureInfo.InvariantCulture);
         var zoomEndStr = zoomEnd.ToString("F3", CultureInfo.InvariantCulture);
