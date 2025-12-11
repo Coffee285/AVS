@@ -434,8 +434,8 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
                     bool isOllamaProvider = providerTypeName.Contains("Ollama", StringComparison.OrdinalIgnoreCase);
                     // Prefer StageAdapter (same path as script generation), then fall back to direct Ollama if allowed.
                     
-                    // Add 600-second timeout for LLM call (increased from 120s for complex ideation requests)
-                    using var llmTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(600));
+                    // Add 900-second timeout for LLM call (15 minutes - matches OllamaScriptProvider)
+                    using var llmTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(900));
                     using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, llmTimeoutCts.Token);
                     
                     try
@@ -466,7 +466,7 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
                     catch (OperationCanceledException) when (llmTimeoutCts.IsCancellationRequested)
                     {
                         stageAdapterFailed = true;
-                        _logger.LogWarning("LLM call timed out after 600 seconds for ideation, will try direct Ollama fallback");
+                        _logger.LogWarning("LLM call timed out after 900 seconds for ideation, will try direct Ollama fallback");
                         lastException = new TimeoutException("AI provider took too long to respond via StageAdapter. Trying direct Ollama...");
                         break; // Exit retry loop to trigger fallback
                     }
@@ -4476,8 +4476,20 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
 
         try
         {
+            // CRITICAL FIX: Use independent timeout - don't link to parent token for timeout management
+            // This prevents upstream components (frontend, API middleware) from cancelling our long-running operation
+            using var cts = new CancellationTokenSource();
+            cts.CancelAfter(TimeSpan.FromSeconds(900)); // 15 minutes - allows for slow local models
+
+            // Still respect explicit user cancellation by checking the parent token
+            if (ct.IsCancellationRequested)
+            {
+                throw new OperationCanceledException("Ideation was cancelled by user", ct);
+            }
+
+            // Use cts.Token for the Ollama call instead of ct
             var response = await _ollamaDirectClient.GenerateAsync(
-                modelToUse, userPrompt, systemPrompt, options, ct).ConfigureAwait(false);
+                modelToUse, userPrompt, systemPrompt, options, cts.Token).ConfigureAwait(false);
             heartbeatCts.Cancel();
             try { await heartbeatTask.ConfigureAwait(false); } catch { }
 
@@ -4495,7 +4507,14 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
                     new[] { "Retry", "Try smaller model" });
             }
 
-            _logger.LogInformation("Ollama ideation completed: {Length} chars", response.Length);
+            var callDuration = DateTime.UtcNow - startTime;
+            
+            // Log provider utilization verification
+            _logger.LogInformation(
+                "LLM call completed: Provider={Provider}, Duration={Duration}ms, ResponseLength={Length} chars. " +
+                "If Ollama is running, you should see CPU/GPU utilization in system monitor.",
+                "Ollama", callDuration.TotalMilliseconds, response.Length);
+            
             return response;
         }
         catch (Exception ex)

@@ -263,8 +263,10 @@ export interface EnhanceTopicResponse {
 
 const API_BASE = '/api/ideation';
 
-// Extended timeout for LLM operations (15 minutes in milliseconds)
-const LLM_TIMEOUT_MS = 15 * 60 * 1000;
+// Extended timeout for LLM operations (21 minutes in milliseconds)
+// Must exceed backend timeout (20 min) to allow for network overhead
+// Matches wizardService.ts pattern for script generation
+const LLM_TIMEOUT_MS = 21 * 60 * 1000; // 1,260,000ms = 21 minutes
 
 export const ideationService = {
   /**
