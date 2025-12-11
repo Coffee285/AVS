@@ -438,11 +438,13 @@ export const FinalExport: FC<FinalExportProps> = ({
       try {
         // Try to get from portable settings first (for portable mode)
         try {
-          const portableResponse = await fetch(apiUrl('/api/settings/portable'));
+          const portableResponse = await fetch(apiUrl('/api/system/portable-status'));
           if (portableResponse.ok) {
             const portableData = await portableResponse.json();
-            if (portableData.downloadsDirectory) {
-              const resolved = await resolvePathOnBackend(portableData.downloadsDirectory);
+            // If in portable mode, use dataDirectory for downloads
+            if (portableData.isPortableMode && portableData.dataDirectory) {
+              const downloadsPath = `${portableData.dataDirectory}/Downloads`;
+              const resolved = await resolvePathOnBackend(downloadsPath);
               setSaveLocation(resolved);
               setIsLoadingSaveLocation(false);
               return;
