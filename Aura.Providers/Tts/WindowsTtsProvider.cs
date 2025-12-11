@@ -20,13 +20,13 @@ namespace Aura.Providers.Tts;
 public class WindowsTtsProvider : ITtsProvider
 {
     private readonly ILogger<WindowsTtsProvider> _logger;
-    private readonly Audio.WavValidator? _wavValidator;
+    private readonly Aura.Core.Audio.WavValidator? _wavValidator;
 #if WINDOWS10_0_19041_0_OR_GREATER
     private readonly SpeechSynthesizer _synthesizer;
 #endif
     private readonly string _outputDirectory;
 
-    public WindowsTtsProvider(ILogger<WindowsTtsProvider> logger, Audio.WavValidator? wavValidator = null)
+    public WindowsTtsProvider(ILogger<WindowsTtsProvider> logger, Aura.Core.Audio.WavValidator? wavValidator = null)
     {
         _logger = logger;
         _wavValidator = wavValidator;
