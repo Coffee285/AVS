@@ -21,7 +21,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aura.Providers.Video;
 
-public class FfmpegVideoComposer : IVideoComposer
+public partial class FfmpegVideoComposer : IVideoComposer
 {
     // Progress milestone constants for render initialization stages
     private const float ProgressInitializing = 0f;
@@ -1018,6 +1018,9 @@ public class FfmpegVideoComposer : IVideoComposer
 
         // Set output file
         builder.SetOutput(outputPath);
+        
+        // Add buffer flush flags to prevent FFmpeg deadlock at 95%
+        builder.AddBufferFlushFlags();
 
         // Build the command
         var command = builder.Build();
