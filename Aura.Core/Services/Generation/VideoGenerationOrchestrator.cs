@@ -66,7 +66,8 @@ public class VideoGenerationOrchestrator
         SystemProfile systemProfile,
         Func<GenerationNode, CancellationToken, Task<object>> taskExecutor,
         IProgress<OrchestrationProgress>? progress = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Dictionary<string, object>? recoveryResultsCallback = null)
     {
         ArgumentNullException.ThrowIfNull(brief);
         ArgumentNullException.ThrowIfNull(planSpec);
@@ -226,7 +227,7 @@ public class VideoGenerationOrchestrator
                 {
                     _logger.LogError("Critical task failures detected, attempting recovery");
 
-                    if (!await AttemptRecoveryAsync(batchResults, graph, strategy, taskExecutor, ct).ConfigureAwait(false))
+                    if (!await AttemptRecoveryAsync(batchResults, graph, strategy, taskExecutor, ct, recoveryResultsCallback).ConfigureAwait(false))
                     {
                         // Build detailed error message with all failed task info
                         var failedTaskDetails = batchResults
@@ -713,7 +714,8 @@ public class VideoGenerationOrchestrator
         AssetDependencyGraph graph,
         GenerationStrategy strategy,
         Func<GenerationNode, CancellationToken, Task<object>> taskExecutor,
-        CancellationToken ct)
+        CancellationToken ct,
+        Dictionary<string, object>? recoveryResultsCallback = null)
     {
         _logger.LogInformation("Attempting recovery from {Count} failed tasks", failedResults.Count(r => !r.Succeeded));
 
@@ -774,6 +776,15 @@ public class VideoGenerationOrchestrator
                     
                     _taskResults[node.TaskId] = new TaskResult(node.TaskId, true, silentAudioPath, 
                         $"Using silent audio fallback due to TTS failure: {errorDetail}");
+                    
+                    // CRITICAL FIX: Store recovery result in callback dictionary so executor can access it
+                    // This allows composition task to find the narration path even when audio task failed and was recovered
+                    if (recoveryResultsCallback != null)
+                    {
+                        recoveryResultsCallback[node.TaskId] = silentAudioPath;
+                        _logger.LogInformation("[Recovery] Stored audio recovery result in callback for executor access: {Path}", silentAudioPath);
+                    }
+                    
                     anyRecovered = true;
                     continue;
                 }
