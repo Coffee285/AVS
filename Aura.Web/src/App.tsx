@@ -54,6 +54,7 @@ import {
   setHttpInterceptorToastHandler,
   setHttpInterceptorNavigationHandler,
 } from './utils/httpInterceptor';
+import './styles/globalStyles.css';
 
 interface ThemeContextType {
   isDarkMode: boolean;

@@ -1,0 +1,121 @@
+/**
+ * Global Styles for Professional NLE (Non-Linear Editor) Experience
+ *
+ * This file implements text selection prevention and cursor styles to make
+ * OpenCut feel like a professional desktop application (Adobe Premiere Pro,
+ * Final Cut Pro, DaVinci Resolve) rather than a web page.
+ *
+ * Key Features:
+ * - Prevents text selection in UI elements
+ * - Allows text selection in appropriate input fields
+ * - Prevents image dragging that interferes with timeline operations
+ * - Professional cursor styles for interactive elements
+ */
+
+/* ==========================================================================
+   TEXT SELECTION PREVENTION
+   Prevents accidental text selection throughout the UI while maintaining
+   professional NLE application feel. Text selection is re-enabled for
+   appropriate input elements below.
+   ========================================================================== */
+:where(*) {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* ==========================================================================
+   TEXT SELECTION ENABLEMENT
+   Re-enables text selection for appropriate interactive elements where
+   users need to select, copy, or edit text content.
+   ========================================================================== */
+:where(input, textarea, [contenteditable='true']) {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* Enable text selection for specific text content areas */
+:where([role='textbox'], [data-allow-select='true']) {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* ==========================================================================
+   IMAGE DRAG PREVENTION
+   Prevents default browser image dragging behavior that interferes with
+   timeline clip dragging and other NLE-specific drag operations.
+   ========================================================================== */
+:where(img) {
+  -webkit-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
+}
+
+/* Re-enable pointer events for images that need interactions (thumbnails, etc.) */
+:where(img[data-interactive='true']) {
+  pointer-events: auto;
+}
+
+/* ==========================================================================
+   PROFESSIONAL CURSOR STYLES
+   Provides appropriate cursor feedback for different interactive elements
+   matching professional NLE application standards.
+   ========================================================================== */
+
+/* Pointer cursor for all clickable elements */
+:where(button, [role='button'], a, [role='link']) {
+  cursor: pointer;
+}
+
+/* Specific cursor types for NLE operations */
+:where([data-cursor='grab']) {
+  cursor: grab;
+}
+
+:where([data-cursor='grabbing']) {
+  cursor: grabbing;
+}
+
+:where([data-cursor='resize-ew']) {
+  cursor: ew-resize;
+}
+
+:where([data-cursor='resize-ns']) {
+  cursor: ns-resize;
+}
+
+:where([data-cursor='move']) {
+  cursor: move;
+}
+
+:where([data-cursor='not-allowed']) {
+  cursor: not-allowed;
+}
+
+:where([data-cursor='crosshair']) {
+  cursor: crosshair;
+}
+
+/* ==========================================================================
+   FOCUS STYLES
+   Maintains accessibility while preventing text selection. Focus outlines
+   remain visible for keyboard navigation.
+   ========================================================================== */
+:where(*:focus-visible) {
+  outline: 2px solid var(--colorBrandStroke1, #5c9eff);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   CONTEXT MENU BEHAVIOR
+   Prevents default browser context menu styles from appearing, allowing
+   custom context menus to take over.
+   ========================================================================== */
+:where([data-no-context-menu='true']) {
+  /* Handled by JavaScript preventDefault on contextmenu event */
+}

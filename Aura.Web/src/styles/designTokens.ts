@@ -392,6 +392,47 @@ export const openCutTokens = {
     /** Transition easing function */
     transitionEasing: 'ease',
   },
+
+  /**
+   * Context menu design tokens for professional NLE-style menus.
+   * Matches Adobe Premiere Pro and Final Cut Pro context menu styling.
+   */
+  contextMenu: {
+    /** Background with slight transparency for depth */
+    background: 'rgba(32, 32, 32, 0.95)',
+    /** Light theme background */
+    backgroundLight: 'rgba(255, 255, 255, 0.95)',
+    /** Subtle border for definition */
+    border: 'rgba(255, 255, 255, 0.1)',
+    /** Elevated shadow for floating feel */
+    shadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+    /** Hover state with accent color */
+    itemHover: 'rgba(92, 158, 255, 0.15)',
+    /** Active/pressed state */
+    itemActive: 'rgba(92, 158, 255, 0.25)',
+    /** Divider line between menu sections */
+    divider: 'rgba(255, 255, 255, 0.08)',
+    /** Icon color for menu items */
+    iconColor: 'rgba(255, 255, 255, 0.7)',
+    /** Keyboard shortcut hint color */
+    shortcutColor: 'rgba(255, 255, 255, 0.5)',
+    /** Disabled item color */
+    disabledColor: 'rgba(255, 255, 255, 0.3)',
+    /** Minimum menu width */
+    minWidth: '220px',
+    /** Maximum menu width */
+    maxWidth: '320px',
+    /** Border radius for rounded corners */
+    borderRadius: '8px',
+    /** Padding for menu items */
+    itemPadding: '8px 12px',
+    /** Font size for menu text */
+    fontSize: '13px',
+    /** Submenu indicator (chevron) size */
+    submenuIconSize: '16px',
+    /** Transition duration for hover effects */
+    transitionDuration: '150ms',
+  },
 } as const;
 
 /**
