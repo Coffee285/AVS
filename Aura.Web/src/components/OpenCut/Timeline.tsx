@@ -865,7 +865,7 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
       const delta = startYRef.current - e.clientY;
       const newHeight = Math.max(
         LAYOUT_CONSTANTS.timeline.minHeight,
-        Math.min(LAYOUT_CONSTANTS.timeline.maxHeight, startHeightRef.current + delta)
+        startHeightRef.current + delta
       );
       layoutStore.setTimelineHeight(newHeight);
       onResize?.(newHeight);
@@ -1638,7 +1638,6 @@ export const Timeline: FC<TimelineProps> = ({ className, onResize }) => {
       style={{
         height: layoutStore.timelineHeight,
         minHeight: LAYOUT_CONSTANTS.timeline.minHeight,
-        maxHeight: LAYOUT_CONSTANTS.timeline.maxHeight,
         flexShrink: 0,
       }}
       onWheel={handleWheel}
