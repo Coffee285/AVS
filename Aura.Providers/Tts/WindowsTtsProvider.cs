@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Aura.Core.Audio;
 using Aura.Core.Models;
 using Aura.Core.Providers;
 using Aura.Providers.Audio;
@@ -26,13 +27,13 @@ public class WindowsTtsProvider : ITtsProvider
     private const int FallbackSampleRate = 22050; // 22.05kHz
 
     private readonly ILogger<WindowsTtsProvider> _logger;
-    private readonly Aura.Core.Audio.WavValidator? _wavValidator;
+    private readonly WavValidator? _wavValidator;
 #if WINDOWS10_0_19041_0_OR_GREATER
     private readonly SpeechSynthesizer _synthesizer;
 #endif
     private readonly string _outputDirectory;
 
-    public WindowsTtsProvider(ILogger<WindowsTtsProvider> logger, Aura.Core.Audio.WavValidator? wavValidator = null)
+    public WindowsTtsProvider(ILogger<WindowsTtsProvider> logger, WavValidator? wavValidator = null)
     {
         _logger = logger;
         _wavValidator = wavValidator;
