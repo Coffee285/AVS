@@ -53,6 +53,20 @@ public class FFmpegCommandBuilder
     }
 
     /// <summary>
+    /// Add critical flags to prevent buffer deadlock and ensure proper packet flushing
+    /// </summary>
+    public FFmpegCommandBuilder AddBufferFlushFlags()
+    {
+        _outputOptions.Add("-max_muxing_queue_size");
+        _outputOptions.Add("9999");
+        _outputOptions.Add("-fflags");
+        _outputOptions.Add("+genpts+flush_packets");
+        _outputOptions.Add("-flush_packets");
+        _outputOptions.Add("1");
+        return this;
+    }
+
+    /// <summary>
     /// Set video codec
     /// </summary>
     public FFmpegCommandBuilder SetVideoCodec(string codec)
