@@ -41,15 +41,12 @@ public partial class IdeationController : ControllerBase
     /// Generate initial concept variations from a topic
     /// </summary>
     [HttpPost("brainstorm")]
+    [Microsoft.AspNetCore.Http.Timeouts.RequestTimeout(1200000)] // 20 minutes - matches script generation, allows for slow Ollama models
     public async Task<IActionResult> Brainstorm(
         [FromBody] BrainstormRequest request,
         CancellationToken ct)
     {
         var correlationId = HttpContext.TraceIdentifier;
-
-        // Add request-level timeout for ideation to prevent long hangs
-        using var requestTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        requestTimeoutCts.CancelAfter(TimeSpan.FromSeconds(1200)); // 20 minutes - matches script generation backend tolerance
 
         try
         {
@@ -70,7 +67,7 @@ public partial class IdeationController : ControllerBase
             {
                 try
                 {
-                    var stats = await _vectorIndex.GetStatisticsAsync(requestTimeoutCts.Token).ConfigureAwait(false);
+                    var stats = await _vectorIndex.GetStatisticsAsync(ct).ConfigureAwait(false);
                     if (stats.TotalDocuments > 0)
                     {
                         _logger.LogInformation(
@@ -106,7 +103,7 @@ public partial class IdeationController : ControllerBase
             }
 
             // Pre-flight check: Verify AI provider is available before attempting ideation
-            var (isAvailable, errorMessage) = await _ideationService.CheckProviderAvailabilityAsync(requestTimeoutCts.Token).ConfigureAwait(false);
+            var (isAvailable, errorMessage) = await _ideationService.CheckProviderAvailabilityAsync(ct).ConfigureAwait(false);
             if (!isAvailable)
             {
                 return StatusCode(503, new
@@ -129,7 +126,7 @@ public partial class IdeationController : ControllerBase
                 LlmParameters = request.LlmParameters
             };
 
-            var response = await _ideationService.BrainstormConceptsAsync(requestWithRag, requestTimeoutCts.Token).ConfigureAwait(false);
+            var response = await _ideationService.BrainstormConceptsAsync(requestWithRag, ct).ConfigureAwait(false);
 
             return Ok(new
             {
