@@ -344,6 +344,10 @@ You MUST analyze the topic deeply and provide concepts that are genuinely useful
             Exception? lastException = null;
             bool lastAttemptHadGenericContent = false;
             string? providerUsed = null;
+            bool stageAdapterFailed = false;
+            bool attemptedOllamaFallback = false;
+            string? lastSystemPrompt = systemPrompt;
+            string? lastUserPrompt = userPrompt;
 
             // Create LLM parameters with JSON format for ideation (requires structured output)
             // This ensures Ollama and other providers return valid JSON
@@ -365,6 +369,8 @@ You MUST analyze the topic deeply and provide concepts that are genuinely useful
                     // Strengthen prompt on retries if previous attempt had generic content
                     var currentSystemPrompt = systemPrompt;
                     var currentUserPrompt = userPrompt;
+                    lastSystemPrompt = currentSystemPrompt;
+                    lastUserPrompt = currentUserPrompt;
                     if (attempt > 0 && lastAttemptHadGenericContent)
                     {
                         _logger.LogInformation("Strengthening prompt for retry attempt {Attempt} due to generic content detection",
@@ -402,6 +408,10 @@ EXAMPLE OF WHAT TO DO:
 ✅ Pro: 'Visual demonstrations make [specific technique for {topicName}] easy to understand for beginners'
 
 Generate SPECIFIC content NOW. Do not use placeholders.";
+                        
+                        // Update the last prompts after modification
+                        lastSystemPrompt = currentSystemPrompt;
+                        lastUserPrompt = currentUserPrompt;
                     }
 
                     // Verify provider type and log detailed information
@@ -425,7 +435,6 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
 
                     bool isOllamaProvider = providerTypeName.Contains("Ollama", StringComparison.OrdinalIgnoreCase);
                     // Prefer StageAdapter (same path as script generation), then fall back to direct Ollama if allowed.
-                    var stageAdapterFailed = false;
                     
                     // Add 600-second timeout for LLM call (increased from 120s for complex ideation requests)
                     using var llmTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(600));
@@ -458,28 +467,15 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
                     }
                     catch (OperationCanceledException) when (llmTimeoutCts.IsCancellationRequested)
                     {
-                        _logger.LogWarning("LLM call timed out after 600 seconds for ideation");
-                        lastException = new TimeoutException("AI provider took too long to respond. Try a smaller/faster model or simplify your topic.");
-                        continue; // Try next attempt
+                        stageAdapterFailed = true;
+                        _logger.LogWarning("LLM call timed out after 600 seconds for ideation, will try direct Ollama fallback");
+                        lastException = new TimeoutException("AI provider took too long to respond via StageAdapter. Trying direct Ollama...");
+                        break; // Exit retry loop to trigger fallback
                     }
                     catch (Exception stageEx)
                     {
                         stageAdapterFailed = true;
                         _logger.LogWarning(stageEx, "LlmStageAdapter ideation path threw, will try direct Ollama if permitted");
-                    }
-
-                    // Fallback: direct Ollama when StageAdapter failed or returned empty
-                    if (jsonResponse == null && stageAdapterFailed && _ollamaDirectClient != null)
-                    {
-                        _logger.LogInformation("Falling back to direct Ollama path with heartbeat logging for ideation");
-                        jsonResponse = await GenerateIdeationWithOllamaDirectAsync(
-                            currentSystemPrompt,
-                            currentUserPrompt,
-                            ideationParams,
-                            request,
-                            linkedCts.Token).ConfigureAwait(false);
-                        providerUsed = "Ollama";
-                        _logger.LogInformation("Successfully generated ideation response via direct Ollama API call");
                     }
 
                     var callDuration = DateTime.UtcNow - callStartTime;
@@ -686,6 +682,34 @@ Generate SPECIFIC content NOW. Do not use placeholders.";
                 {
                     lastException = ex;
                     _logger.LogWarning(ex, "Ideation attempt {Attempt} failed", attempt + 1);
+                }
+            }
+
+            // Fallback: Try direct Ollama if StageAdapter failed and we haven't attempted it yet
+            if (jsonResponse == null && stageAdapterFailed && _ollamaDirectClient != null && !attemptedOllamaFallback)
+            {
+                _logger.LogInformation("All StageAdapter attempts failed/timed out. Falling back to direct Ollama with heartbeat logging.");
+                attemptedOllamaFallback = true;
+                
+                try
+                {
+                    // Create new timeout for the fallback attempt
+                    using var fallbackTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(600));
+                    using var fallbackLinkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, fallbackTimeoutCts.Token);
+                    
+                    jsonResponse = await GenerateIdeationWithOllamaDirectAsync(
+                        lastSystemPrompt ?? systemPrompt,
+                        lastUserPrompt ?? userPrompt,
+                        ideationParams,
+                        request,
+                        fallbackLinkedCts.Token).ConfigureAwait(false);
+                    providerUsed = "Ollama";
+                    _logger.LogInformation("Successfully generated ideation response via direct Ollama fallback");
+                }
+                catch (Exception fallbackEx)
+                {
+                    _logger.LogError(fallbackEx, "Direct Ollama fallback also failed");
+                    lastException = fallbackEx;
                 }
             }
 
