@@ -75,44 +75,110 @@ public class VoiceStage : PipelineStage
 
         ReportProgress(progress, 20, "Synthesizing narration...");
 
-        // Generate audio with retry logic
-        var narrationPath = await _retryWrapper.ExecuteWithRetryAsync(
-            async (ctRetry) =>
-            {
-                var audioPath = await _ttsProvider.SynthesizeAsync(
-                    scriptLines,
-                    context.VoiceSpec,
-                    ctRetry).ConfigureAwait(false);
-
-                ReportProgress(progress, 70, "Validating audio output...");
-
-                // Validate audio output
-                var minDuration = TimeSpan.FromSeconds(
-                    Math.Max(5, context.PlanSpec.TargetDuration.TotalSeconds * 0.3));
-                var audioValidation = _ttsValidator.ValidateAudioFile(audioPath, minDuration);
-
-                if (!audioValidation.IsValid)
+        string narrationPath;
+        
+        try
+        {
+            // Generate audio with retry logic
+            narrationPath = await _retryWrapper.ExecuteWithRetryAsync(
+                async (ctRetry) =>
                 {
-                    Logger.LogWarning(
-                        "[{CorrelationId}] Audio validation failed: {Issues}",
-                        context.CorrelationId,
-                        string.Join(", ", audioValidation.Issues));
-                    
-                    throw new Validation.ValidationException(
-                        "Audio quality validation failed",
-                        audioValidation.Issues);
-                }
+                    var audioPath = await _ttsProvider.SynthesizeAsync(
+                        scriptLines,
+                        context.VoiceSpec,
+                        ctRetry).ConfigureAwait(false);
 
+                    ReportProgress(progress, 70, "Validating audio output...");
+
+                    // Validate audio output
+                    var minDuration = TimeSpan.FromSeconds(
+                        Math.Max(5, context.PlanSpec.TargetDuration.TotalSeconds * 0.3));
+                    var audioValidation = _ttsValidator.ValidateAudioFile(audioPath, minDuration);
+
+                    if (!audioValidation.IsValid)
+                    {
+                        Logger.LogWarning(
+                            "[{CorrelationId}] Audio validation failed: {Issues}",
+                            context.CorrelationId,
+                            string.Join(", ", audioValidation.Issues));
+                        
+                        throw new Validation.ValidationException(
+                            "Audio quality validation failed",
+                            audioValidation.Issues);
+                    }
+
+                    // Register for cleanup
+                    _cleanupManager.RegisterTempFile(audioPath);
+
+                    return audioPath;
+                },
+                "Audio Generation",
+                ct
+            ).ConfigureAwait(false);
+
+            ReportProgress(progress, 90, "Narration generated successfully");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex,
+                "[{CorrelationId}] TTS synthesis failed after all retries. Falling back to silent audio. " +
+                "Original error: {ErrorMessage}",
+                context.CorrelationId,
+                ex.Message);
+            
+            // Fall back to generating silent audio as a last resort
+            // This ensures the pipeline can complete even when TTS providers fail
+            ReportProgress(progress, 75, "TTS failed, generating silent audio fallback...");
+            
+            try
+            {
+                // Calculate total duration from script lines
+                var totalDuration = scriptLines.Sum(line => line.Duration.TotalSeconds);
+                var duration = TimeSpan.FromSeconds(Math.Max(1, totalDuration));
+                
+                // Generate silent audio file
+                var silentAudioPath = Path.Combine(
+                    Path.GetTempPath(), 
+                    "AuraVideoStudio", 
+                    "TTS", 
+                    $"silent-fallback-{Guid.NewGuid()}.wav");
+                
+                Directory.CreateDirectory(Path.GetDirectoryName(silentAudioPath)!);
+                
+                var silentWavGenerator = new Aura.Core.Audio.SilentWavGenerator(
+                    Logger as ILogger<Aura.Core.Audio.SilentWavGenerator> ?? 
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<Aura.Core.Audio.SilentWavGenerator>.Instance);
+                
+                await silentWavGenerator.GenerateAsync(silentAudioPath, duration, ct: ct).ConfigureAwait(false);
+                
                 // Register for cleanup
-                _cleanupManager.RegisterTempFile(audioPath);
-
-                return audioPath;
-            },
-            "Audio Generation",
-            ct
-        ).ConfigureAwait(false);
-
-        ReportProgress(progress, 90, "Narration generated successfully");
+                _cleanupManager.RegisterTempFile(silentAudioPath);
+                
+                narrationPath = silentAudioPath;
+                
+                Logger.LogWarning(
+                    "[{CorrelationId}] Generated silent audio fallback. " +
+                    "Video will have no narration. Configure a working TTS provider to add voice. " +
+                    "Duration: {Duration}s, Path: {Path}",
+                    context.CorrelationId,
+                    duration.TotalSeconds,
+                    silentAudioPath);
+                
+                ReportProgress(progress, 90, "Silent audio fallback generated (no narration)");
+            }
+            catch (Exception fallbackEx)
+            {
+                Logger.LogCritical(fallbackEx,
+                    "[{CorrelationId}] CRITICAL: Failed to generate silent audio fallback. " +
+                    "This should never happen. Original TTS error: {OriginalError}",
+                    context.CorrelationId,
+                    ex.Message);
+                
+                throw new InvalidOperationException(
+                    $"TTS synthesis failed and silent audio fallback also failed. Original error: {ex.Message}",
+                    fallbackEx);
+            }
+        }
 
         Logger.LogInformation(
             "[{CorrelationId}] Narration generated and validated at: {Path}",
