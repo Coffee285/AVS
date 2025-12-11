@@ -31,6 +31,7 @@ public class TimelineBuilder
             Scenes: scenes,
             SceneAssets: sceneAssets,
             NarrationPath: narrationPath,
+            SceneAudioPaths: null,
             MusicPath: musicPath ?? string.Empty,
             SubtitlesPath: subtitlesPath
         );
@@ -51,6 +52,7 @@ public class TimelineBuilder
             Scenes: timeline.Scenes,
             SceneAssets: updatedAssets,
             NarrationPath: timeline.NarrationPath,
+            SceneAudioPaths: timeline.SceneAudioPaths,
             MusicPath: timeline.MusicPath,
             SubtitlesPath: timeline.SubtitlesPath
         );

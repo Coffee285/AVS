@@ -1182,6 +1182,7 @@ public class VideoOrchestrator
                 Scenes: scenes,
                 SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
                 NarrationPath: enhancedNarrationPath,
+                SceneAudioPaths: null,
                 MusicPath: string.Empty,
                 SubtitlesPath: null
             );
@@ -1404,6 +1405,7 @@ public class VideoOrchestrator
             Scenes: scenes,
             SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
             NarrationPath: narrationPath,
+            SceneAudioPaths: null,
             MusicPath: string.Empty,
             SubtitlesPath: null
         );
@@ -2134,6 +2136,7 @@ public class VideoOrchestrator
                         Scenes: parsedScenes,
                         SceneAssets: sceneAssets,
                         NarrationPath: compositionNarrationPath,
+                        SceneAudioPaths: null,
                         MusicPath: string.Empty,
                         SubtitlesPath: null
                     );

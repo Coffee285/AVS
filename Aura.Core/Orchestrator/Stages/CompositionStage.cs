@@ -65,9 +65,13 @@ public class CompositionStage : PipelineStage
             Scenes: context.ParsedScenes,
             SceneAssets: context.SceneAssets,
             NarrationPath: context.NarrationPath,
+            SceneAudioPaths: context.SceneAudioPaths,
             MusicPath: context.MusicPath ?? string.Empty,
             SubtitlesPath: context.SubtitlesPath
         );
+
+        // Validate audio files before composition
+        ValidateAudioFiles(timeline, context.CorrelationId);
 
         // Validate composition if validator available
         if (_compositionValidator != null)
@@ -193,6 +197,69 @@ public class CompositionStage : PipelineStage
     protected override int GetItemsProcessed(PipelineContext context)
     {
         return string.IsNullOrEmpty(context.FinalVideoPath) ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Validates all audio files referenced in the timeline before composition
+    /// </summary>
+    private void ValidateAudioFiles(TimelineRecord timeline, string correlationId)
+    {
+        // Validate main narration file
+        if (!string.IsNullOrEmpty(timeline.NarrationPath))
+        {
+            ValidateSingleAudioFile(timeline.NarrationPath, "narration", correlationId);
+        }
+
+        // Validate per-scene audio files if available
+        if (timeline.SceneAudioPaths != null && timeline.SceneAudioPaths.Count > 0)
+        {
+            Logger.LogInformation(
+                "[{CorrelationId}] Validating {Count} per-scene audio files",
+                correlationId,
+                timeline.SceneAudioPaths.Count);
+
+            foreach (var (sceneIndex, audioPath) in timeline.SceneAudioPaths)
+            {
+                ValidateSingleAudioFile(audioPath, $"scene_{sceneIndex}", correlationId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates a single audio file for existence, size, and path format
+    /// </summary>
+    private void ValidateSingleAudioFile(string audioPath, string context, string correlationId)
+    {
+        // Validate path is absolute
+        if (!System.IO.Path.IsPathRooted(audioPath))
+        {
+            throw new InvalidOperationException(
+                $"Audio path must be absolute: {audioPath} ({context})");
+        }
+
+        // Validate file exists
+        if (!System.IO.File.Exists(audioPath))
+        {
+            throw new System.IO.FileNotFoundException(
+                $"Audio file not found: {audioPath} ({context})");
+        }
+
+        // Validate file size (must be at least 1KB for valid audio)
+        var fileInfo = new System.IO.FileInfo(audioPath);
+        if (fileInfo.Length < 1024)
+        {
+            throw new InvalidOperationException(
+                $"Audio file is too small: {audioPath} ({context}). " +
+                $"File size: {fileInfo.Length} bytes (expected at least 1024 bytes). " +
+                "This usually indicates TTS synthesis failed or produced invalid audio.");
+        }
+
+        Logger.LogDebug(
+            "[{CorrelationId}] Audio file validated: {Context} - {Path} ({Size} bytes)",
+            correlationId,
+            context,
+            audioPath,
+            fileInfo.Length);
     }
 }
 

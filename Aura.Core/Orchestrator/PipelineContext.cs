@@ -78,6 +78,7 @@ public sealed class PipelineContext : IDisposable
     public string? GeneratedScript { get; set; }
     public List<Scene>? ParsedScenes { get; set; }
     public string? NarrationPath { get; set; }
+    public Dictionary<int, string>? SceneAudioPaths { get; set; }
     public string? MusicPath { get; set; }
     public string? SubtitlesPath { get; set; }
     public Dictionary<int, IReadOnlyList<Asset>> SceneAssets { get; set; } = new();
