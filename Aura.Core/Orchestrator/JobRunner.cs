@@ -574,8 +574,9 @@ public partial class JobRunner
                             continue;
                         }
                         
-                        // For rendering stage, give more time before failing
-                        if (lastStage == "Rendering" && stuckDuration.TotalSeconds > 120)
+                        // For rendering stage at 90%+, give significantly more time for finalization (muxing, flushing)
+                        var renderingThreshold = (lastStage == "Rendering" && lastPercent >= 90) ? 180 : 120;
+                        if (lastStage == "Rendering" && stuckDuration.TotalSeconds > renderingThreshold)
                         {
                             var message = $"Video render timed out after {(int)stuckDuration.TotalSeconds}s at {lastPercent}%";
                             _logger.LogError("[Job {JobId}] {Message}", jobId, message);

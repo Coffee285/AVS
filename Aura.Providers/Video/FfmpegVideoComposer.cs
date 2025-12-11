@@ -592,12 +592,14 @@ public partial class FfmpegVideoComposer : IVideoComposer
         _logger.LogInformation("Render completed successfully (JobId={JobId}): {OutputPath}", jobId, outputFilePath);
         _logger.LogInformation("FFmpeg log written to: {LogPath}", ffmpegLogPath);
 
-        // Report 100% completion
+        // CRITICAL: Report 100% completion BEFORE returning to ensure job reaches completed state
         progress.Report(new RenderProgress(
             100,
             DateTime.Now - startTime,
             TimeSpan.Zero,
             "Render complete"));
+
+        _logger.LogInformation("✅ [JobId={JobId}] Progress reported as 100%, render finalized", jobId);
 
             return outputFilePath;
         }
@@ -756,12 +758,14 @@ public partial class FfmpegVideoComposer : IVideoComposer
             _logger.LogInformation("Render completed successfully (JobId={JobId}): {OutputPath}", jobId, outputFilePath);
             _logger.LogInformation("FFmpeg log written to: {LogPath}", ffmpegLogPath);
 
-            // Report 100% completion
+            // CRITICAL: Report 100% completion BEFORE returning to ensure job reaches completed state
             progress.Report(new RenderProgress(
                 100,
                 DateTime.Now - startTime,
                 TimeSpan.Zero,
                 "Render complete"));
+
+            _logger.LogInformation("✅ [JobId={JobId}] Progress reported as 100%, render finalized", jobId);
 
             return outputFilePath;
         }
