@@ -253,9 +253,9 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: openCutTokens.spacing.xs,
-    padding: `0 ${openCutTokens.spacing.sm}`,
-    borderRight: `1px solid ${tokens.colorNeutralStroke3}`,
-    backgroundColor: tokens.colorNeutralBackground3,
+    padding: 0,
+    borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: tokens.colorNeutralBackground2,
   },
   trackLabelIcon: {
     color: tokens.colorNeutralForeground3,
