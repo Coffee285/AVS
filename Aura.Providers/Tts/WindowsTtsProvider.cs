@@ -18,7 +18,7 @@ using Windows.Storage;
 
 namespace Aura.Providers.Tts;
 
-public class WindowsTtsProvider : ITtsProvider
+public class WindowsTtsProvider : ITtsProvider, IDisposable
 {
     // Audio format validation constants
     private const short PreferredBitsPerSample = 16;
@@ -32,14 +32,12 @@ public class WindowsTtsProvider : ITtsProvider
     private readonly SpeechSynthesizer _synthesizer;
 #endif
     private readonly string _outputDirectory;
+    private bool _disposed = false;
 
     public WindowsTtsProvider(ILogger<WindowsTtsProvider> logger, WavValidator? wavValidator = null)
     {
         _logger = logger;
         _wavValidator = wavValidator;
-#if WINDOWS10_0_19041_0_OR_GREATER
-        _synthesizer = new SpeechSynthesizer();
-#endif
         _outputDirectory = Path.Combine(Path.GetTempPath(), "AuraVideoStudio", "TTS");
         
         // Ensure output directory exists
@@ -47,6 +45,30 @@ public class WindowsTtsProvider : ITtsProvider
         {
             Directory.CreateDirectory(_outputDirectory);
         }
+        
+#if WINDOWS10_0_19041_0_OR_GREATER
+        try
+        {
+            _synthesizer = new SpeechSynthesizer();
+            _logger.LogInformation(
+                "Windows TTS initialized. Default voice: {DefaultVoice}, Available voices: {VoiceCount}",
+                SpeechSynthesizer.DefaultVoice?.DisplayName ?? "Unknown",
+                SpeechSynthesizer.AllVoices?.Count ?? 0);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, 
+                "Failed to initialize Windows Speech Synthesizer. " +
+                "This may indicate missing Windows Speech Platform components. " +
+                "Please ensure Windows Text-to-Speech is installed and configured correctly.");
+            throw new InvalidOperationException(
+                "Windows TTS initialization failed. Please check Windows Speech Platform installation.", ex);
+        }
+#else
+        _logger.LogWarning(
+            "Windows TTS is not available on this platform (requires Windows 10 build 19041 or later). " +
+            "Please use a different TTS provider (Piper, Mimic3, ElevenLabs, or PlayHT).");
+#endif
     }
 
     public async Task<IReadOnlyList<string>> GetAvailableVoicesAsync()
@@ -69,8 +91,17 @@ public class WindowsTtsProvider : ITtsProvider
 
     public async Task<string> SynthesizeAsync(IEnumerable<ScriptLine> lines, VoiceSpec spec, CancellationToken ct)
     {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(WindowsTtsProvider), 
+                "Cannot synthesize audio - provider has been disposed");
+        }
+        
 #if WINDOWS10_0_19041_0_OR_GREATER
-        _logger.LogInformation("Synthesizing speech with Windows TTS using voice {Voice}", spec.VoiceName);
+        _logger.LogInformation(
+            "Synthesizing speech with Windows TTS. Voice: {Voice}, Lines: {LineCount}",
+            spec.VoiceName ?? "default",
+            lines.Count());
         
         // Find the requested voice
         VoiceInformation? selectedVoice = null;
@@ -113,17 +144,46 @@ public class WindowsTtsProvider : ITtsProvider
         
         if (selectedVoice == null)
         {
-            _logger.LogWarning("Voice {Voice} not found, using default voice", spec.VoiceName);
+            _logger.LogWarning(
+                "Voice {Voice} not found, using default voice. Available voices: {AvailableVoices}",
+                spec.VoiceName,
+                string.Join(", ", SpeechSynthesizer.AllVoices.Select(v => v.DisplayName)));
             selectedVoice = SpeechSynthesizer.DefaultVoice;
         }
         
+        if (selectedVoice == null)
+        {
+            _logger.LogError(
+                "CRITICAL: No voices available in Windows TTS. " +
+                "This indicates Windows Speech Platform is not properly installed. " +
+                "Voice count: {VoiceCount}",
+                SpeechSynthesizer.AllVoices?.Count ?? 0);
+            throw new InvalidOperationException(
+                "No Windows TTS voices are available. Please install Windows Speech Platform components. " +
+                "You can install voices from Windows Settings > Time & Language > Speech.");
+        }
+        
         // Update the spec with the actual voice name for SSML generation
-        var actualVoiceName = selectedVoice?.DisplayName ?? "Microsoft David Desktop";
+        var actualVoiceName = selectedVoice.DisplayName;
         var effectiveSpec = spec with { VoiceName = actualVoiceName };
-        _logger.LogDebug("Effective voice for SSML: {VoiceName}", actualVoiceName);
+        _logger.LogInformation(
+            "Using Windows TTS voice: {VoiceName} (Language: {Language}, Gender: {Gender})",
+            actualVoiceName,
+            selectedVoice.Language ?? "Unknown",
+            selectedVoice.Gender);
         
         // Set the voice
-        _synthesizer.Voice = selectedVoice;
+        try
+        {
+            _synthesizer.Voice = selectedVoice;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to set Windows TTS voice to {VoiceName}", actualVoiceName);
+            throw new InvalidOperationException(
+                $"Failed to set Windows TTS voice to '{actualVoiceName}'. " +
+                "This may indicate a problem with the voice installation.", ex);
+        }
         
         // Prepare the output file
         string outputFilePath = Path.Combine(_outputDirectory, $"narration_{DateTime.Now:yyyyMMddHHmmss}.wav");
@@ -567,4 +627,40 @@ public class WindowsTtsProvider : ITtsProvider
             </speak>";
     }
 #endif
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (disposing)
+        {
+#if WINDOWS10_0_19041_0_OR_GREATER
+            try
+            {
+                _synthesizer?.Dispose();
+                _logger.LogDebug("Windows TTS SpeechSynthesizer disposed successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error disposing Windows TTS SpeechSynthesizer");
+            }
+#endif
+        }
+
+        _disposed = true;
+    }
+
+    ~WindowsTtsProvider()
+    {
+        Dispose(false);
+    }
 }
