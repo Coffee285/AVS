@@ -756,6 +756,10 @@ public class JobsController : ControllerBase
     [HttpGet("{jobId}/events")]
     public async Task GetJobEvents(string jobId, [FromQuery] string? lastEventId = null, CancellationToken ct = default)
     {
+        // CRITICAL: Disable response buffering for SSE to work properly
+        var bufferingFeature = HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>();
+        bufferingFeature?.DisableBuffering();
+
         // Use RequestAborted to detect client disconnections properly
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, HttpContext.RequestAborted);
         var cancellationToken = linkedCts.Token;
@@ -771,10 +775,11 @@ public class JobsController : ControllerBase
             correlationId, jobId, isReconnect, reconnectEventId ?? "none");
 
         // Set headers for SSE
-        Response.Headers.Add("Content-Type", "text/event-stream");
-        Response.Headers.Add("Cache-Control", "no-cache");
+        Response.Headers.Add("Content-Type", "text/event-stream; charset=utf-8");
+        Response.Headers.Add("Cache-Control", "no-cache, no-store, must-revalidate");
         Response.Headers.Add("Connection", "keep-alive");
         Response.Headers.Add("X-Accel-Buffering", "no"); // Disable nginx buffering
+        Response.Headers.Add("Transfer-Encoding", "chunked"); // Enable chunked transfer
 
         try
         {
@@ -1543,6 +1548,10 @@ public class JobsController : ControllerBase
     [HttpGet("{jobId}/progress/stream")]
     public async Task GetJobProgressStream(string jobId, CancellationToken ct = default)
     {
+        // CRITICAL: Disable response buffering for SSE to work properly
+        var bufferingFeature = HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>();
+        bufferingFeature?.DisableBuffering();
+
         // Use RequestAborted to detect client disconnections properly
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, HttpContext.RequestAborted);
         var cancellationToken = linkedCts.Token;
@@ -1551,10 +1560,11 @@ public class JobsController : ControllerBase
         Log.Information("[{CorrelationId}] SSE progress stream requested for job {JobId}", correlationId, jobId);
 
         // Set headers for SSE
-        Response.Headers.Append("Content-Type", "text/event-stream");
-        Response.Headers.Append("Cache-Control", "no-cache");
+        Response.Headers.Append("Content-Type", "text/event-stream; charset=utf-8");
+        Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
         Response.Headers.Append("Connection", "keep-alive");
         Response.Headers.Append("X-Accel-Buffering", "no"); // Disable nginx buffering
+        Response.Headers.Append("Transfer-Encoding", "chunked"); // Enable chunked transfer
 
         try
         {

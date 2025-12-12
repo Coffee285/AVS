@@ -198,6 +198,10 @@ export function ResourceMonitor({ compact = false }: ResourceMonitorProps) {
   const pollIntervalRef = useRef<number>(2000); // Start with 2 seconds
   const circuitBreakerOpenUntilRef = useRef<number>(0); // Circuit breaker timestamp
 
+  // Track last critical operation log to prevent spam
+  const lastCriticalOperationLogRef = useRef<number>(0);
+  const CRITICAL_OP_LOG_DEBOUNCE_MS = 60000; // Log at most once per minute
+
   // Detect critical operations by checking for active progress indicators
   // This is a heuristic - we pause polling when UI shows spinners/progress
   const isCriticalOperationActive = (): boolean => {
@@ -205,7 +209,18 @@ export function ResourceMonitor({ compact = false }: ResourceMonitorProps) {
     const hasLoadingSpinner = document.querySelector('[role="progressbar"], [data-loading="true"]');
     // Check for SSE connections (video export)
     const hasActiveExport = sessionStorage.getItem('active-export-job');
-    return Boolean(hasLoadingSpinner || hasActiveExport);
+    const isCritical = Boolean(hasLoadingSpinner || hasActiveExport);
+    
+    // Debounce console logs to reduce spam
+    if (isCritical) {
+      const now = Date.now();
+      if (now - lastCriticalOperationLogRef.current > CRITICAL_OP_LOG_DEBOUNCE_MS) {
+        console.info('[ResourceMonitor] Critical operation detected, pausing metrics polling');
+        lastCriticalOperationLogRef.current = now;
+      }
+    }
+    
+    return isCritical;
   };
 
   // Fetch real system metrics from backend API
@@ -222,8 +237,8 @@ export function ResourceMonitor({ compact = false }: ResourceMonitorProps) {
       }
 
       // CRITICAL OPERATION DETECTION: Pause polling during heavy operations
+      // Console logging is now debounced inside isCriticalOperationActive()
       if (isCriticalOperationActive()) {
-        console.info('[ResourceMonitor] Critical operation detected, pausing metrics polling');
         return;
       }
 

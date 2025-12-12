@@ -231,13 +231,15 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // Configure response compression (Brotli + Gzip)
+// CRITICAL: Exclude text/event-stream to prevent SSE buffering issues
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
     options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
     options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
     options.MimeTypes = Microsoft.AspNetCore.ResponseCompression.ResponseCompressionDefaults.MimeTypes.Concat(
-        new[] { "application/json", "text/json", "text/plain", "text/css", "text/html", "application/javascript", "text/javascript" });
+        new[] { "application/json", "text/json", "text/plain", "text/css", "text/html", "application/javascript", "text/javascript" })
+        .Where(mimeType => mimeType != "text/event-stream"); // Exclude SSE from compression
 });
 
 builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(options =>
