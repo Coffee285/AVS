@@ -12,9 +12,22 @@ export const ZOOM_STORAGE_KEY = 'aura-ui-zoom';
 /**
  * Round to avoid floating point precision issues
  */
-function roundTo(value: number, decimals: number = 1): number {
+export function roundTo(value: number, decimals: number = 1): number {
   const factor = Math.pow(10, decimals);
   return Math.round(value * factor) / factor;
+}
+
+/**
+ * Convert zoom percentage to pixel-based clamp expression
+ * Matches the base clamp values from global.css: clamp(18px, calc(0.45vw + 15px), 22px)
+ */
+export function zoomToClamp(zoom: number): string {
+  const multiplier = zoom / 100;
+  const minPx = roundTo(18 * multiplier);
+  const maxPx = roundTo(22 * multiplier);
+  const vwCoeff = roundTo(0.45 * multiplier, 2);
+  const vwBase = roundTo(15 * multiplier);
+  return `clamp(${minPx}px, calc(${vwCoeff}vw + ${vwBase}px), ${maxPx}px)`;
 }
 
 /**
@@ -24,18 +37,8 @@ function roundTo(value: number, decimals: number = 1): number {
 export function applyZoom(zoom: number): void {
   const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 
-  // Convert zoom percentage to pixel multiplier
-  const multiplier = clamped / 100;
-
-  // Base clamp values from global.css: clamp(18px, calc(0.45vw + 15px), 22px)
-  // Round values to avoid floating point precision issues
-  const minPx = roundTo(18 * multiplier);
-  const maxPx = roundTo(22 * multiplier);
-  const vwCoeff = roundTo(0.45 * multiplier, 2);
-  const vwBase = roundTo(15 * multiplier);
-
   // Generate clamp expression that scales with zoom
-  const clampValue = `clamp(${minPx}px, calc(${vwCoeff}vw + ${vwBase}px), ${maxPx}px)`;
+  const clampValue = zoomToClamp(clamped);
 
   document.documentElement.style.setProperty('--aura-base-font-size', clampValue);
 
@@ -46,6 +49,7 @@ export function applyZoom(zoom: number): void {
   }
 
   if (import.meta.env.DEV) {
+    const multiplier = clamped / 100;
     console.log(
       `[Zoom] Applied ${clamped}% (multiplier: ${multiplier.toFixed(2)}), CSS: ${clampValue}`
     );

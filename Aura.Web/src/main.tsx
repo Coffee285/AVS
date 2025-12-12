@@ -83,14 +83,13 @@ const initializeDefaultZoom = (): void => {
 
   const savedZoom = localStorage.getItem(ZOOM_KEY);
 
-  // Helper to round values to avoid floating point precision issues
-  const roundTo = (value: number, decimals: number = 1): number => {
-    const factor = Math.pow(10, decimals);
-    return Math.round(value * factor) / factor;
-  };
-
-  // Helper to convert zoom percentage to pixel-based clamp expression
+  // Import zoom helper dynamically to avoid circular dependencies
+  // Use inline implementation for early initialization
   const zoomToClamp = (zoom: number): string => {
+    const roundTo = (value: number, decimals: number = 1): number => {
+      const factor = Math.pow(10, decimals);
+      return Math.round(value * factor) / factor;
+    };
     const multiplier = zoom / 100;
     const minPx = roundTo(18 * multiplier);
     const maxPx = roundTo(22 * multiplier);
