@@ -1121,34 +1121,51 @@ public partial class JobRunner
 
         JobProgress?.Invoke(this, eventArgs);
 
-        // CRITICAL FIX: Sync terminal states SYNCHRONOUSLY to avoid race condition
-        // Frontend polls immediately after job completes - sync must complete first
-        if (_exportJobService != null && IsTerminalStatus(updated.Status))
+        // CRITICAL FIX: Sync ALL updates (not just terminal states) to ExportJobService
+        // This ensures SSE /progress/stream endpoint gets real-time updates
+        if (_exportJobService != null)
         {
             var exportStatus = MapJobStatusToExportStatus(updated.Status);
+            var isTerminal = IsTerminalStatus(updated.Status);
             
-            _logger.LogInformation(
-                "[Job {JobId}] Syncing terminal state to ExportJobService: Status={Status}, OutputPath={OutputPath}",
-                updated.Id, exportStatus, updated.OutputPath ?? "NULL");
+            if (isTerminal)
+            {
+                _logger.LogInformation(
+                    "[Job {JobId}] Syncing terminal state to ExportJobService: Status={Status}, OutputPath={OutputPath}",
+                    updated.Id, exportStatus, updated.OutputPath ?? "NULL");
+            }
             
             try
             {
-                // AWAIT the sync for terminal states - this is critical for frontend polling
-                // Using GetAwaiter().GetResult() for synchronous blocking to prevent race condition
-                _exportJobService.UpdateJobStatusAsync(
-                    updated.Id,
-                    exportStatus,
-                    updated.Percent,
-                    updated.OutputPath,
-                    updated.ErrorMessage).GetAwaiter().GetResult();
-                    
-                _logger.LogInformation(
-                    "[Job {JobId}] Successfully synced terminal state to ExportJobService",
-                    updated.Id);
+                if (isTerminal)
+                {
+                    // AWAIT terminal state sync SYNCHRONOUSLY to avoid race condition
+                    // Frontend polls immediately after job completes - sync must complete first
+                    _exportJobService.UpdateJobStatusAsync(
+                        updated.Id,
+                        exportStatus,
+                        updated.Percent,
+                        updated.OutputPath,
+                        updated.ErrorMessage).GetAwaiter().GetResult();
+                        
+                    _logger.LogInformation(
+                        "[Job {JobId}] Successfully synced terminal state to ExportJobService",
+                        updated.Id);
+                }
+                else
+                {
+                    // For non-terminal states, sync progress asynchronously (fire-and-forget)
+                    // This keeps SSE subscribers updated without blocking the job runner
+                    // Errors are logged within UpdateJobProgressAsync itself, so we can safely ignore the task
+                    _ = _exportJobService.UpdateJobProgressAsync(
+                        updated.Id,
+                        updated.Percent,
+                        updated.Stage);
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[Job {JobId}] Failed to sync status to ExportJobService", updated.Id);
+                _logger.LogError(ex, "[Job {JobId}] Failed to sync to ExportJobService", updated.Id);
             }
         }
 

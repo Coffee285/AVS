@@ -228,22 +228,34 @@ public class JobsController : ControllerBase
             {
                 try
                 {
+                    // Map JobStatus to string format expected by ExportJobService
+                    var exportStatus = MapJobStatus(job.Status.ToString());
+                    
                     await _exportJobService.CreateJobAsync(new VideoJob
                     {
                         Id = job.Id,
-                        Status = "running",
+                        Status = exportStatus, // Use mapped status instead of hardcoded "running"
                         Progress = job.Percent,
                         Stage = job.Stage,
                         CreatedAt = job.CreatedUtc,
                         StartedAt = job.StartedUtc
                     }).ConfigureAwait(false);
                     
-                    Log.Information("[{CorrelationId}] Job {JobId} initialized in ExportJobService", correlationId, job.Id);
+                    Log.Information("[{CorrelationId}] Job {JobId} initialized in ExportJobService with status {Status}", 
+                        correlationId, job.Id, exportStatus);
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning(ex, "[{CorrelationId}] Failed to initialize job {JobId} in ExportJobService, SSE may not work", correlationId, job.Id);
+                    // Log as error instead of warning since SSE won't work without this
+                    Log.Error(ex, "[{CorrelationId}] FAILED to initialize job {JobId} in ExportJobService - SSE progress tracking will not work!", 
+                        correlationId, job.Id);
+                    // Don't fail the request, but the SSE endpoint will have issues
                 }
+            }
+            else
+            {
+                Log.Warning("[{CorrelationId}] ExportJobService is null - SSE progress tracking will not be available for job {JobId}", 
+                    correlationId, job.Id);
             }
 
             return Ok(new { jobId = job.Id, status = job.Status, stage = job.Stage, correlationId });
