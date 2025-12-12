@@ -329,10 +329,14 @@ export const Toast: FC<ToastProps> = ({ toast, onDismiss }) => {
         isPaused && styles.progressFillPaused
       );
 
-  // For reduced motion, use transform with JS-controlled value; otherwise use CSS animation
+  // For reduced motion, use transform with JS-controlled value
+  // For normal motion, use animation shorthand to trigger animation
   const progressStyle = prefersReducedMotion
     ? { transform: `scaleX(${isPaused ? 1 : 0})` }
-    : { animationDuration: `${animationDuration}ms` };
+    : {
+        animation: `progressShrink ${animationDuration}ms linear forwards`,
+        animationPlayState: isPaused ? 'paused' : 'running',
+      };
 
   return (
     <div
