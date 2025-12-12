@@ -2632,7 +2632,7 @@ try
     }
     else
     {
-        Log.Error("FFmpeg not found on startup. Application may not function correctly.");
+        Log.Error("FFmpeg not found on startup. Video generation will not work.");
         if (!string.IsNullOrEmpty(resolution.Error))
         {
             Log.Error("  Error: {Error}", resolution.Error);
@@ -2642,25 +2642,18 @@ try
             Log.Error("  Attempted paths: {Paths}", string.Join(", ", resolution.AttemptedPaths.Take(5)));
         }
 
-        if (app.Environment.IsProduction())
-        {
-            Log.Warning("═══════════════════════════════════════════════════════════════");
-            Log.Warning("⚠ WARNING: FFmpeg not found");
-            Log.Warning("═══════════════════════════════════════════════════════════════");
-            Log.Warning("FFmpeg is required for video generation but was not detected.");
-            Log.Warning("Video rendering will NOT work until FFmpeg is installed.");
-            Log.Warning("");
-            Log.Warning("To fix this issue:");
-            Log.Warning("  1. Install FFmpeg from https://ffmpeg.org/download.html");
-            Log.Warning("  2. Add FFmpeg to your system PATH");
-            Log.Warning("  3. Or configure FFmpeg:ExecutablePath in appsettings.json");
-            Log.Warning("═══════════════════════════════════════════════════════════════");
-        }
-        else
-        {
-            Log.Information("FFmpeg not found - this is normal for development");
-            Log.Information("Video generation will use fallback or manual installation");
-        }
+        Log.Error("═══════════════════════════════════════════════════════════════");
+        Log.Error("⚠ CRITICAL: FFmpeg not found");
+        Log.Error("═══════════════════════════════════════════════════════════════");
+        Log.Error("FFmpeg is required for video generation but was not detected.");
+        Log.Error("Video rendering will NOT work until FFmpeg is installed and configured.");
+        Log.Error("");
+        Log.Error("To fix this issue:");
+        Log.Error("  1. Install FFmpeg from https://ffmpeg.org/download.html");
+        Log.Error("  2. Add FFmpeg to your system PATH, or");
+        Log.Error("  3. Configure FFmpeg:ExecutablePath in appsettings.json with the full path");
+        Log.Error("  4. Restart the application after installation");
+        Log.Error("═══════════════════════════════════════════════════════════════");
     }
 }
 catch (Exception ex)
