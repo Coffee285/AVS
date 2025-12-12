@@ -2899,7 +2899,12 @@ app.UseApiAuthentication();
 // Add correlation ID middleware early in the request processing pipeline
 app.UseCorrelationId();
 
-// Add response compression (before most other middleware)
+// CRITICAL: SSE bypass middleware MUST come BEFORE response compression
+// This ensures SSE endpoints (/api/jobs/*/events, /api/jobs/*/progress/stream) 
+// are not buffered by response compression middleware, fixing the "stuck at 95%" issue
+app.UseMiddleware<Aura.Api.Middleware.SseBypassMiddleware>();
+
+// Add response compression (after SSE bypass)
 app.UseResponseCompression();
 
 // Add response caching headers middleware
