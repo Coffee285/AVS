@@ -810,11 +810,19 @@ public class JobsController : ControllerBase
             var pingIntervalSeconds = 5; // 5-second heartbeat as per requirements
             var pollIntervalMs = 500; // Poll every 500ms for responsiveness
             var eventIdCounter = 0;
-            // Stall warning threshold in seconds. Can be made configurable via IConfiguration if needed.
-            var stallWarningThresholdSeconds = 120; // 2 minutes for warning
-            var stallFailureThresholdSeconds = 180; // 3 minutes for automatic failure
+            // CRITICAL FIX: Progressive stall detection thresholds synchronized with frontend
+            // Thresholds increase based on progress to prevent false positives during FFmpeg finalization
             var stallWarningEmitted = false;
             var stallFailureEmitted = false;
+            
+            // Helper function to get stall threshold based on progress percentage
+            int GetStallThresholdSeconds(int percent)
+            {
+                if (percent < 50) return 180; // 3 minutes for early stages (0-50%)
+                if (percent < 70) return 240; // 4 minutes for mid stages (50-70%)
+                if (percent < 90) return 300; // 5 minutes for encoding (70-90%)
+                return 600; // 10 minutes for finalization (90-100%) - muxing and flushing can be slow
+            }
 
             while (!cancellationToken.IsCancellationRequested && job.Status != JobStatus.Done && job.Status != JobStatus.Failed && job.Status != JobStatus.Canceled)
             {
@@ -834,7 +842,8 @@ public class JobsController : ControllerBase
                     lastPingTime = DateTime.UtcNow;
                 }
 
-                // Stall detection: warn if no progress change for 2+ minutes
+                // CRITICAL FIX: Progressive stall detection based on job progress percentage
+                // Reset timers when progress changes
                 if (job.Percent != lastPercent)
                 {
                     lastProgressChangeTime = DateTime.UtcNow;
@@ -844,32 +853,36 @@ public class JobsController : ControllerBase
                 else
                 {
                     var timeSinceLastProgress = (DateTime.UtcNow - lastProgressChangeTime).TotalSeconds;
+                    var stallThresholdSeconds = GetStallThresholdSeconds(job.Percent);
+                    // Warn at 2/3 of threshold, fail at threshold
+                    var warningThresholdSeconds = stallThresholdSeconds * 2 / 3;
 
-                    // Warning at 2 minutes
-                    if (timeSinceLastProgress >= stallWarningThresholdSeconds && !stallWarningEmitted)
+                    // Progressive warning based on job progress
+                    if (timeSinceLastProgress >= warningThresholdSeconds && !stallWarningEmitted)
                     {
                         Log.Warning(
-                            "[{CorrelationId}] Job {JobId} appears stalled at {Percent}% (stage: {Stage}) - no progress for {Seconds:F0}s",
-                            correlationId, jobId, job.Percent, job.Stage, timeSinceLastProgress);
+                            "[{CorrelationId}] Job {JobId} appears stalled at {Percent}% (stage: {Stage}) - no progress for {Seconds:F0}s (threshold: {Threshold}s)",
+                            correlationId, jobId, job.Percent, job.Stage, timeSinceLastProgress, stallThresholdSeconds);
 
                         await SendSseEventWithId("warning", new
                         {
-                            message = $"Job progress appears stalled at {job.Percent}% ({job.Stage}). If this persists, consider cancelling and retrying.",
+                            message = $"Job progress appears stalled at {job.Percent}% ({job.Stage}). This is normal for finalization stages. Please wait.",
                             step = job.Stage,
                             percent = job.Percent,
                             stallDurationSeconds = (int)timeSinceLastProgress,
+                            thresholdSeconds = stallThresholdSeconds,
                             correlationId
                         }, GenerateEventId(++eventIdCounter), cancellationToken).ConfigureAwait(false);
 
                         stallWarningEmitted = true;
                     }
 
-                    // Failure at 3 minutes - emit job-failed event so frontend can react
-                    if (timeSinceLastProgress >= stallFailureThresholdSeconds && !stallFailureEmitted)
+                    // Progressive failure threshold based on job progress
+                    if (timeSinceLastProgress >= stallThresholdSeconds && !stallFailureEmitted)
                     {
                         Log.Error(
-                            "[{CorrelationId}] Job {JobId} stalled for {Seconds:F0}s at {Percent}% ({Stage}), emitting failure event",
-                            correlationId, jobId, timeSinceLastProgress, job.Percent, job.Stage);
+                            "[{CorrelationId}] Job {JobId} stalled for {Seconds:F0}s at {Percent}% ({Stage}), emitting failure event (threshold: {Threshold}s)",
+                            correlationId, jobId, timeSinceLastProgress, job.Percent, job.Stage, stallThresholdSeconds);
 
                         var stallError = new JobStepError
                         {
@@ -885,8 +898,9 @@ public class JobsController : ControllerBase
                             stage = job.Stage,
                             percent = job.Percent,
                             errors = new[] { stallError },
-                            errorMessage = $"Job stalled at {job.Stage} stage with no progress for over {stallFailureThresholdSeconds / 60.0:F0} minutes",
+                            errorMessage = $"Job stalled at {job.Stage} stage with no progress for over {stallThresholdSeconds / 60.0:F0} minutes",
                             stallDurationSeconds = (int)timeSinceLastProgress,
+                            thresholdSeconds = stallThresholdSeconds,
                             correlationId
                         }, GenerateEventId(++eventIdCounter), cancellationToken).ConfigureAwait(false);
 
@@ -1647,10 +1661,18 @@ public class JobsController : ControllerBase
                 var pollIntervalMs = 500; // Poll every 500ms for responsiveness
                 var heartbeatCounter = 0;
                 var lastProgressChangeTime = DateTime.UtcNow;
-                var stallWarningThresholdSeconds = 120; // Warn after 2 minutes without progress
-                var stallFailureThresholdSeconds = 180; // Fail after 3 minutes without progress
                 var stallWarningEmitted = false;
                 var stallFailureEmitted = false;
+                
+                // CRITICAL FIX: Progressive stall detection thresholds synchronized with frontend
+                // Helper function to get stall threshold based on progress percentage
+                int GetProgressStallThresholdSeconds(int percent)
+                {
+                    if (percent < 50) return 180; // 3 minutes for early stages (0-50%)
+                    if (percent < 70) return 240; // 4 minutes for mid stages (50-70%)
+                    if (percent < 90) return 300; // 5 minutes for encoding (70-90%)
+                    return 600; // 10 minutes for finalization (90-100%) - muxing and flushing can be slow
+                }
 
                 while (!cancellationToken.IsCancellationRequested)
                 {
@@ -1660,7 +1682,7 @@ public class JobsController : ControllerBase
                     job = _jobRunner.GetJob(jobId);
                     if (job == null) break;
 
-                    // Detect stalled jobs and emit warning/failure events so the client can react
+                    // CRITICAL FIX: Progressive stall detection based on job progress percentage
                     if (job.Percent != lastPercent)
                     {
                         lastProgressChangeTime = DateTime.UtcNow;
@@ -1670,19 +1692,23 @@ public class JobsController : ControllerBase
                     else
                     {
                         var timeSinceLastProgress = (DateTime.UtcNow - lastProgressChangeTime).TotalSeconds;
+                        var stallThresholdSeconds = GetProgressStallThresholdSeconds(job.Percent);
+                        // Warn at 2/3 of threshold, fail at threshold
+                        var warningThresholdSeconds = stallThresholdSeconds * 2 / 3;
 
-                        if (timeSinceLastProgress >= stallWarningThresholdSeconds && !stallWarningEmitted)
+                        if (timeSinceLastProgress >= warningThresholdSeconds && !stallWarningEmitted)
                         {
                             Log.Warning(
-                                "[{CorrelationId}] Job {JobId} appears stalled at {Percent}% (stage: {Stage}) - no progress for {Seconds:F0}s",
-                                correlationId, jobId, job.Percent, job.Stage, timeSinceLastProgress);
+                                "[{CorrelationId}] Job {JobId} appears stalled at {Percent}% (stage: {Stage}) - no progress for {Seconds:F0}s (threshold: {Threshold}s)",
+                                correlationId, jobId, job.Percent, job.Stage, timeSinceLastProgress, stallThresholdSeconds);
 
                             var warningData = JsonSerializer.Serialize(new
                             {
-                                message = $"Job progress appears stalled at {job.Percent}% ({job.Stage}). If this persists, consider cancelling and retrying.",
+                                message = $"Job progress appears stalled at {job.Percent}% ({job.Stage}). This is normal for finalization stages. Please wait.",
                                 step = job.Stage,
                                 percent = job.Percent,
                                 stallDurationSeconds = (int)timeSinceLastProgress,
+                                thresholdSeconds = stallThresholdSeconds,
                                 correlationId
                             });
 
@@ -1692,14 +1718,14 @@ public class JobsController : ControllerBase
                             stallWarningEmitted = true;
                         }
 
-                        if (timeSinceLastProgress >= stallFailureThresholdSeconds && !stallFailureEmitted)
+                        if (timeSinceLastProgress >= stallThresholdSeconds && !stallFailureEmitted)
                         {
                             Log.Error(
-                                "[{CorrelationId}] Job {JobId} stalled for {Seconds:F0}s at {Percent}% ({Stage}), emitting failure event and marking as failed",
-                                correlationId, jobId, timeSinceLastProgress, job.Percent, job.Stage);
+                                "[{CorrelationId}] Job {JobId} stalled for {Seconds:F0}s at {Percent}% ({Stage}), emitting failure event (threshold: {Threshold}s)",
+                                correlationId, jobId, timeSinceLastProgress, job.Percent, job.Stage, stallThresholdSeconds);
 
                             var failureMessage =
-                                $"Job stalled at {job.Stage} stage with no progress for over {stallFailureThresholdSeconds / 60.0:F0} minutes";
+                                $"Job stalled at {job.Stage} stage with no progress for over {stallThresholdSeconds / 60.0:F0} minutes";
 
                             // Force the job into a failed terminal state so polling endpoints also report failure
                             _jobRunner.FailJobAsStalled(
@@ -1717,6 +1743,7 @@ public class JobsController : ControllerBase
                                 percent = job.Percent,
                                 errorMessage = failureMessage,
                                 stallDurationSeconds = (int)timeSinceLastProgress,
+                                thresholdSeconds = stallThresholdSeconds,
                                 correlationId
                             });
 

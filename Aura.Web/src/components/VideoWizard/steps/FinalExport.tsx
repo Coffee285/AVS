@@ -276,19 +276,19 @@ function normalizeJobData(jobData?: JobStatusData | null): JobStatusData | undef
   return {
     // Normalize status (lowercase or capitalized)
     status: (jobData.status ?? jobData.Status ?? '').toLowerCase(),
-    
+
     // Normalize progress (percent, Percent, or progress)
     percent: jobData.progress ?? jobData.percent ?? jobData.Percent ?? 0,
-    
+
     // Normalize stage
     stage: jobData.stage ?? jobData.Stage,
-    
+
     // Normalize outputPath
     outputPath: jobData.outputPath ?? jobData.OutputPath,
-    
+
     // Normalize error message
     errorMessage: jobData.errorMessage ?? jobData.ErrorMessage ?? jobData.error,
-    
+
     // Pass through other fields as-is
     progressMessage: jobData.progressMessage,
     message: jobData.message,
@@ -428,9 +428,9 @@ function checkJobCompletion(jobData: JobStatusData): boolean {
 }
 
 // SSE connection timing constants
-// ARCHITECTURAL FIX: Removed JOB_REGISTRATION_DELAY_MS (race condition fix)
-// Instead, SSE endpoint will send initial state immediately even if job isn't running yet
-const SSE_CONNECTION_TIMEOUT_MS = 60000; // Timeout for SSE connection establishment (60 seconds)
+// CRITICAL FIX: Reduced connection timeout from 60s to 5s for faster fallback to polling
+// SSE acknowledgment must be received within 5 seconds or connection is considered failed
+const SSE_CONNECTION_TIMEOUT_MS = 5000; // Timeout for SSE connection establishment (5 seconds)
 const JOB_TIMEOUT_MS = 10 * 60 * 1000; // Overall job timeout (10 minutes)
 
 /**
@@ -743,7 +743,8 @@ export const FinalExport: FC<FinalExportProps> = ({
           let jobData: JobStatusData | null = null;
 
           const ssePromise = new Promise<JobStatusData>((resolve, reject) => {
-            const sseUrl = apiUrl(`/api/jobs/${jobId}/progress/stream`);
+            // CRITICAL FIX: Use /events endpoint for consistency with backend SSE implementation
+            const sseUrl = apiUrl(`/api/jobs/${jobId}/events`);
             console.info('[FinalExport] Connecting to SSE:', sseUrl);
 
             const eventSource = new EventSource(sseUrl);
@@ -756,11 +757,11 @@ export const FinalExport: FC<FinalExportProps> = ({
             // Track whether we've received any progress updates (connection established)
             let connectionEstablished = false;
 
-            // Connection establishment timeout - separate from job timeout
+            // Connection establishment timeout - verify SSE acknowledgment within 5 seconds
             const connectionTimeoutId = setTimeout(() => {
               if (!connectionEstablished && eventSource.readyState !== EventSource.CLOSED) {
                 console.warn(
-                  `[FinalExport] SSE connection not established after ${SSE_CONNECTION_TIMEOUT_MS}ms, falling back to polling`
+                  `[FinalExport] SSE acknowledgment not received within ${SSE_CONNECTION_TIMEOUT_MS / 1000}s, falling back to polling`
                 );
                 eventSource.close();
                 eventSourceRef.current = null;
