@@ -231,7 +231,7 @@ public class JobsController : ControllerBase
                     // Map JobStatus to string format expected by ExportJobService
                     var exportStatus = MapJobStatus(job.Status.ToString());
                     
-                    await _exportJobService.CreateJobAsync(new VideoJob
+                    var videoJob = new VideoJob
                     {
                         Id = job.Id,
                         Status = exportStatus, // Use mapped status instead of hardcoded "running"
@@ -239,22 +239,34 @@ public class JobsController : ControllerBase
                         Stage = job.Stage,
                         CreatedAt = job.CreatedUtc,
                         StartedAt = job.StartedUtc
-                    }).ConfigureAwait(false);
+                    };
                     
-                    Log.Information("[{CorrelationId}] Job {JobId} initialized in ExportJobService with status {Status}", 
-                        correlationId, job.Id, exportStatus);
+                    await _exportJobService.CreateJobAsync(videoJob).ConfigureAwait(false);
+                    
+                    // Verify job was actually created by reading it back
+                    var verifyJob = await _exportJobService.GetJobAsync(job.Id).ConfigureAwait(false);
+                    if (verifyJob != null)
+                    {
+                        Log.Information("[{CorrelationId}] Job {JobId} successfully initialized in ExportJobService with status {Status} - SSE streaming enabled", 
+                            correlationId, job.Id, exportStatus);
+                    }
+                    else
+                    {
+                        Log.Error("[{CorrelationId}] Job {JobId} created in ExportJobService but verification failed - SSE may not work!", 
+                            correlationId, job.Id);
+                    }
                 }
                 catch (Exception ex)
                 {
                     // Log as error instead of warning since SSE won't work without this
-                    Log.Error(ex, "[{CorrelationId}] FAILED to initialize job {JobId} in ExportJobService - SSE progress tracking will not work!", 
-                        correlationId, job.Id);
+                    Log.Error(ex, "[{CorrelationId}] FAILED to initialize job {JobId} in ExportJobService - SSE progress tracking will not work! Exception: {ExceptionType}, Message: {Message}", 
+                        correlationId, job.Id, ex.GetType().Name, ex.Message);
                     // Don't fail the request, but the SSE endpoint will have issues
                 }
             }
             else
             {
-                Log.Warning("[{CorrelationId}] ExportJobService is null - SSE progress tracking will not be available for job {JobId}", 
+                Log.Warning("[{CorrelationId}] ExportJobService is null - SSE progress tracking will not be available for job {JobId}. Check DI registration.", 
                     correlationId, job.Id);
             }
 
@@ -797,18 +809,42 @@ public class JobsController : ControllerBase
             var job = _jobRunner.GetJob(jobId);
             if (job == null)
             {
-                await SendSseEventWithId("error", new { message = "Job not found", jobId, correlationId }, GenerateEventId(), cancellationToken).ConfigureAwait(false);
-                return;
+                // Check if job exists in ExportJobService as fallback
+                VideoJob? exportJob = null;
+                if (_exportJobService != null)
+                {
+                    exportJob = await _exportJobService.GetJobAsync(jobId).ConfigureAwait(false);
+                }
+                
+                if (exportJob == null)
+                {
+                    Log.Warning("[{CorrelationId}] SSE: Job {JobId} not found in JobRunner or ExportJobService", correlationId, jobId);
+                    await SendSseEventWithId("error", new { message = "Job not found", jobId, correlationId }, GenerateEventId(), cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+                else
+                {
+                    Log.Information("[{CorrelationId}] SSE: Job {JobId} found in ExportJobService but not JobRunner", correlationId, jobId);
+                }
             }
 
-            // Send initial job status with artifacts
-            await SendSseEventWithId("job-status", new {
-                status = job.Status.ToString(),
-                stage = job.Stage,
-                percent = job.Percent,
-                correlationId,
-                isReconnect
-            }, GenerateEventId(), cancellationToken).ConfigureAwait(false);
+            // Send initial job status with artifacts - wrap in try-catch to prevent 500 errors
+            try
+            {
+                await SendSseEventWithId("job-status", new {
+                    status = job?.Status.ToString() ?? "Unknown",
+                    stage = job?.Stage ?? "Unknown",
+                    percent = job?.Percent ?? 0,
+                    correlationId,
+                    isReconnect
+                }, GenerateEventId(), cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception statusEx)
+            {
+                Log.Error(statusEx, "[{CorrelationId}] SSE: Failed to send initial job status for {JobId}", correlationId, jobId);
+                await SendSseEventWithId("error", new { message = "Failed to send initial status", error = statusEx.Message, jobId, correlationId }, GenerateEventId(), cancellationToken).ConfigureAwait(false);
+                return;
+            }
 
             // Track last sent values and last ping time
             var lastStatus = job.Status;
@@ -835,12 +871,16 @@ public class JobsController : ControllerBase
                 return 600; // 10 minutes for finalization (90-100%) - muxing and flushing can be slow
             }
 
-            while (!cancellationToken.IsCancellationRequested && job.Status != JobStatus.Done && job.Status != JobStatus.Failed && job.Status != JobStatus.Canceled)
+            while (!cancellationToken.IsCancellationRequested && job != null && job.Status != JobStatus.Done && job.Status != JobStatus.Failed && job.Status != JobStatus.Canceled)
             {
                 await Task.Delay(pollIntervalMs, cancellationToken).ConfigureAwait(false);
 
                 job = _jobRunner.GetJob(jobId);
-                if (job == null) break;
+                if (job == null)
+                {
+                    Log.Warning("[{CorrelationId}] SSE: Job {JobId} disappeared during streaming", correlationId, jobId);
+                    break;
+                }
 
                 // Send keep-alive heartbeat every 5 seconds with structured data
                 if ((DateTime.UtcNow - lastPingTime).TotalSeconds >= pingIntervalSeconds)
@@ -1090,8 +1130,16 @@ public class JobsController : ControllerBase
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "[{CorrelationId}] Error streaming events for job {JobId}", correlationId, jobId);
-            await SendSseEvent("error", new { message = ex.Message, correlationId }).ConfigureAwait(false);
+            Log.Error(ex, "[{CorrelationId}] CRITICAL: SSE stream error for job {JobId}. Exception type: {ExceptionType}, Message: {Message}, StackTrace: {StackTrace}", 
+                correlationId, jobId, ex.GetType().Name, ex.Message, ex.StackTrace);
+            try
+            {
+                await SendSseEvent("error", new { message = ex.Message, exceptionType = ex.GetType().Name, correlationId }).ConfigureAwait(false);
+            }
+            catch (Exception sendEx)
+            {
+                Log.Error(sendEx, "[{CorrelationId}] Failed to send SSE error message to client for job {JobId}", correlationId, jobId);
+            }
         }
     }
 

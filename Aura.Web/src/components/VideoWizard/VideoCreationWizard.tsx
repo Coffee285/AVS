@@ -33,6 +33,7 @@ import type { FC } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWizardPersistence } from '../../hooks/useWizardPersistence';
 import { listProviders } from '../../services/api/scriptApi';
+import { useGlobalLlmStore } from '../../state/globalLlmStore';
 import { WizardProgress } from '../WizardProgress';
 import { AdvancedModePanel } from './AdvancedModePanel';
 import { CelebrationEffect } from './CelebrationEffect';
@@ -206,7 +207,10 @@ export const VideoCreationWizard: FC = () => {
   const autoSaveTimerRef = useRef<number | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
-  const [selectedLlmProvider, setSelectedLlmProvider] = useState<string | undefined>(undefined);
+
+  // Use global LLM store for provider selection
+  const { selection: globalLlmSelection, setSelection: setGlobalLlmSelection } =
+    useGlobalLlmStore();
   const [availableLlmProviders, setAvailableLlmProviders] = useState<
     Array<{ name: string; isAvailable: boolean; tier: string }>
   >([]);
@@ -473,7 +477,7 @@ export const VideoCreationWizard: FC = () => {
     return `${minutes} minutes ago`;
   }, [lastSaved]);
 
-  // Load available LLM providers on mount
+  // Load available LLM providers on mount and sync with global store
   useEffect(() => {
     const loadProviders = async () => {
       try {
@@ -502,22 +506,54 @@ export const VideoCreationWizard: FC = () => {
           }))
         );
 
-        // Prefer Ollama if available (check normalized name), otherwise use first available
+        // If global store has a selection, validate it's still available
+        if (globalLlmSelection?.provider) {
+          const providerStillAvailable = llmProviders.find((p) => {
+            const normalized = normalizeProviderName(p.name);
+            return (
+              p.isAvailable && normalized === normalizeProviderName(globalLlmSelection.provider)
+            );
+          });
+
+          if (providerStillAvailable) {
+            console.info(
+              '[VideoCreationWizard] Using global LLM selection:',
+              globalLlmSelection.provider
+            );
+            // Global selection is valid, no need to change it
+            return;
+          } else {
+            console.warn(
+              '[VideoCreationWizard] Global LLM selection is no longer available:',
+              globalLlmSelection.provider
+            );
+          }
+        }
+
+        // No valid global selection - use auto-selection logic
+        // Prefer Ollama if available, otherwise use first available
         const ollamaProvider = llmProviders.find((p) => {
           const normalized = normalizeProviderName(p.name);
           return p.isAvailable && normalized === 'Ollama';
         });
         if (ollamaProvider) {
-          console.info('[VideoCreationWizard] Ollama is available, selecting it as default');
-          setSelectedLlmProvider(ollamaProvider.name);
+          console.info('[VideoCreationWizard] Auto-selecting Ollama as default');
+          // Update global store with auto-selection
+          setGlobalLlmSelection({
+            provider: normalizeProviderName(ollamaProvider.name),
+            modelId: globalLlmSelection?.modelId || '', // Preserve model if exists
+          });
         } else {
           const firstAvailable = llmProviders.find((p) => p.isAvailable);
           if (firstAvailable) {
             console.info(
-              '[VideoCreationWizard] Selecting first available provider:',
+              '[VideoCreationWizard] Auto-selecting first available provider:',
               firstAvailable.name
             );
-            setSelectedLlmProvider(firstAvailable.name);
+            setGlobalLlmSelection({
+              provider: normalizeProviderName(firstAvailable.name),
+              modelId: '', // Model will be set by GlobalLlmSelector
+            });
           }
         }
       } catch (error) {
@@ -526,7 +562,7 @@ export const VideoCreationWizard: FC = () => {
     };
 
     void loadProviders();
-  }, []);
+  }, [globalLlmSelection, setGlobalLlmSelection]);
 
   const renderStepContent = () => {
     // Default data for graceful degradation when a step fails
@@ -643,8 +679,14 @@ export const VideoCreationWizard: FC = () => {
               briefData={wizardData.brief}
               styleData={wizardData.style}
               advancedMode={advancedMode}
-              selectedProvider={selectedLlmProvider}
-              onProviderChange={setSelectedLlmProvider}
+              selectedProvider={globalLlmSelection?.provider}
+              onProviderChange={(provider) => {
+                // Update global store when provider changes in ScriptReview
+                setGlobalLlmSelection({
+                  provider: provider || '',
+                  modelId: globalLlmSelection?.modelId || '',
+                });
+              }}
               advancedSettings={{
                 llmParameters: wizardData.advanced.llmParameters,
                 ragConfiguration: wizardData.advanced.ragConfiguration,
@@ -733,7 +775,7 @@ export const VideoCreationWizard: FC = () => {
           )}
         </div>
         <div className={styles.headerRight}>
-          {/* LLM Provider Selector - Always visible */}
+          {/* LLM Provider Selector - Always visible, synced with global store */}
           {availableLlmProviders.length > 0 && (
             <Tooltip content="Select which LLM to use for script generation" relationship="label">
               <div
@@ -743,14 +785,35 @@ export const VideoCreationWizard: FC = () => {
                   LLM:
                 </Text>
                 <Dropdown
-                  value={selectedLlmProvider || 'Auto'}
+                  value={globalLlmSelection?.provider || 'Auto'}
                   onOptionSelect={(_, data) => {
                     if (data.optionValue) {
-                      setSelectedLlmProvider(data.optionValue);
                       console.info(
                         '[VideoCreationWizard] LLM provider changed to:',
                         data.optionValue
                       );
+                      // Update global store when user changes provider
+                      if (data.optionValue === 'Auto') {
+                        // Auto-select first available provider
+                        const firstAvailable = availableLlmProviders.find((p) => p.isAvailable);
+                        if (firstAvailable) {
+                          const normalizeProviderName = (name: string) => {
+                            const parenIndex = name.indexOf('(');
+                            return parenIndex > 0
+                              ? name.substring(0, parenIndex).trim()
+                              : name.trim();
+                          };
+                          setGlobalLlmSelection({
+                            provider: normalizeProviderName(firstAvailable.name),
+                            modelId: globalLlmSelection?.modelId || '',
+                          });
+                        }
+                      } else {
+                        setGlobalLlmSelection({
+                          provider: data.optionValue,
+                          modelId: globalLlmSelection?.modelId || '',
+                        });
+                      }
                     }
                   }}
                   style={{ minWidth: '150px' }}
@@ -770,15 +833,15 @@ export const VideoCreationWizard: FC = () => {
                     </Option>
                   ))}
                 </Dropdown>
-                {selectedLlmProvider &&
-                  selectedLlmProvider !== 'Auto' &&
+                {globalLlmSelection?.provider &&
+                  globalLlmSelection.provider !== 'Auto' &&
                   (() => {
                     // Normalize provider name for comparison (handle "Ollama (model)" format)
                     const normalizeProviderName = (name: string) => {
                       const parenIndex = name.indexOf('(');
                       return parenIndex > 0 ? name.substring(0, parenIndex).trim() : name.trim();
                     };
-                    const selectedNormalized = normalizeProviderName(selectedLlmProvider);
+                    const selectedNormalized = normalizeProviderName(globalLlmSelection.provider);
                     const provider = availableLlmProviders.find(
                       (p) => normalizeProviderName(p.name) === selectedNormalized
                     );
@@ -818,7 +881,10 @@ export const VideoCreationWizard: FC = () => {
               label="Advanced Mode"
             />
           </div>
-          <CostEstimator wizardData={wizardData} selectedLlmProvider={selectedLlmProvider} />
+          <CostEstimator
+            wizardData={wizardData}
+            selectedLlmProvider={globalLlmSelection?.provider}
+          />
           <Tooltip content="Save progress and exit" relationship="label">
             <Button
               appearance="subtle"
@@ -834,7 +900,7 @@ export const VideoCreationWizard: FC = () => {
       {/* Advanced Mode Panel - appears when Advanced Mode is enabled */}
       {advancedMode && (
         <AdvancedModePanel
-          selectedProvider={selectedLlmProvider}
+          selectedProvider={globalLlmSelection?.provider}
           llmParameters={wizardData.advanced.llmParameters ?? {}}
           ragConfiguration={
             wizardData.advanced.ragConfiguration ?? {
