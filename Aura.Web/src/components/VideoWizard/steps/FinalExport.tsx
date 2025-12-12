@@ -430,7 +430,7 @@ function checkJobCompletion(jobData: JobStatusData): boolean {
 // SSE connection timing constants
 // ARCHITECTURAL FIX: Removed JOB_REGISTRATION_DELAY_MS (race condition fix)
 // Instead, SSE endpoint will send initial state immediately even if job isn't running yet
-const SSE_CONNECTION_TIMEOUT_MS = 30000; // Timeout for SSE connection establishment
+const SSE_CONNECTION_TIMEOUT_MS = 60000; // Timeout for SSE connection establishment (60 seconds)
 const JOB_TIMEOUT_MS = 10 * 60 * 1000; // Overall job timeout (10 minutes)
 
 /**
@@ -1003,13 +1003,13 @@ export const FinalExport: FC<FinalExportProps> = ({
             const STUCK_CHECK_INTERVAL = 5; // Check every 5 polls
 
             // Stage-aware stuck detection thresholds (in milliseconds)
-            // CRITICAL FIX: Increased finalization threshold to 300s (5 minutes)
-            // Video finalization at 95%+ can legitimately take 2-3 minutes for muxing and flushing
+            // Progressive thresholds based on progress percentage to prevent false positives
+            // during FFmpeg finalization which can take significant time at high percentages
             const getStuckThreshold = (progress: number): number => {
-              if (progress < 50) return 120 * 1000; // 2 minutes for early stages
-              if (progress < 70) return 90 * 1000; // 90 seconds for mid stages
-              if (progress < 90) return 120 * 1000; // 2 minutes for 70-90% (encoding)
-              return 300 * 1000; // 5 minutes for finalization (90%+) - muxing can be slow
+              if (progress < 50) return 180 * 1000; // 3 minutes for early stages (0-50%)
+              if (progress < 70) return 240 * 1000; // 4 minutes for mid stages (50-70%)
+              if (progress < 90) return 300 * 1000; // 5 minutes for encoding (70-90%)
+              return 600 * 1000; // 10 minutes for finalization (90-100%) - muxing and flushing can be slow
             };
 
             while (!jobCompleted && pollAttempts < maxPollAttempts) {
