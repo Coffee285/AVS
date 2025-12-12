@@ -828,13 +828,21 @@ public class JobsController : ControllerBase
                 }
             }
 
+            // Ensure job is not null before proceeding
+            if (job == null)
+            {
+                Log.Error("[{CorrelationId}] SSE: Job {JobId} is null after fallback check", correlationId, jobId);
+                await SendSseEventWithId("error", new { message = "Job not available for streaming", jobId, correlationId }, GenerateEventId(), cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             // Send initial job status with artifacts - wrap in try-catch to prevent 500 errors
             try
             {
                 await SendSseEventWithId("job-status", new {
-                    status = job?.Status.ToString() ?? "Unknown",
-                    stage = job?.Stage ?? "Unknown",
-                    percent = job?.Percent ?? 0,
+                    status = job.Status.ToString(),
+                    stage = job.Stage,
+                    percent = job.Percent,
                     correlationId,
                     isReconnect
                 }, GenerateEventId(), cancellationToken).ConfigureAwait(false);
@@ -871,10 +879,11 @@ public class JobsController : ControllerBase
                 return 600; // 10 minutes for finalization (90-100%) - muxing and flushing can be slow
             }
 
-            while (!cancellationToken.IsCancellationRequested && job != null && job.Status != JobStatus.Done && job.Status != JobStatus.Failed && job.Status != JobStatus.Canceled)
+            while (!cancellationToken.IsCancellationRequested && job.Status != JobStatus.Done && job.Status != JobStatus.Failed && job.Status != JobStatus.Canceled)
             {
                 await Task.Delay(pollIntervalMs, cancellationToken).ConfigureAwait(false);
 
+                // Refresh job state and check for null immediately
                 job = _jobRunner.GetJob(jobId);
                 if (job == null)
                 {

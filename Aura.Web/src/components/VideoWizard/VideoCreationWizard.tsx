@@ -35,6 +35,12 @@ import { useWizardPersistence } from '../../hooks/useWizardPersistence';
 import { listProviders } from '../../services/api/scriptApi';
 import { useGlobalLlmStore } from '../../state/globalLlmStore';
 import { WizardProgress } from '../WizardProgress';
+
+// Utility function to normalize provider names (handles "Ollama (model)" format)
+const normalizeProviderName = (name: string): string => {
+  const parenIndex = name.indexOf('(');
+  return parenIndex > 0 ? name.substring(0, parenIndex).trim() : name.trim();
+};
 import { AdvancedModePanel } from './AdvancedModePanel';
 import { CelebrationEffect } from './CelebrationEffect';
 import { CostEstimator } from './CostEstimator';
@@ -482,11 +488,6 @@ export const VideoCreationWizard: FC = () => {
     const loadProviders = async () => {
       try {
         const response = await listProviders();
-        // Normalize provider names to handle "Ollama (model)" format
-        const normalizeProviderName = (name: string) => {
-          const parenIndex = name.indexOf('(');
-          return parenIndex > 0 ? name.substring(0, parenIndex).trim() : name.trim();
-        };
 
         const llmProviders = response.providers.filter((p) => {
           const normalized = normalizeProviderName(p.name);
@@ -836,11 +837,6 @@ export const VideoCreationWizard: FC = () => {
                 {globalLlmSelection?.provider &&
                   globalLlmSelection.provider !== 'Auto' &&
                   (() => {
-                    // Normalize provider name for comparison (handle "Ollama (model)" format)
-                    const normalizeProviderName = (name: string) => {
-                      const parenIndex = name.indexOf('(');
-                      return parenIndex > 0 ? name.substring(0, parenIndex).trim() : name.trim();
-                    };
                     const selectedNormalized = normalizeProviderName(globalLlmSelection.provider);
                     const provider = availableLlmProviders.find(
                       (p) => normalizeProviderName(p.name) === selectedNormalized
