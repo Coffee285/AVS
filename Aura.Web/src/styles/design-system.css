@@ -1,0 +1,411 @@
+/**
+ * Aura Video Studio - Unified Design System
+ * 
+ * This file establishes a consistent design language across the entire application.
+ * It provides a single source of truth for spacing, typography, colors, shadows,
+ * and other design tokens.
+ * 
+ * Design Principles:
+ * - Base 4px unit for all spacing (8px preferred increment)
+ * - Clear typography hierarchy (7 levels)
+ * - Semantic color names mapped to Fluent UI tokens
+ * - 5-level elevation system for depth
+ * - Smooth, purposeful animations
+ * 
+ * Import Order:
+ * 1. Fluent UI tokens
+ * 2. This file (design-system.css)
+ * 3. Component-specific styles
+ */
+
+:root {
+  /* ===================================================================
+     SPACING SYSTEM - 4px Base Grid
+     Use these tokens for all margins, padding, and gaps.
+     Prefer 8px increments (sm, md, lg, xl) for most layouts.
+     =================================================================== */
+  
+  --space-xs: 0.25rem;   /* 4px  - Tight spacing within components */
+  --space-sm: 0.5rem;    /* 8px  - Between related elements */
+  --space-md: 1rem;      /* 16px - Standard component gap */
+  --space-lg: 1.5rem;    /* 24px - Section spacing */
+  --space-xl: 2rem;      /* 32px - Major section breaks */
+  --space-2xl: 3rem;     /* 48px - Page-level spacing */
+  --space-3xl: 4rem;     /* 64px - Maximum spacing */
+  
+  /* Semantic spacing aliases for common use cases */
+  --space-inline: var(--space-sm);        /* Inline elements (chips, tags) */
+  --space-stack: var(--space-md);         /* Vertical stack gaps */
+  --space-section: var(--space-xl);       /* Between page sections */
+  --space-page: var(--space-2xl);         /* Page margins */
+  
+  /* ===================================================================
+     TYPOGRAPHY SYSTEM
+     Clear hierarchy with semantic names. All sizes are rem-based for
+     accessibility and proper scaling with user preferences.
+     =================================================================== */
+  
+  /* Font Families */
+  --font-primary: -apple-system, BlinkMacSystemFont, "Segoe UI Variable",
+                  "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "Consolas", 
+               "Courier New", monospace;
+  
+  /* Font Sizes - Mobile First, Scale Up */
+  --text-display: 2.25rem;    /* 36px - Hero headings */
+  --text-title1: 1.75rem;     /* 28px - Page titles */
+  --text-title2: 1.5rem;      /* 24px - Section headers */
+  --text-title3: 1.25rem;     /* 20px - Subsection headers */
+  --text-body: 0.875rem;      /* 14px - Standard body text */
+  --text-caption: 0.75rem;    /* 12px - Labels, captions */
+  --text-small: 0.6875rem;    /* 11px - Fine print */
+  
+  /* Font Weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  
+  /* Line Heights */
+  --line-height-tight: 1.2;     /* Headlines, tight text */
+  --line-height-normal: 1.5;    /* Body text, comfortable reading */
+  --line-height-relaxed: 1.75;  /* Large text blocks, accessibility */
+  
+  /* Letter Spacing (Tracking) */
+  --letter-spacing-tight: -0.02em;   /* Large headings */
+  --letter-spacing-normal: 0;        /* Body text */
+  --letter-spacing-wide: 0.02em;     /* All-caps labels */
+  
+  /* ===================================================================
+     COLOR SYSTEM
+     Semantic names mapped to Fluent UI tokens for theme support.
+     Use semantic names in components for automatic dark mode.
+     =================================================================== */
+  
+  /* Backgrounds */
+  --bg-app: var(--colorNeutralBackground1);           /* App canvas */
+  --bg-surface: var(--colorNeutralBackground2);       /* Cards, panels */
+  --bg-elevated: var(--colorNeutralBackground3);      /* Elevated surfaces */
+  --bg-overlay: var(--colorNeutralBackgroundInverted); /* Overlays, modals */
+  
+  /* Borders */
+  --border-default: var(--colorNeutralStroke1);       /* Standard borders */
+  --border-subtle: var(--colorNeutralStroke2);        /* Subtle dividers */
+  --border-strong: var(--colorNeutralStroke3);        /* Emphasis borders */
+  
+  /* Text Colors */
+  --text-primary: var(--colorNeutralForeground1);     /* Primary text */
+  --text-secondary: var(--colorNeutralForeground2);   /* Secondary text */
+  --text-tertiary: var(--colorNeutralForeground3);    /* Tertiary text */
+  --text-disabled: var(--colorNeutralForegroundDisabled); /* Disabled text */
+  --text-on-brand: var(--colorNeutralForegroundOnBrand); /* On brand color */
+  
+  /* Brand Colors */
+  --brand-primary: var(--colorBrandBackground);       /* Primary brand color */
+  --brand-hover: var(--colorBrandBackgroundHover);    /* Brand hover state */
+  --brand-pressed: var(--colorBrandBackgroundPressed); /* Brand pressed state */
+  --brand-foreground: var(--colorBrandForeground1);   /* Text on brand */
+  
+  /* Status Colors - Consistent with Fluent UI */
+  --status-success: #22c55e;     /* Green - Success states */
+  --status-success-bg: #dcfce7;  /* Light green background */
+  --status-warning: #f59e0b;     /* Amber - Warning states */
+  --status-warning-bg: #fef3c7;  /* Light amber background */
+  --status-error: #ef4444;       /* Red - Error states */
+  --status-error-bg: #fee2e2;    /* Light red background */
+  --status-info: #0ea5e9;        /* Blue - Info states */
+  --status-info-bg: #e0f2fe;     /* Light blue background */
+  
+  /* ===================================================================
+     ELEVATION SYSTEM - 5 Levels
+     Creates depth and hierarchy through layered shadows.
+     Inspired by Material Design and Apple HIG.
+     =================================================================== */
+  
+  /* Level 0: Flat (no shadow) */
+  --shadow-0: none;
+  
+  /* Level 1: Subtle elevation - Cards on surface */
+  --shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  
+  /* Level 2: Standard elevation - Hover states, dropdowns */
+  --shadow-2: 0 2px 4px 0 rgb(0 0 0 / 0.08),
+              0 1px 2px 0 rgb(0 0 0 / 0.04);
+  
+  /* Level 3: Pronounced elevation - Modals, tooltips */
+  --shadow-3: 0 4px 12px 0 rgb(0 0 0 / 0.12),
+              0 2px 4px 0 rgb(0 0 0 / 0.06);
+  
+  /* Level 4: Strong elevation - Context menus, dialogs */
+  --shadow-4: 0 8px 24px 0 rgb(0 0 0 / 0.16),
+              0 4px 8px 0 rgb(0 0 0 / 0.08);
+  
+  /* Level 5: Maximum elevation - Full-screen overlays */
+  --shadow-5: 0 16px 48px 0 rgb(0 0 0 / 0.20),
+              0 8px 16px 0 rgb(0 0 0 / 0.10);
+  
+  /* Special shadows */
+  --shadow-glow: 0 0 20px rgb(14 165 233 / 0.4);        /* Brand glow */
+  --shadow-glow-sm: 0 0 10px rgb(14 165 233 / 0.3);     /* Subtle glow */
+  --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05); /* Inset shadow */
+  
+  /* ===================================================================
+     BORDER RADIUS SYSTEM
+     Rounded corners for visual softness and modern aesthetic.
+     =================================================================== */
+  
+  --radius-sm: 4px;      /* Small components (tags, badges) */
+  --radius-md: 8px;      /* Standard (buttons, inputs, cards) */
+  --radius-lg: 12px;     /* Large panels, modals */
+  --radius-xl: 16px;     /* Hero sections */
+  --radius-2xl: 20px;    /* Extra large surfaces */
+  --radius-full: 9999px; /* Pills, circular avatars */
+  
+  /* ===================================================================
+     ANIMATION SYSTEM
+     Smooth, purposeful animations that enhance UX without distraction.
+     Based on Apple and Material Design motion principles.
+     =================================================================== */
+  
+  /* Easing Functions */
+  --ease-standard: cubic-bezier(0.4, 0.0, 0.2, 1);      /* Standard easing */
+  --ease-in: cubic-bezier(0.4, 0.0, 1, 1);              /* Entering elements */
+  --ease-out: cubic-bezier(0.0, 0.0, 0.2, 1);           /* Exiting elements */
+  --ease-in-out: cubic-bezier(0.4, 0.0, 0.2, 1);        /* In and out */
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Emphasis bounce */
+  --ease-smooth: cubic-bezier(0.65, 0, 0.35, 1);        /* Smooth motion */
+  
+  /* Duration Tokens */
+  --duration-instant: 100ms;    /* Immediate feedback (hover, focus) */
+  --duration-fast: 150ms;       /* Quick transitions (tooltips) */
+  --duration-normal: 250ms;     /* Standard animations (modals, panels) */
+  --duration-slow: 350ms;       /* Deliberate animations (page transitions) */
+  --duration-slowest: 500ms;    /* Very slow (large movements) */
+  
+  /* ===================================================================
+     Z-INDEX SYSTEM
+     Layering order for overlapping elements. Use these instead of
+     arbitrary z-index values to maintain predictable stacking.
+     =================================================================== */
+  
+  --z-base: 0;           /* Base layer (normal document flow) */
+  --z-sticky: 100;       /* Sticky headers */
+  --z-dropdown: 1000;    /* Dropdowns, popovers */
+  --z-modal: 2000;       /* Modals, dialogs */
+  --z-overlay: 3000;     /* Full-screen overlays */
+  --z-toast: 4000;       /* Toast notifications */
+  --z-tooltip: 5000;     /* Tooltips (always on top) */
+  
+  /* ===================================================================
+     LAYOUT CONSTANTS
+     Common layout dimensions for consistent page structure.
+     =================================================================== */
+  
+  /* Container widths */
+  --container-sm: 640px;    /* Small content */
+  --container-md: 768px;    /* Medium content */
+  --container-lg: 1024px;   /* Large content */
+  --container-xl: 1280px;   /* Extra large content */
+  --container-2xl: 1536px;  /* Maximum content width */
+  
+  /* Sidebar widths */
+  --sidebar-width: 240px;         /* Standard sidebar */
+  --sidebar-width-collapsed: 60px; /* Collapsed sidebar */
+  
+  /* Panel widths (OpenCut editor) */
+  --panel-min-width: 200px;       /* Minimum panel width */
+  --panel-default-width: 280px;   /* Default panel width */
+  --panel-max-width: 400px;       /* Maximum panel width */
+  
+  /* Header/toolbar heights */
+  --header-height: 48px;          /* Standard header (Apple HIG 44pt+) */
+  --toolbar-height: 40px;         /* Secondary toolbar */
+  --footer-height: 32px;          /* Footer bar */
+  
+  /* ===================================================================
+     INTERACTION STATES
+     Common state styles for consistent feedback.
+     =================================================================== */
+  
+  /* Focus ring (accessibility) */
+  --focus-ring: 0 0 0 2px var(--brand-primary);
+  --focus-ring-offset: 2px;
+  
+  /* Disabled state */
+  --opacity-disabled: 0.5;
+  
+  /* Hover state */
+  --opacity-hover: 0.9;
+  
+  /* ===================================================================
+     RESPONSIVE BREAKPOINTS
+     Match Tailwind defaults for consistency.
+     =================================================================== */
+  
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+}
+
+/* ===================================================================
+   DARK MODE OVERRIDES
+   Adjust tokens for dark theme. Most colors are already handled by
+   Fluent UI, but we override status colors for better dark mode visibility.
+   =================================================================== */
+
+.dark {
+  /* Status colors - adjusted for dark backgrounds */
+  --status-success: #34c759;     /* Brighter green for dark mode */
+  --status-success-bg: #1a3d2e;  /* Darker green background */
+  --status-warning: #ff9f0a;     /* Brighter amber for dark mode */
+  --status-warning-bg: #3d2f1a;  /* Darker amber background */
+  --status-error: #ff453a;       /* Brighter red for dark mode */
+  --status-error-bg: #3d1a1a;    /* Darker red background */
+  --status-info: #0a84ff;        /* Brighter blue for dark mode */
+  --status-info-bg: #1a2d3d;     /* Darker blue background */
+  
+  /* Adjust shadows for dark mode (more subtle) */
+  --shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-2: 0 2px 4px 0 rgb(0 0 0 / 0.4),
+              0 1px 2px 0 rgb(0 0 0 / 0.2);
+  --shadow-3: 0 4px 12px 0 rgb(0 0 0 / 0.5),
+              0 2px 4px 0 rgb(0 0 0 / 0.3);
+  --shadow-4: 0 8px 24px 0 rgb(0 0 0 / 0.6),
+              0 4px 8px 0 rgb(0 0 0 / 0.4);
+  --shadow-5: 0 16px 48px 0 rgb(0 0 0 / 0.7),
+              0 8px 16px 0 rgb(0 0 0 / 0.5);
+}
+
+/* ===================================================================
+   UTILITY CLASSES
+   Common patterns as reusable classes.
+   =================================================================== */
+
+/* Elevation helpers */
+.elevation-1 { box-shadow: var(--shadow-1); }
+.elevation-2 { box-shadow: var(--shadow-2); }
+.elevation-3 { box-shadow: var(--shadow-3); }
+.elevation-4 { box-shadow: var(--shadow-4); }
+.elevation-5 { box-shadow: var(--shadow-5); }
+
+/* Typography helpers */
+.text-display { 
+  font-size: var(--text-display);
+  line-height: var(--line-height-tight);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.text-title1 { 
+  font-size: var(--text-title1);
+  line-height: var(--line-height-tight);
+  font-weight: var(--font-weight-semibold);
+}
+
+.text-title2 { 
+  font-size: var(--text-title2);
+  line-height: var(--line-height-tight);
+  font-weight: var(--font-weight-semibold);
+}
+
+.text-title3 { 
+  font-size: var(--text-title3);
+  line-height: var(--line-height-normal);
+  font-weight: var(--font-weight-semibold);
+}
+
+.text-body { 
+  font-size: var(--text-body);
+  line-height: var(--line-height-normal);
+}
+
+.text-caption { 
+  font-size: var(--text-caption);
+  line-height: var(--line-height-normal);
+  color: var(--text-secondary);
+}
+
+.text-small { 
+  font-size: var(--text-small);
+  line-height: var(--line-height-normal);
+  color: var(--text-tertiary);
+}
+
+/* Spacing helpers (prefer CSS classes over inline styles) */
+.space-stack > * + * { margin-top: var(--space-stack); }
+.space-inline > * + * { margin-left: var(--space-inline); }
+
+/* Surface styles */
+.surface-elevated {
+  background-color: var(--bg-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+}
+
+.surface-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+}
+
+/* Focus visible (for keyboard navigation) */
+.focus-visible:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Smooth transitions (apply to interactive elements) */
+.transition-standard {
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+
+.transition-colors {
+  transition: background-color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+}
+
+.transition-transform {
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+
+/* Truncate text with ellipsis */
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Line clamp (multi-line truncate) */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+/* ===================================================================
+   REDUCED MOTION
+   Respect user's motion preferences (accessibility).
+   =================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

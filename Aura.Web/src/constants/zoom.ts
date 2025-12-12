@@ -20,6 +20,9 @@ export function applyZoom(zoom: number): void {
   } catch {
     // Ignore storage errors
   }
+  
+  // Notify listeners of zoom change
+  window.dispatchEvent(new Event('zoom-changed'));
 }
 
 /**

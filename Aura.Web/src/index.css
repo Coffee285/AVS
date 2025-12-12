@@ -7,6 +7,12 @@
 @import url('./styles/graphics-variables.css');
 @import url('./styles/mica-support.css');
 
+/* Unified Design System - Single source of truth for design tokens */
+@import url('./styles/design-system.css');
+
+/* OpenCut Premium Panel Chrome - Professional NLE styling */
+@import url('./styles/opencut-premium.css');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
