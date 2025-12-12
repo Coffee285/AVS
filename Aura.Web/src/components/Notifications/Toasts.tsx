@@ -5,6 +5,7 @@ import {
   ToastFooter,
   Toaster,
   makeStyles,
+  mergeClasses,
   shorthands,
   tokens,
   useToastController,
@@ -436,15 +437,23 @@ function ToastWithProgress({
     setIsPaused(false);
   };
 
-  // Determine progress fill class names
+  // Determine progress fill class names - use mergeClasses for Griffel compatibility
   const progressFillClassName = prefersReducedMotion
     ? styles.progressFill
-    : `${styles.progressFill} ${styles.progressFillAnimated} ${isPaused ? styles.progressFillPaused : ''}`;
+    : mergeClasses(
+        styles.progressFill,
+        styles.progressFillAnimated,
+        isPaused && styles.progressFillPaused
+      );
 
   // For reduced motion, use transform with JS-controlled value
+  // For normal motion, use animation shorthand to trigger animation
   const progressStyle = prefersReducedMotion
     ? { transform: `scaleX(${isPaused ? 1 : 0})` }
-    : { animationDuration: `${animationDuration}ms` };
+    : {
+        animation: `progressShrink ${animationDuration}ms linear forwards`,
+        animationPlayState: isPaused ? 'paused' : 'running',
+      };
 
   return (
     // This div is for hover detection to pause toast auto-dismiss, not for interactive content
