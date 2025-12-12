@@ -184,16 +184,18 @@ const useStyles = makeStyles({
     },
   },
 
+  // Keyframes for progress bar animation - defined at root level for Griffel
+  '@keyframes progressShrink': {
+    '0%': {
+      transform: 'scaleX(1)',
+    },
+    '100%': {
+      transform: 'scaleX(0)',
+    },
+  },
+
   // Applied when animation is active (not in reduced motion mode)
   progressFillAnimated: {
-    '@keyframes progressShrink': {
-      from: {
-        transform: 'scaleX(1)',
-      },
-      to: {
-        transform: 'scaleX(0)',
-      },
-    },
     animationName: 'progressShrink',
     animationTimingFunction: 'linear',
     animationFillMode: 'forwards',
