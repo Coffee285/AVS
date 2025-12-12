@@ -775,11 +775,22 @@ public class JobsController : ControllerBase
             correlationId, jobId, isReconnect, reconnectEventId ?? "none");
 
         // Set headers for SSE
-        Response.Headers.Add("Content-Type", "text/event-stream; charset=utf-8");
-        Response.Headers.Add("Cache-Control", "no-cache, no-store, must-revalidate");
-        Response.Headers.Add("Connection", "keep-alive");
-        Response.Headers.Add("X-Accel-Buffering", "no"); // Disable nginx buffering
-        Response.Headers.Add("Transfer-Encoding", "chunked"); // Enable chunked transfer
+        // Use ContentType property instead of Headers["Content-Type"] to satisfy analyzer
+        Response.ContentType = "text/event-stream; charset=utf-8";
+        
+        // For headers that might be set by middleware, only set if not already present
+        if (!Response.Headers.ContainsKey("Cache-Control"))
+            Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+        if (!Response.Headers.ContainsKey("Connection"))
+            Response.Headers.Connection = "keep-alive";
+        
+        Response.Headers["X-Accel-Buffering"] = "no"; // Disable nginx buffering
+        
+        // ASP0015: Using Headers["Transfer-Encoding"] is acceptable for SSE endpoints
+        // TransferEncoding property doesn't support setting "chunked" directly
+#pragma warning disable ASP0015
+        Response.Headers["Transfer-Encoding"] = "chunked"; // Enable chunked transfer
+#pragma warning restore ASP0015
 
         try
         {
@@ -1574,11 +1585,22 @@ public class JobsController : ControllerBase
         Log.Information("[{CorrelationId}] SSE progress stream requested for job {JobId}", correlationId, jobId);
 
         // Set headers for SSE
-        Response.Headers.Append("Content-Type", "text/event-stream; charset=utf-8");
-        Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
-        Response.Headers.Append("Connection", "keep-alive");
-        Response.Headers.Append("X-Accel-Buffering", "no"); // Disable nginx buffering
-        Response.Headers.Append("Transfer-Encoding", "chunked"); // Enable chunked transfer
+        // Use ContentType property instead of Headers["Content-Type"] to satisfy analyzer
+        Response.ContentType = "text/event-stream; charset=utf-8";
+        
+        // For headers that might be set by middleware, only set if not already present
+        if (!Response.Headers.ContainsKey("Cache-Control"))
+            Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+        if (!Response.Headers.ContainsKey("Connection"))
+            Response.Headers.Connection = "keep-alive";
+        
+        Response.Headers["X-Accel-Buffering"] = "no"; // Disable nginx buffering
+        
+        // ASP0015: Using Headers["Transfer-Encoding"] is acceptable for SSE endpoints
+        // TransferEncoding property doesn't support setting "chunked" directly
+#pragma warning disable ASP0015
+        Response.Headers["Transfer-Encoding"] = "chunked"; // Enable chunked transfer
+#pragma warning restore ASP0015
 
         try
         {

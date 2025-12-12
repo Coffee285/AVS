@@ -209,6 +209,11 @@ public partial class FfmpegVideoComposer : IVideoComposer
                 ct).ConfigureAwait(false);
         }
 
+        // CRITICAL: Log warning when using fallback - this indicates DI misconfiguration
+        _logger.LogWarning("[{JobId}] ManagedProcessRunner not available, using fallback process management. " +
+            "This may cause progress reporting issues. Verify ProcessRegistry and ManagedProcessRunner are registered in DI.",
+            jobId);
+
         // Fallback to manual process management (original implementation)
         var stderrBuilder = new StringBuilder();
         var stdoutBuilder = new StringBuilder();
@@ -421,9 +426,39 @@ public partial class FfmpegVideoComposer : IVideoComposer
         };
 
         // Start the process
-        process.Start();
+        try
+        {
+            process.Start();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[{JobId}] Failed to start FFmpeg process at {Path}", jobId, ffmpegPath);
+            throw new FfmpegException(
+                "Failed to start FFmpeg process. Ensure FFmpeg is installed and accessible.",
+                FfmpegErrorCategory.ProcessFailed,
+                exitCode: null,
+                stderr: null,
+                jobId: jobId,
+                correlationId: correlationId,
+                suggestedActions: new[]
+                {
+                    "Verify FFmpeg is installed and in PATH",
+                    "Check file permissions",
+                    "Try specifying FFmpeg path in settings"
+                },
+                innerException: ex);
+        }
+
         process.BeginErrorReadLine();
         process.BeginOutputReadLine();
+
+        // Report immediate progress after process starts successfully
+        _logger.LogInformation("[{JobId}] FFmpeg process started successfully (PID: {Pid})", jobId, process.Id);
+        progress.Report(new RenderProgress(
+            ProgressStartingEncode,
+            TimeSpan.Zero,
+            totalDuration,
+            "FFmpeg process started, encoding in progress..."));
 
         // Register with process registry for tracking
         if (_processRegistry != null)

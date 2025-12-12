@@ -1515,12 +1515,14 @@ public partial class JobRunner
             formattedMessage = message;
         }
         else if (message.Contains("Render complete", StringComparison.OrdinalIgnoreCase) ||
-                 message.Contains("Rendering complete", StringComparison.OrdinalIgnoreCase))
+                 message.Contains("Rendering complete", StringComparison.OrdinalIgnoreCase) ||
+                 message.Contains("Video export complete", StringComparison.OrdinalIgnoreCase) ||
+                 message.Contains("Progress reported as 100%", StringComparison.OrdinalIgnoreCase))
         {
             // FFmpeg render has finished - transition to Complete stage
             stage = "Complete";
             percent = 100;
-            formattedMessage = "Video rendering complete";
+            formattedMessage = "Video export complete";
         }
         else if (message.Contains("Processing batch", StringComparison.OrdinalIgnoreCase) ||
                  message.Contains("Batch completed", StringComparison.OrdinalIgnoreCase))
