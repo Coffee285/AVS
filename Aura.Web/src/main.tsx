@@ -83,12 +83,27 @@ const initializeDefaultZoom = (): void => {
 
   const savedZoom = localStorage.getItem(ZOOM_KEY);
 
-  // Use type assertion for the non-standard (but widely supported) zoom CSS property
-  const htmlStyle = document.documentElement.style as CSSStyleDeclaration & { zoom: string };
+  // Import zoom helper dynamically to avoid circular dependencies
+  // Use inline implementation for early initialization
+  const zoomToClamp = (zoom: number): string => {
+    const roundTo = (value: number, decimals: number = 1): number => {
+      const factor = Math.pow(10, decimals);
+      return Math.round(value * factor) / factor;
+    };
+    const multiplier = zoom / 100;
+    const minPx = roundTo(18 * multiplier);
+    const maxPx = roundTo(22 * multiplier);
+    const vwCoeff = roundTo(0.45 * multiplier, 2);
+    const vwBase = roundTo(15 * multiplier);
+    return `clamp(${minPx}px, calc(${vwCoeff}vw + ${vwBase}px), ${maxPx}px)`;
+  };
+
+  const htmlStyle = document.documentElement.style;
 
   // If no preference or old 120% default, upgrade to 140%
   if (savedZoom === null || savedZoom === OLD_DEFAULT_ZOOM) {
-    htmlStyle.setProperty('--aura-base-font-size', `${NEW_DEFAULT_ZOOM}%`);
+    const zoom = parseInt(NEW_DEFAULT_ZOOM, 10);
+    htmlStyle.setProperty('--aura-base-font-size', zoomToClamp(zoom));
     localStorage.setItem(ZOOM_KEY, NEW_DEFAULT_ZOOM);
     console.info('[Main] Applied default zoom level: 140%');
     return;
@@ -97,11 +112,12 @@ const initializeDefaultZoom = (): void => {
   // Apply a valid saved preference
   const zoomLevel = parseInt(savedZoom, 10);
   if (!isNaN(zoomLevel) && zoomLevel >= 80 && zoomLevel <= 180) {
-    htmlStyle.setProperty('--aura-base-font-size', `${zoomLevel}%`);
+    htmlStyle.setProperty('--aura-base-font-size', zoomToClamp(zoomLevel));
     console.info(`[Main] Applied saved zoom level: ${zoomLevel}%`);
   } else {
     // Fallback to 140% if stored value is invalid
-    htmlStyle.setProperty('--aura-base-font-size', `${NEW_DEFAULT_ZOOM}%`);
+    const zoom = parseInt(NEW_DEFAULT_ZOOM, 10);
+    htmlStyle.setProperty('--aura-base-font-size', zoomToClamp(zoom));
     localStorage.setItem(ZOOM_KEY, NEW_DEFAULT_ZOOM);
     console.warn('[Main] Invalid saved zoom level detected, reset to 140%');
   }

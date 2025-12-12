@@ -33,10 +33,22 @@ describe('Zoom Functions', () => {
   });
 
   describe('applyZoom', () => {
-    it('should set CSS custom property to the provided zoom level', () => {
+    it('should set CSS custom property with pixel-based clamp expression', () => {
+      applyZoom(100);
+      const value = document.documentElement.style.getPropertyValue('--aura-base-font-size');
+      // At 100%, multiplier is 1.0, so values are: clamp(18px, calc(0.45vw + 15px), 22px)
+      expect(value).toBe('clamp(18px, calc(0.45vw + 15px), 22px)');
+    });
+
+    it('should scale clamp values proportionally with zoom', () => {
       applyZoom(120);
       const value = document.documentElement.style.getPropertyValue('--aura-base-font-size');
-      expect(value).toBe('120%');
+      // At 120%, multiplier is 1.2, rounded values: clamp(21.6px, calc(0.54vw + 18px), 26.4px)
+      expect(value).toContain('clamp(');
+      expect(value).toContain('21.6px');
+      expect(value).toContain('0.54vw');
+      expect(value).toContain('18px');
+      expect(value).toContain('26.4px');
     });
 
     it('should persist zoom level to localStorage', () => {
@@ -47,14 +59,20 @@ describe('Zoom Functions', () => {
     it('should clamp zoom to minimum value', () => {
       applyZoom(50); // Below MIN_ZOOM (80)
       const value = document.documentElement.style.getPropertyValue('--aura-base-font-size');
-      expect(value).toBe(`${MIN_ZOOM}%`);
+      // At 80%, multiplier is 0.8, rounded values: clamp(14.4px, calc(0.36vw + 12px), 17.6px)
+      expect(value).toContain('clamp(');
+      expect(value).toContain('14.4px');
+      expect(value).toContain('0.36vw');
+      expect(value).toContain('12px');
+      expect(value).toContain('17.6px');
       expect(localStorage.getItem(ZOOM_STORAGE_KEY)).toBe(String(MIN_ZOOM));
     });
 
     it('should clamp zoom to maximum value', () => {
       applyZoom(200); // Above MAX_ZOOM (180)
       const value = document.documentElement.style.getPropertyValue('--aura-base-font-size');
-      expect(value).toBe(`${MAX_ZOOM}%`);
+      // At 180%, multiplier is 1.8, so: clamp(32.4px, calc(0.81vw + 27px), 39.6px)
+      expect(value).toBe('clamp(32.4px, calc(0.81vw + 27px), 39.6px)');
       expect(localStorage.getItem(ZOOM_STORAGE_KEY)).toBe(String(MAX_ZOOM));
     });
   });
@@ -134,11 +152,12 @@ describe('Zoom Functions', () => {
       expect(getCurrentZoom()).toBe(100);
     });
 
-    it('should update CSS custom property to 100%', () => {
+    it('should update CSS custom property with base clamp values', () => {
       applyZoom(180);
       resetZoom();
       const value = document.documentElement.style.getPropertyValue('--aura-base-font-size');
-      expect(value).toBe('100%');
+      // At 100%, should use base values: clamp(18px, calc(0.45vw + 15px), 22px)
+      expect(value).toBe('clamp(18px, calc(0.45vw + 15px), 22px)');
     });
   });
 

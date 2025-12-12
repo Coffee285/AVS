@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zoom Implementation Test</title>
+  <style>
+    /* Simulate global.css base font size */
+    :root {
+      --aura-base-font-size: clamp(18px, calc(0.45vw + 15px), 22px);
+    }
+
+    html {
+      font-size: var(--aura-base-font-size);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      padding: 2rem;
+      background: #1e1e1e;
+      color: #ffffff;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      padding: 1rem;
+      background: #2d2d2d;
+      border-radius: 8px;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background: #0078d4;
+      color: white;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #106ebe;
+    }
+
+    button:active {
+      background: #005a9e;
+    }
+
+    .info {
+      background: #2d2d2d;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+    }
+
+    .sample-content {
+      background: #2d2d2d;
+      padding: 2rem;
+      border-radius: 8px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    p {
+      font-size: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .metric {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      background: #0078d4;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-right: 0.5rem;
+    }
+
+    code {
+      background: #1e1e1e;
+      padding: 0.2rem 0.4rem;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="controls">
+      <button onclick="zoomOut()">Zoom Out (-10%)</button>
+      <button onclick="resetZoom()">Reset to 100%</button>
+      <button onclick="zoomIn()">Zoom In (+10%)</button>
+      <button onclick="setDefaultZoom()">Set to 140% (Default)</button>
+    </div>
+
+    <div class="info">
+      <p><span class="metric" id="current-zoom">100%</span></p>
+      <p><strong>Current CSS Value:</strong> <code id="current-css">Loading...</code></p>
+      <p><strong>localStorage Value:</strong> <code id="storage-value">Loading...</code></p>
+    </div>
+
+    <div class="sample-content">
+      <h1>Zoom Implementation Test</h1>
+      <p>This page tests the new pixel-based zoom implementation. Notice how all text scales proportionally when you change the zoom level.</p>
+
+      <h2>How It Works</h2>
+      <p>The zoom is stored as a percentage (80-180%) in localStorage, but applied as a pixel-based clamp expression to the <code>--aura-base-font-size</code> CSS variable.</p>
+
+      <h2>Formula</h2>
+      <p>For zoom percentage Z, the CSS value is: <code>clamp(18*m px, calc(0.45*m vw + 15*m px), 22*m px)</code> where <code>m = Z / 100</code></p>
+
+      <h2>Sample Text</h2>
+      <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. This text should grow larger or smaller as you adjust the zoom level. Try clicking the buttons above!</p>
+
+      <ul>
+        <li>List item with normal text</li>
+        <li>Another list item to show scaling</li>
+        <li>Notice how everything scales together</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    const MIN_ZOOM = 80;
+    const MAX_ZOOM = 180;
+    const DEFAULT_ZOOM = 140;
+    const STEP = 10;
+    const ZOOM_STORAGE_KEY = 'aura-ui-zoom';
+
+    function roundTo(value, decimals = 1) {
+      const factor = Math.pow(10, decimals);
+      return Math.round(value * factor) / factor;
+    }
+
+    function zoomToClamp(zoom) {
+      const multiplier = zoom / 100;
+      const minPx = roundTo(18 * multiplier);
+      const maxPx = roundTo(22 * multiplier);
+      const vwCoeff = roundTo(0.45 * multiplier, 2);
+      const vwBase = roundTo(15 * multiplier);
+      return `clamp(${minPx}px, calc(${vwCoeff}vw + ${vwBase}px), ${maxPx}px)`;
+    }
+
+    function applyZoom(zoom) {
+      const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+      const clampValue = zoomToClamp(clamped);
+      
+      document.documentElement.style.setProperty('--aura-base-font-size', clampValue);
+      localStorage.setItem(ZOOM_STORAGE_KEY, String(clamped));
+      
+      updateDisplay();
+      console.log(`[Zoom] Applied ${clamped}% (multiplier: ${(clamped/100).toFixed(2)}), CSS: ${clampValue}`);
+      
+      return clamped;
+    }
+
+    function getCurrentZoom() {
+      try {
+        const stored = localStorage.getItem(ZOOM_STORAGE_KEY);
+        const parsed = stored ? parseInt(stored, 10) : DEFAULT_ZOOM;
+        return Number.isFinite(parsed) ? Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parsed)) : DEFAULT_ZOOM;
+      } catch {
+        return DEFAULT_ZOOM;
+      }
+    }
+
+    function zoomIn() {
+      const current = getCurrentZoom();
+      const newZoom = Math.min(MAX_ZOOM, current + STEP);
+      applyZoom(newZoom);
+    }
+
+    function zoomOut() {
+      const current = getCurrentZoom();
+      const newZoom = Math.max(MIN_ZOOM, current - STEP);
+      applyZoom(newZoom);
+    }
+
+    function resetZoom() {
+      applyZoom(100);
+    }
+
+    function setDefaultZoom() {
+      applyZoom(DEFAULT_ZOOM);
+    }
+
+    function updateDisplay() {
+      const zoom = getCurrentZoom();
+      const cssValue = document.documentElement.style.getPropertyValue('--aura-base-font-size');
+      const storageValue = localStorage.getItem(ZOOM_STORAGE_KEY);
+      
+      document.getElementById('current-zoom').textContent = zoom + '%';
+      document.getElementById('current-css').textContent = cssValue;
+      document.getElementById('storage-value').textContent = storageValue || 'not set';
+    }
+
+    // Initialize on page load
+    window.addEventListener('load', () => {
+      const savedZoom = getCurrentZoom();
+      applyZoom(savedZoom);
+      console.log('[Zoom Test] Page loaded with zoom:', savedZoom);
+    });
+
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === '=') {
+        e.preventDefault();
+        zoomIn();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    });
+  </script>
+</body>
+</html>
