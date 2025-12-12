@@ -83,12 +83,21 @@ public class ExportJobService : IExportJobService
     {
         if (_jobs.TryGetValue(jobId, out var job))
         {
+            // Only update if progress actually changed (avoid spamming subscribers with identical updates)
+            var clampedPercent = Math.Clamp(percent, 0, 100);
+            if (job.Progress == clampedPercent && job.Stage == stage && job.Status == "running")
+            {
+                // No actual change, skip update to reduce SSE spam
+                return Task.CompletedTask;
+            }
+
             var updatedJob = job with
             {
-                Progress = Math.Clamp(percent, 0, 100),
+                Progress = clampedPercent,
                 Stage = stage,
                 Status = "running",
-                StartedAt = job.StartedAt ?? DateTime.UtcNow
+                StartedAt = job.StartedAt ?? DateTime.UtcNow,
+                Message = $"{stage}: {clampedPercent}%" // Add descriptive message for frontend
             };
             _jobs[jobId] = updatedJob;
 

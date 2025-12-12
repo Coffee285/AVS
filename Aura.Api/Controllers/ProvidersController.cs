@@ -1992,9 +1992,20 @@ public class ProvidersController : ControllerBase
             {
                 case "ollama":
                 case "local":
-                    // Local/Ollama providers don't require API keys; treat as valid to avoid blocking exports
+                case "windows":
+                case "rulebased":
+                    // Local/offline providers don't require API keys; treat as valid to avoid blocking exports
                     fieldValidationStatus["Provider"] = true;
-                    break;
+                    // Return early with success for local providers
+                    return Task.FromResult<IActionResult>(Ok(new EnhancedProviderValidationResponse(
+                        true,
+                        "Valid",
+                        request.Provider,
+                        null,
+                        fieldValidationStatus,
+                        $"{request.Provider} is a local provider and does not require validation",
+                        correlationId
+                    )));
                 case "openai":
                     ValidateOpenAIConfiguration(request.Configuration, fieldErrors, fieldValidationStatus);
                     break;

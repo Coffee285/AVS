@@ -424,9 +424,10 @@ apiClient.interceptors.response.use(
     const startTime = extendedInternalConfig._requestStartTime;
     const duration = startTime ? Date.now() - startTime : 0;
 
-    // Record success in circuit breaker
+    // Record success in circuit breaker, but skip for health checks to prevent constant resets
     const extendedConfig = response.config as ExtendedAxiosRequestConfig;
-    if (!extendedConfig._skipCircuitBreaker) {
+    const isHealthCheck = response.config.url?.includes('/health') || response.config.url?.includes('/ping');
+    if (!extendedConfig._skipCircuitBreaker && !isHealthCheck) {
       circuitBreaker.recordSuccess();
     }
 
@@ -507,8 +508,9 @@ apiClient.interceptors.response.use(
         errorCode,
       };
 
-      // Check if we should trigger circuit breaker
-      if (extendedConfig && !extendedConfig._skipCircuitBreaker) {
+      // Check if we should trigger circuit breaker (skip for health checks)
+      const isHealthCheckError = error.config?.url?.includes('/health') || error.config?.url?.includes('/ping');
+      if (extendedConfig && !extendedConfig._skipCircuitBreaker && !isHealthCheckError) {
         if (shouldTriggerCircuitBreaker(status, errorCode)) {
           circuitBreaker.recordFailure();
         }
