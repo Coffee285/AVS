@@ -74,38 +74,37 @@ export default {
           950: '#450a0a',
         },
       },
-      // Enhanced typography scale
+      // Typography scale aligned with design system
       fontSize: {
-        'xs': ['0.75rem', { lineHeight: '1rem' }],
-        'sm': ['0.875rem', { lineHeight: '1.25rem' }],
-        'base': ['1rem', { lineHeight: '1.5rem' }],
-        'lg': ['1.125rem', { lineHeight: '1.75rem' }],
-        'xl': ['1.25rem', { lineHeight: '1.75rem' }],
-        '2xl': ['1.5rem', { lineHeight: '2rem' }],
-        '3xl': ['1.875rem', { lineHeight: '2.25rem' }],
-        '4xl': ['2.25rem', { lineHeight: '2.5rem' }],
-        '5xl': ['3rem', { lineHeight: '1' }],
-        '6xl': ['3.75rem', { lineHeight: '1' }],
+        'xs': ['0.6875rem', { lineHeight: '1rem' }],        // --text-small (11px)
+        'sm': ['0.75rem', { lineHeight: '1.25rem' }],       // --text-caption (12px)
+        'base': ['0.875rem', { lineHeight: '1.5rem' }],     // --text-body (14px)
+        'lg': ['1.25rem', { lineHeight: '1.75rem' }],       // --text-title3 (20px)
+        'xl': ['1.5rem', { lineHeight: '1.75rem' }],        // --text-title2 (24px)
+        '2xl': ['1.75rem', { lineHeight: '2rem' }],         // --text-title1 (28px)
+        '3xl': ['2.25rem', { lineHeight: '2.25rem' }],      // --text-display (36px)
       },
-      // Enhanced spacing system
+      // Spacing system aligned with design system (4px base grid)
       spacing: {
-        '4': '1rem',
-        '8': '2rem',
-        '12': '3rem',
-        '16': '4rem',
-        '20': '5rem',
-        '24': '6rem',
-        '28': '7rem',
-        '32': '8rem',
+        '0.5': '0.125rem',  // 2px (rare usage)
+        '1': '0.25rem',     // 4px  - --space-xs
+        '2': '0.5rem',      // 8px  - --space-sm
+        '3': '0.75rem',     // 12px (rare usage)
+        '4': '1rem',        // 16px - --space-md
+        '5': '1.25rem',     // 20px (rare usage)
+        '6': '1.5rem',      // 24px - --space-lg
+        '8': '2rem',        // 32px - --space-xl
+        '12': '3rem',       // 48px - --space-2xl
+        '16': '4rem',       // 64px - --space-3xl
       },
-      // Enhanced border radius
+      // Border radius aligned with design system
       borderRadius: {
-        'sm': '0.25rem',
-        'md': '0.375rem',
-        'lg': '0.5rem',
-        'xl': '0.75rem',
-        '2xl': '1rem',
-        '3xl': '1.5rem',
+        'sm': '4px',      // --radius-sm
+        'md': '8px',      // --radius-md
+        'lg': '12px',     // --radius-lg
+        'xl': '16px',     // --radius-xl
+        '2xl': '20px',    // --radius-2xl
+        'full': '9999px', // --radius-full
       },
       // Enhanced shadow system for better depth
       boxShadow: {

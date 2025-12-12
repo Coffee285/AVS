@@ -1,0 +1,404 @@
+/**
+ * OpenCut Premium Panel Chrome
+ * 
+ * Refined styling for OpenCut panels to achieve a professional NLE feel
+ * similar to Adobe Premiere Pro, Final Cut Pro, and DaVinci Resolve.
+ * 
+ * Key Features:
+ * - Refined panel separators with subtle depth
+ * - Enhanced resize handles with better visibility
+ * - Premium scrollbar styling (WebKit browsers)
+ * - Consistent panel header chrome
+ * - Smooth animations and transitions
+ */
+
+/* ===================================================================
+   PANEL CHROME
+   =================================================================== */
+
+.opencut-panel {
+  background: var(--bg-surface);
+  border-radius: 0;
+  position: relative;
+  display: flex;
+  flexDirection: column;
+  minHeight: 0;
+}
+
+.opencut-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 0 var(--space-md);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Subtle gradient for visual depth */
+.opencut-panel-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--border-default),
+    transparent
+  );
+  opacity: 0.3;
+}
+
+.opencut-panel-title {
+  font-size: var(--text-caption);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  user-select: none;
+}
+
+.opencut-panel-content {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* ===================================================================
+   PANEL SEPARATORS (Enhanced Dividers)
+   =================================================================== */
+
+.opencut-panel-separator {
+  position: relative;
+  width: 6px;
+  height: 100%;
+  background: var(--bg-app);
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+/* Add subtle shadow on sides for depth */
+.opencut-panel-separator::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 100%;
+  background: var(--border-subtle);
+  box-shadow: 1px 0 2px rgb(0 0 0 / 0.05);
+}
+
+.opencut-panel-separator::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 100%;
+  background: var(--border-subtle);
+  box-shadow: -1px 0 2px rgb(0 0 0 / 0.05);
+}
+
+.opencut-panel-separator:hover {
+  background: var(--bg-elevated);
+}
+
+/* Visible resize handle on hover */
+.opencut-panel-separator:hover .resize-handle {
+  opacity: 1;
+}
+
+.resize-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 48px;
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out),
+              background-color var(--duration-fast) var(--ease-out);
+}
+
+.opencut-panel-separator:active .resize-handle,
+.opencut-panel-separator.dragging .resize-handle {
+  opacity: 1;
+  background: var(--brand-primary);
+}
+
+/* ===================================================================
+   PREMIUM SCROLLBARS (WebKit only)
+   Custom scrollbar styling for professional feel.
+   =================================================================== */
+
+.opencut-panel-content::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.opencut-panel-content::-webkit-scrollbar-track {
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.opencut-panel-content::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-md);
+  border: 2px solid var(--bg-surface);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.opencut-panel-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+.opencut-panel-content::-webkit-scrollbar-thumb:active {
+  background: var(--text-secondary);
+}
+
+/* Horizontal scrollbar */
+.opencut-panel-content::-webkit-scrollbar-track:horizontal {
+  border-left: none;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Corner where scrollbars meet */
+.opencut-panel-content::-webkit-scrollbar-corner {
+  background: var(--bg-surface);
+}
+
+/* ===================================================================
+   TIMELINE CHROME
+   Special styling for timeline panel to feel like pro NLE.
+   =================================================================== */
+
+.opencut-timeline {
+  background: var(--bg-app);
+  border-top: 1px solid var(--border-default);
+  box-shadow: 0 -2px 8px rgb(0 0 0 / 0.05);
+}
+
+.opencut-timeline-header {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.opencut-timeline-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.opencut-timeline-ruler {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  user-select: none;
+}
+
+.opencut-timeline-tracks {
+  position: relative;
+  overflow: auto;
+}
+
+/* ===================================================================
+   PREVIEW PANEL
+   Styling for video preview area.
+   =================================================================== */
+
+.opencut-preview {
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.opencut-preview-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  image-rendering: crisp-edges;
+}
+
+.opencut-preview-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--z-dropdown);
+}
+
+/* Safe zones overlay */
+.opencut-preview-safe-zones {
+  border: 2px dashed rgb(255 255 255 / 0.3);
+  position: absolute;
+}
+
+/* ===================================================================
+   TAB NAVIGATION (Left Panel)
+   Enhanced tab styling for panel switcher.
+   =================================================================== */
+
+.opencut-tabs {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.opencut-tab {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-caption);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+  user-select: none;
+}
+
+.opencut-tab:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.opencut-tab.active {
+  background: var(--brand-primary);
+  color: var(--text-on-brand);
+}
+
+.opencut-tab:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+/* ===================================================================
+   PROPERTY PANEL (Right Panel)
+   Styling for contextual properties.
+   =================================================================== */
+
+.opencut-properties-section {
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.opencut-properties-section:last-child {
+  border-bottom: none;
+}
+
+.opencut-properties-section-title {
+  font-size: var(--text-caption);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  margin-bottom: var(--space-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.opencut-properties-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.opencut-properties-label {
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.opencut-properties-value {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ===================================================================
+   DARK MODE SPECIFIC ADJUSTMENTS
+   =================================================================== */
+
+.dark .opencut-panel-separator::before,
+.dark .opencut-panel-separator::after {
+  box-shadow: none;
+}
+
+.dark .opencut-timeline {
+  box-shadow: 0 -2px 8px rgb(0 0 0 / 0.3);
+}
+
+/* ===================================================================
+   ANIMATIONS
+   =================================================================== */
+
+@keyframes panel-slide-in {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.opencut-panel.animating {
+  animation: panel-slide-in var(--duration-normal) var(--ease-out);
+}
+
+/* ===================================================================
+   UTILITY CLASSES
+   =================================================================== */
+
+.opencut-divider-vertical {
+  width: 1px;
+  height: 100%;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.opencut-divider-horizontal {
+  width: 100%;
+  height: 1px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.opencut-no-select {
+  user-select: none;
+}
+
+.opencut-scrollable {
+  overflow: auto;
+  min-height: 0;
+}
+
+.opencut-scrollable-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.opencut-scrollable-y {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
