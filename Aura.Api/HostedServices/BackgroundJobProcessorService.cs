@@ -248,8 +248,8 @@ public class BackgroundJobProcessorService : BackgroundService
                 .Where(j => j.Status == "Processing" && (
                     // Rendering at 90%+ stuck for 5+ minutes
                     (j.CurrentStage == "Rendering" && j.ProgressPercent >= 90 && j.UpdatedAt < shortThreshold) ||
-                    // Other cases stuck for 10+ minutes
-                    j.UpdatedAt < longThreshold
+                    // Other cases stuck for 10+ minutes (exclude rendering at 90%+ to avoid double-matching)
+                    ((j.CurrentStage != "Rendering" || j.ProgressPercent < 90) && j.UpdatedAt < longThreshold)
                 ))
                 .ToListAsync(cancellationToken).ConfigureAwait(false);
 

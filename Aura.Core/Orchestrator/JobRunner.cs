@@ -734,7 +734,7 @@ public partial class JobRunner
             // This prevents jobs from being marked as "complete" without an actual output file
             if (string.IsNullOrEmpty(generationResult.OutputPath))
             {
-                var failureMsg = "Video generation completed but no output file was produced. " +
+                var failureMsg = "Video generation orchestrator returned successfully but produced no output file. " +
                                  "Check logs for TTS, image generation, or FFmpeg errors.";
                 _logger.LogError("[Job {JobId}] {Error}", jobId, failureMsg);
                 
@@ -743,8 +743,8 @@ public partial class JobRunner
             
             if (!File.Exists(generationResult.OutputPath))
             {
-                var failureMsg = $"Video generation reported output path '{generationResult.OutputPath}' " +
-                                 "but file does not exist. FFmpeg may have failed during render.";
+                var failureMsg = $"Video generation orchestrator reported output path '{generationResult.OutputPath}' " +
+                                 "but file does not exist on disk. FFmpeg may have failed during render.";
                 _logger.LogError("[Job {JobId}] {Error}", jobId, failureMsg);
                 
                 throw new InvalidOperationException(failureMsg);
