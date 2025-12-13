@@ -2170,14 +2170,15 @@ public class VideoOrchestrator
                         throw new InvalidOperationException(error);
                     }
                     
+                    var recoveredAudioPath = state.RecoveryResults.TryGetValue("audio", out var recoveredAudio) ? recoveredAudio as string : null;
                     var compositionNarrationPath = state.NarrationPath
-                        ?? (state.RecoveryResults.TryGetValue("audio", out var recoveredAudio) ? recoveredAudio as string : null)
+                        ?? recoveredAudioPath
                         ?? narrationPath;
 
                     _logger.LogInformation(
                         "[Composition] Narration path resolution: state.NarrationPath={StateNarration}, RecoveryResults={Recovery}, Closure={Closure}, Final={Final}",
                         state.NarrationPath ?? "NULL",
-                        state.RecoveryResults.ContainsKey("audio") ? state.RecoveryResults["audio"] : "NOT_FOUND",
+                        recoveredAudioPath ?? "NOT_FOUND",
                         narrationPath ?? "NULL",
                         compositionNarrationPath ?? "NULL");
 
@@ -2377,6 +2378,7 @@ public class VideoOrchestrator
                         _logger.LogError(ex, 
                             "[Render FAILED] FFmpeg render threw exception. Type: {Type}, Message: {Message}",
                             ex.GetType().Name, ex.Message);
+                        // Clear any cached render outputs to avoid returning stale paths when render fails
                         state.FinalVideoPath = null;
                         state.RenderOutput = null;
                         state.RenderError = ex.Message;

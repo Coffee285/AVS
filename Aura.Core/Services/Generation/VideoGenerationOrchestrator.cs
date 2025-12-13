@@ -792,8 +792,10 @@ public class VideoGenerationOrchestrator
                     
                     // CRITICAL FIX: Store recovery result in callback dictionary so executor can access it
                     // This allows composition task to find the narration path even when audio task failed and was recovered
-                    recoveryResultsCallback?.Invoke(node.TaskId, silentAudioPath);
-                    recoveryResultsCallback?.Invoke("audio", silentAudioPath);
+                    foreach (var key in new[] { node.TaskId, "audio" })
+                    {
+                        recoveryResultsCallback?.Invoke(key, silentAudioPath);
+                    }
                     _logger.LogInformation("[Recovery] Stored audio recovery result in callback for executor access: {Path}", silentAudioPath);
                     
                     anyRecovered = true;
