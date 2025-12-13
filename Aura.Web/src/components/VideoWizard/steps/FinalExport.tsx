@@ -829,6 +829,13 @@ export const FinalExport: FC<FinalExportProps> = ({
                 const jobProgress = data.percent || 0;
                 const overallProgress = (formatIndex * 100 + jobProgress) / totalFormats;
 
+                console.log(`[DIAGNOSTIC] [${new Date().toISOString()}] SSE progress event received:`, {
+                  status: data.status,
+                  percent: jobProgress,
+                  stage: data.stage,
+                  outputPath: data.outputPath
+                });
+
                 setExportProgress(overallProgress);
                 setExportStage(
                   formatStageMessage(data.stage || 'Processing...', data.message, jobProgress)
@@ -857,6 +864,14 @@ export const FinalExport: FC<FinalExportProps> = ({
               clearTimeout(jobTimeoutId);
               try {
                 const data = JSON.parse(event.data) as JobStatusData;
+                
+                console.log(`[DIAGNOSTIC] [${new Date().toISOString()}] SSE job-completed event received:`, {
+                  status: data.status,
+                  percent: data.percent,
+                  stage: data.stage,
+                  outputPath: data.outputPath
+                });
+                
                 console.info('[SSE] Job completed:', data);
                 eventSource.close();
                 eventSourceRef.current = null;
@@ -1051,6 +1066,8 @@ export const FinalExport: FC<FinalExportProps> = ({
               pollAttempts++;
 
               try {
+                console.log(`[DIAGNOSTIC] [${new Date().toISOString()}] Polling job status:`, pollJobId);
+                
                 const statusResponse = await fetch(apiUrl(`/api/jobs/${pollJobId}`), {
                   headers: { Accept: 'application/json' },
                 });
@@ -1083,6 +1100,13 @@ export const FinalExport: FC<FinalExportProps> = ({
 
                 const typedJobData = (await statusResponse.json()) as JobStatusData;
                 lastJobData = typedJobData;
+                
+                console.log(`[DIAGNOSTIC] [${new Date().toISOString()}] Polling response:`, {
+                  status: typedJobData.status,
+                  percent: typedJobData.percent,
+                  stage: typedJobData.stage,
+                  outputPath: typedJobData.outputPath
+                });
 
                 // Normalize data to handle field name variations (lowercase vs capitalized)
                 const normalized = normalizeJobData(typedJobData);

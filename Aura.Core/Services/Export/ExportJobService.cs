@@ -117,6 +117,14 @@ public class ExportJobService : IExportJobService
     /// <inheritdoc />
     public Task UpdateJobStatusAsync(string jobId, string status, int percent, string? outputPath = null, string? errorMessage = null)
     {
+        var timestamp = DateTime.UtcNow.ToString("HH:mm:ss.fff");
+        var threadId = Environment.CurrentManagedThreadId;
+        
+        _logger.LogWarning(
+            "[DIAGNOSTIC] [{Timestamp}] [Thread {ThreadId}] ExportJobService.UpdateJobStatusAsync called: " +
+            "JobId={JobId}, Status={Status}, Percent={Percent}, OutputPath={OutputPath}",
+            timestamp, threadId, jobId, status, percent, outputPath ?? "NULL");
+
         if (_jobs.TryGetValue(jobId, out var job))
         {
             var isTerminal = status is "completed" or "failed" or "cancelled";
@@ -164,19 +172,35 @@ public class ExportJobService : IExportJobService
                     jobId, status, percent);
             }
 
+            // DIAGNOSTIC: About to notify subscribers
+            var subscriberCount = _subscribers.TryGetValue(jobId, out var channels) ? channels.Count : 0;
+            _logger.LogWarning(
+                "[DIAGNOSTIC] [{Timestamp}] About to notify {Count} subscriber(s)",
+                DateTime.UtcNow.ToString("HH:mm:ss.fff"), 
+                subscriberCount);
+
             // Notify subscribers of status update (synchronous to ensure delivery before return)
             NotifySubscribers(jobId, updatedJob);
+            
+            // DIAGNOSTIC: Notified subscribers
+            _logger.LogWarning(
+                "[DIAGNOSTIC] [{Timestamp}] Notified subscribers",
+                DateTime.UtcNow.ToString("HH:mm:ss.fff"));
             
             // Log subscriber notification for terminal states
             if (isTerminal)
             {
                 _logger.LogInformation(
                     "[JobId={JobId}] Notified {Count} subscriber channel(s) of terminal state: {Status}",
-                    jobId, _subscribers.TryGetValue(jobId, out var channels) ? channels.Count : 0, status);
+                    jobId, subscriberCount, status);
             }
         }
         else
         {
+            _logger.LogError(
+                "[DIAGNOSTIC] [{Timestamp}] Job {JobId} NOT FOUND in ExportJobService._jobs dictionary!",
+                DateTime.UtcNow.ToString("HH:mm:ss.fff"), jobId);
+            
             _logger.LogWarning("Attempted to update status for non-existent job {JobId}", jobId);
         }
 
@@ -220,6 +244,10 @@ public class ExportJobService : IExportJobService
         string jobId,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        _logger.LogWarning(
+            "[DIAGNOSTIC] [{Timestamp}] SSE subscriber registered for job {JobId}",
+            DateTime.UtcNow.ToString("HH:mm:ss.fff"), jobId);
+
         var channel = Channel.CreateUnbounded<VideoJob>(new UnboundedChannelOptions
         {
             SingleReader = true,
@@ -258,11 +286,19 @@ public class ExportJobService : IExportJobService
             // Stream updates as they come in
             await foreach (var update in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
+                _logger.LogWarning(
+                    "[DIAGNOSTIC] [{Timestamp}] SSE sending update: JobId={JobId}, Status={Status}, Percent={Percent}",
+                    DateTime.UtcNow.ToString("HH:mm:ss.fff"), jobId, update.Status, update.Progress);
+                
                 yield return update;
 
                 // Stop streaming when job reaches terminal state
                 if (IsTerminalStatus(update.Status))
                 {
+                    _logger.LogWarning(
+                        "[DIAGNOSTIC] [{Timestamp}] SSE closing stream for terminal state: {Status}",
+                        DateTime.UtcNow.ToString("HH:mm:ss.fff"), update.Status);
+                    
                     _logger.LogDebug("Job {JobId} reached terminal state {Status}, closing SSE stream", jobId, update.Status);
                     break;
                 }

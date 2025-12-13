@@ -309,6 +309,15 @@ public class JobsController : ControllerBase
             // Check JobRunner first
             var job = _jobRunner.GetJob(jobId);
 
+            // DIAGNOSTIC: Polling request details
+            Log.Warning(
+                "[DIAGNOSTIC] [{Timestamp}] Polling request for job {JobId}: Status={Status}, Percent={Percent}, OutputPath={OutputPath}",
+                DateTime.UtcNow.ToString("HH:mm:ss.fff"), 
+                jobId, 
+                job?.Status.ToString() ?? "NULL", 
+                job?.Percent ?? -1,
+                job?.OutputPath ?? "NULL");
+
             if (job == null)
             {
                 // Check export job service as fallback
@@ -782,6 +791,11 @@ public class JobsController : ControllerBase
         // Query parameter is used as fallback since EventSource doesn't support custom headers
         var reconnectEventId = lastEventId ?? Request.Headers["Last-Event-ID"].FirstOrDefault();
         var isReconnect = !string.IsNullOrEmpty(reconnectEventId);
+
+        // DIAGNOSTIC: SSE connection requested
+        Log.Warning(
+            "[DIAGNOSTIC] [{Timestamp}] SSE connection requested for job {JobId}",
+            DateTime.UtcNow.ToString("HH:mm:ss.fff"), jobId);
 
         Log.Information("[{CorrelationId}] SSE stream requested for job {JobId}, reconnect={IsReconnect}, lastEventId={LastEventId}",
             correlationId, jobId, isReconnect, reconnectEventId ?? "none");
