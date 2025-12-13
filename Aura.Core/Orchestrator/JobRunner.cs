@@ -33,6 +33,14 @@ public partial class JobRunner
     // Changed to 0.19 to allow progression to 99%, reserving 100% for explicit completion.
     private const int RenderStartPercent = 80;
     private const double RenderProgressMultiplier = 0.19;
+
+    private static readonly string[] OutputMissingSuggestions =
+    {
+        "Verify TTS succeeded or silent fallback was created",
+        "Check FFmpeg logs for render errors",
+        "Ensure visual assets exist on disk before rendering",
+        "Retry the render with updated settings"
+    };
     
     // Compiled regex patterns for performance (used in progress message parsing)
     [GeneratedRegex(@"(\d+(?:\.\d+)?)\s*%", RegexOptions.Compiled)]
@@ -733,13 +741,6 @@ public partial class JobRunner
             // CRITICAL FIX: Fail the job immediately if orchestrator returned with null/missing output path
             // This prevents jobs from being marked as "complete" without an actual output file
             var renderOutputPath = generationResult.OutputPath;
-            var outputMissingSuggestions = new[]
-            {
-                "Verify TTS succeeded or silent fallback was created",
-                "Check FFmpeg logs for render errors",
-                "Ensure visual assets exist on disk before rendering",
-                "Retry the render with updated settings"
-            };
 
             if (string.IsNullOrEmpty(renderOutputPath))
             {
@@ -752,7 +753,7 @@ public partial class JobRunner
                     CorrelationId = job.CorrelationId ?? string.Empty,
                     FailedAt = DateTime.UtcNow,
                     ErrorCode = "E305-OUTPUT_NULL",
-                    SuggestedActions = outputMissingSuggestions
+                    SuggestedActions = OutputMissingSuggestions
                 };
 
                 job = UpdateJob(
@@ -779,7 +780,7 @@ public partial class JobRunner
                     CorrelationId = job.CorrelationId ?? string.Empty,
                     FailedAt = DateTime.UtcNow,
                     ErrorCode = "E305-OUTPUT_NOT_FOUND",
-                    SuggestedActions = outputMissingSuggestions
+                    SuggestedActions = OutputMissingSuggestions
                 };
 
                 job = UpdateJob(
