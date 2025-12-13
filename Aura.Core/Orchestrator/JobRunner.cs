@@ -720,6 +720,13 @@ public partial class JobRunner
             imageProviderOverride
             ).ConfigureAwait(false);
 
+            _logger.LogWarning(
+                "[DIAGNOSTIC] [JOB-RESULT-RECEIVED] Orchestrator returned for job {JobId} at {Timestamp}. " +
+                "OutputPath: {Path}, Success: {Success}, File exists: {Exists}",
+                jobId, DateTime.UtcNow.ToString("HH:mm:ss.fff"),
+                generationResult.OutputPath ?? "NULL", generationResult.Success,
+                generationResult.OutputPath != null && File.Exists(generationResult.OutputPath));
+
             _logger.LogInformation("[Job {JobId}] Orchestrator returned successfully with output: {OutputPath}", 
                 jobId, generationResult.OutputPath);
 
@@ -783,6 +790,13 @@ public partial class JobRunner
             // CRITICAL: Force 100% completion immediately - this MUST succeed
             // Even if cleanup operations above failed, we still mark the job as complete
             // because the video was successfully generated
+            _logger.LogWarning(
+                "[DIAGNOSTIC] [JOB-FORCING-COMPLETION] About to call UpdateJob with completion for job {JobId} at {Timestamp}. " +
+                "OutputPath: {Path}, File exists: {Exists}, Status: {Status}, Percent: {Percent}",
+                jobId, DateTime.UtcNow.ToString("HH:mm:ss.fff"),
+                generationResult.OutputPath, System.IO.File.Exists(generationResult.OutputPath),
+                JobStatus.Done, 100);
+
             _logger.LogInformation("[Job {JobId}] Forcing completion to 100% (output exists: {OutputExists})", 
                 jobId, System.IO.File.Exists(generationResult.OutputPath));
 
@@ -797,6 +811,12 @@ public partial class JobRunner
                 progressMessage: StageNames.CompletionMessage,
                 finishedAt: DateTime.UtcNow,
                 completedUtc: DateTime.UtcNow);
+
+            _logger.LogWarning(
+                "[DIAGNOSTIC] [JOB-UPDATE-COMPLETE] UpdateJob returned for job {JobId} at {Timestamp}. " +
+                "Status: {Status}, Percent: {Percent}, OutputPath: {Path}",
+                jobId, DateTime.UtcNow.ToString("HH:mm:ss.fff"),
+                job.Status, job.Percent, job.OutputPath ?? "NULL");
 
             // DIAGNOSTIC: Forced completion to 100%
             LogDiagnostic(jobId, "Forced completion - job should be Done/100%");

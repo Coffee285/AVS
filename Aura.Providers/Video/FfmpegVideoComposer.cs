@@ -98,6 +98,13 @@ public partial class FfmpegVideoComposer : IVideoComposer
         var jobId = spec.JobId ?? Guid.NewGuid().ToString("N");
         var correlationId = System.Diagnostics.Activity.Current?.Id ?? jobId;
 
+        // DIAGNOSTIC: Enhanced logging for render start to confirm FFmpeg execution begins
+        _logger.LogWarning(
+            "[DIAGNOSTIC] [FFMPEG-START] RenderAsync called for job {JobId} at {Timestamp}. " +
+            "Resolution: {Width}x{Height}, FPS: {Fps}, Codec: {Codec}, Container: {Container}",
+            jobId, DateTime.UtcNow.ToString("HH:mm:ss.fff"),
+            spec.Res.Width, spec.Res.Height, spec.Fps, spec.Codec, spec.Container);
+
         _logger.LogInformation("Starting FFmpeg render (JobId={JobId}, CorrelationId={CorrelationId}) at {Resolution}p",
             jobId, correlationId, spec.Res.Height);
 
@@ -642,6 +649,21 @@ public partial class FfmpegVideoComposer : IVideoComposer
                 fileInfo.Length / 1024);
         }
 
+        // DIAGNOSTIC: Verify output file exists before declaring success
+        if (!File.Exists(outputFilePath))
+        {
+            var error = $"CRITICAL: Render completed but output file not found: {outputFilePath}";
+            _logger.LogError(error);
+            throw new InvalidOperationException(error);
+        }
+
+        var finalFileInfo = new FileInfo(outputFilePath);
+        _logger.LogWarning(
+            "[DIAGNOSTIC] [FFMPEG-COMPLETE] Render completed for job {JobId} at {Timestamp}. " +
+            "OutputPath: {Path}, Size: {Size:N0} bytes, File exists: {Exists}",
+            jobId, DateTime.UtcNow.ToString("HH:mm:ss.fff"),
+            outputFilePath, finalFileInfo.Length, true);
+
         _logger.LogInformation("Render completed successfully (JobId={JobId}): {OutputPath}", jobId, outputFilePath);
         _logger.LogInformation("FFmpeg log written to: {LogPath}", ffmpegLogPath);
 
@@ -799,7 +821,21 @@ public partial class FfmpegVideoComposer : IVideoComposer
                 throw new InvalidOperationException($"Video render failed: output file not created at {outputFilePath}");
             }
 
+            // DIAGNOSTIC: Verify output file exists before declaring success
+            if (!File.Exists(outputFilePath))
+            {
+                var error = $"CRITICAL: Managed runner render completed but output file not found: {outputFilePath}";
+                _logger.LogError(error);
+                throw new InvalidOperationException(error);
+            }
+
             var fileInfo = new FileInfo(outputFilePath);
+            _logger.LogWarning(
+                "[DIAGNOSTIC] [FFMPEG-COMPLETE-MANAGED] Render completed for job {JobId} at {Timestamp}. " +
+                "OutputPath: {Path}, Size: {Size:N0} bytes, File exists: {Exists}",
+                jobId, DateTime.UtcNow.ToString("HH:mm:ss.fff"),
+                outputFilePath, fileInfo.Length, true);
+
             _logger.LogInformation("Render verified: {Path} ({Size} bytes)", outputFilePath, fileInfo.Length);
 
             if (fileInfo.Length == 0)

@@ -652,7 +652,10 @@ public class VideoOrchestrator
             string? outputPath = null;
             string extractionMethod = "unknown";
 
-            _logger.LogInformation("Extracting output path. Available task result keys: {Keys}, ExecutorState.FinalVideoPath: {FinalVideoPath}",
+            _logger.LogWarning(
+                "[DIAGNOSTIC] [OUTPUT-PATH-EXTRACTION] Starting output path extraction for job {JobId} at {Timestamp}. " +
+                "Available task result keys: {Keys}, ExecutorState.FinalVideoPath: {FinalVideoPath}",
+                jobId ?? "unknown", DateTime.UtcNow.ToString("HH:mm:ss.fff"),
                 string.Join(", ", result.TaskResults.Keys),
                 executorContext.FinalVideoPath ?? "(null)");
 
@@ -799,6 +802,13 @@ public class VideoOrchestrator
                 throw new InvalidOperationException(
                     $"Video render completed but output file not found. Expected path: {outputPath}. Extraction method: {extractionMethod}");
             }
+
+            var finalOutputFileInfo = new FileInfo(outputPath);
+            _logger.LogWarning(
+                "[DIAGNOSTIC] [OUTPUT-PATH-SUCCESS] Output path successfully extracted for job {JobId} at {Timestamp}. " +
+                "Path: {Path}, Extraction method: {Method}, Size: {Size:N0} bytes, File exists: {Exists}",
+                jobId ?? "unknown", DateTime.UtcNow.ToString("HH:mm:ss.fff"),
+                outputPath, extractionMethod, finalOutputFileInfo.Length, true);
 
             _logger.LogInformation(
                 "Smart orchestration completed. Video at: {Path} (verified exists). Extraction method: {Method}",
@@ -2312,7 +2322,18 @@ public class VideoOrchestrator
                     string outputPath;
                     try
                     {
+                        _logger.LogWarning(
+                            "[DIAGNOSTIC] [COMPOSITION-RENDER-START] Calling _videoComposer.RenderAsync for job {JobId} at {Timestamp}",
+                            renderSpec.JobId ?? "unknown", DateTime.UtcNow.ToString("HH:mm:ss.fff"));
+
                         outputPath = await _videoComposer.RenderAsync(timeline, renderSpec, renderProgress, ct).ConfigureAwait(false);
+                        
+                        _logger.LogWarning(
+                            "[DIAGNOSTIC] [COMPOSITION-RENDER-RETURN] _videoComposer.RenderAsync returned for job {JobId} at {Timestamp}. " +
+                            "OutputPath: {Path}, File exists: {Exists}",
+                            renderSpec.JobId ?? "unknown", DateTime.UtcNow.ToString("HH:mm:ss.fff"),
+                            outputPath, File.Exists(outputPath));
+
                         _logger.LogInformation("[Render Complete] FFmpeg returned output path: {Path}", outputPath);
                     }
                     catch (Exception ex)
@@ -2361,6 +2382,14 @@ public class VideoOrchestrator
 
                     // Store final video path in state for reliable fallback extraction
                     state.FinalVideoPath = outputPath;
+
+                    // DIAGNOSTIC: Track output path storage in state
+                    var stateFileInfo = new FileInfo(outputPath);
+                    _logger.LogWarning(
+                        "[DIAGNOSTIC] [COMPOSITION-STATE-UPDATE] Stored output path in state.FinalVideoPath for job {JobId} at {Timestamp}. " +
+                        "Path: {Path}, Size: {Size:N0} bytes, Exists: {Exists}",
+                        renderSpec.JobId ?? "unknown", DateTime.UtcNow.ToString("HH:mm:ss.fff"),
+                        outputPath, stateFileInfo.Length, File.Exists(outputPath));
 
                     // CRITICAL FIX: Log the output path being returned to ensure it's captured
                     // The return value should automatically be stored in TaskResults["composition"]
