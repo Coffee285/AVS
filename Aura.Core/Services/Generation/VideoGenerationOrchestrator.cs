@@ -264,13 +264,15 @@ public class VideoGenerationOrchestrator
                 result.Succeeded,
                 result.QualityScore);
 
+            // COMPREHENSIVE LOGGING: Log orchestration completion with full details
             _logger.LogInformation(
-                "Orchestration completed: {Status}, {Succeeded}/{Total} tasks succeeded ({Failed} failed), Time: {Time}",
+                "[ORCHESTRATION COMPLETE] Status: {Status}, Succeeded: {Succeeded}/{Total}, Failed: {Failed}, Duration: {Duration:F1}s, Timestamp: {Timestamp}",
                 result.Succeeded ? "Success" : "Partial Success",
                 succeededTasks,
                 totalTasks,
                 failedTasks,
-                stopwatch.Elapsed);
+                stopwatch.Elapsed.TotalSeconds,
+                DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"));
 
             progress?.Report(new OrchestrationProgress(
                 "Orchestration completed",
@@ -460,8 +462,10 @@ public class VideoGenerationOrchestrator
                         totalTasks,
                         stopwatch.Elapsed));
 
-                    _logger.LogInformation("Executing task: {TaskId} ({TaskType}) - Priority: {Priority}, ResourceCost: {ResourceCost}",
-                        node.TaskId, node.TaskType, node.Priority, node.EstimatedResourceCost);
+                    // COMPREHENSIVE LOGGING: Log task start with full context
+                    _logger.LogInformation(
+                        "[TASK START] Task: {TaskId}, Type: {TaskType}, Priority: {Priority}, ResourceCost: {ResourceCost}, Timestamp: {Timestamp}",
+                        node.TaskId, node.TaskType, node.Priority, node.EstimatedResourceCost, DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"));
 
                     // Execute task with timeout (uses batch timeout as base)
                     using var taskTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(batchTimeoutCts.Token);
@@ -488,6 +492,15 @@ public class VideoGenerationOrchestrator
                     var taskResult = new TaskResult(node.TaskId, true, result, null);
                     _taskResults[node.TaskId] = taskResult;
                     results.Add(taskResult);
+
+                    // COMPREHENSIVE LOGGING: Log task completion details for diagnostic purposes
+                    var duration = node.CompletedAt.HasValue && node.StartedAt.HasValue
+                        ? (node.CompletedAt.Value - node.StartedAt.Value).TotalSeconds
+                        : 0;
+                    
+                    _logger.LogInformation(
+                        "[TASK COMPLETE] Task: {TaskId}, Type: {TaskType}, Duration: {Duration:F1}s, Result Type: {ResultType}, Timestamp: {Timestamp}",
+                        node.TaskId, node.TaskType, duration, result?.GetType()?.Name ?? "null", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"));
 
                     // CRITICAL FIX: Log what was stored for composition task to verify result storage
                     if (node.TaskId == CompositionTaskId)

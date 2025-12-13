@@ -2010,6 +2010,121 @@ public class JobsController : ControllerBase
     }
 
     /// <summary>
+    /// Check if output file exists for a job (for fallback completion detection).
+    /// Returns file existence status and metadata if file exists.
+    /// </summary>
+    [HttpGet("{jobId}/output")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetJobOutput(string jobId)
+    {
+        var correlationId = HttpContext.TraceIdentifier;
+
+        try
+        {
+            var job = _jobRunner.GetJob(jobId);
+            if (job == null)
+            {
+                // Check export job service as fallback
+                if (_exportJobService != null)
+                {
+                    var exportJob = await _exportJobService.GetJobAsync(jobId).ConfigureAwait(false);
+                    if (exportJob != null && !string.IsNullOrEmpty(exportJob.OutputPath))
+                    {
+                        if (System.IO.File.Exists(exportJob.OutputPath))
+                        {
+                            var fileInfo = new System.IO.FileInfo(exportJob.OutputPath);
+                            return Ok(new
+                            {
+                                exists = true,
+                                path = exportJob.OutputPath,
+                                sizeBytes = fileInfo.Length,
+                                createdAt = fileInfo.CreationTimeUtc,
+                                status = exportJob.Status,
+                                correlationId
+                            });
+                        }
+                    }
+                }
+
+                return NotFound(new ProblemDetails
+                {
+                    Type = "https://github.com/Coffee285/aura-video-studio/blob/main/docs/errors/README.md#E404",
+                    Title = "Job Not Found",
+                    Status = 404,
+                    Detail = $"Job with ID '{jobId}' was not found",
+                    Extensions = { ["correlationId"] = correlationId }
+                });
+            }
+
+            // Check if job has output path
+            if (string.IsNullOrEmpty(job.OutputPath))
+            {
+                return Ok(new
+                {
+                    exists = false,
+                    status = job.Status.ToString().ToLowerInvariant(),
+                    progress = job.Percent,
+                    stage = job.Stage,
+                    message = "Output file not yet generated",
+                    correlationId
+                });
+            }
+
+            // Check if file actually exists on disk
+            if (!System.IO.File.Exists(job.OutputPath))
+            {
+                Log.Warning(
+                    "[{CorrelationId}] Job {JobId} has OutputPath but file does not exist: {Path}",
+                    correlationId, jobId, job.OutputPath);
+
+                return Ok(new
+                {
+                    exists = false,
+                    status = job.Status.ToString().ToLowerInvariant(),
+                    progress = job.Percent,
+                    stage = job.Stage,
+                    expectedPath = job.OutputPath,
+                    message = "Output path set but file not found on disk",
+                    correlationId
+                });
+            }
+
+            // File exists - return detailed information
+            var outputFileInfo = new System.IO.FileInfo(job.OutputPath);
+            
+            Log.Information(
+                "[{CorrelationId}] Job {JobId} output verified. Path: {Path}, Size: {Size:N0} bytes",
+                correlationId, jobId, job.OutputPath, outputFileInfo.Length);
+
+            return Ok(new
+            {
+                exists = true,
+                path = job.OutputPath,
+                sizeBytes = outputFileInfo.Length,
+                createdAt = outputFileInfo.CreationTimeUtc,
+                status = job.Status.ToString().ToLowerInvariant(),
+                progress = job.Percent,
+                stage = job.Stage,
+                correlationId
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[{CorrelationId}] Error checking output for job {JobId}", correlationId, jobId);
+
+            return StatusCode(500, new ProblemDetails
+            {
+                Type = "https://github.com/Coffee285/aura-video-studio/blob/main/docs/errors/README.md#E500",
+                Title = "Error Checking Output",
+                Status = 500,
+                Detail = $"Failed to check job output: {ex.Message}",
+                Extensions = { ["correlationId"] = correlationId }
+            });
+        }
+    }
+
+    /// <summary>
     /// Parse aspect ratio string to enum
     /// </summary>
     private static Core.Models.Aspect ParseAspect(string aspect)
