@@ -144,30 +144,7 @@ const useStyles = makeStyles({
   },
   progressFill: {
     height: '100%',
-    transformOrigin: 'left',
-    willChange: 'transform',
-    '@media (prefers-reduced-motion: reduce)': {
-      transitionProperty: 'transform',
-      transitionDuration: '0.1s',
-      transitionTimingFunction: 'linear',
-    },
-  },
-  // Keyframes for progress bar animation - defined at root level for Griffel
-  '@keyframes progressShrink': {
-    '0%': {
-      transform: 'scaleX(1)',
-    },
-    '100%': {
-      transform: 'scaleX(0)',
-    },
-  },
-  progressFillAnimated: {
-    animationName: 'progressShrink',
-    animationTimingFunction: 'linear',
-    animationFillMode: 'forwards',
-  },
-  progressFillPaused: {
-    animationPlayState: 'paused',
+    transition: 'width 100ms linear',
   },
   progressSuccess: {
     backgroundColor: '#34C759',
@@ -202,17 +179,17 @@ function getToastIcon(type: ToastType) {
 
 /**
  * Toast notification component with animations and progress bar
- * Uses CSS animation for smooth, hardware-accelerated progress indication
+ * Uses setInterval with CSS transition for smooth progress indication
  */
 export const Toast: FC<ToastProps> = ({ toast, onDismiss }) => {
   const styles = useStyles();
   const prefersReducedMotion = useReducedMotion();
   const [isExiting, setIsExiting] = useState(false);
+  const [progress, setProgress] = useState(100);
   const [isPaused, setIsPaused] = useState(false);
-  const [animationDuration, setAnimationDuration] = useState(
-    toast.duration ?? DEFAULT_TOAST_DURATION
-  );
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startTimeRef = useRef<number>(0);
   const pauseStartTimeRef = useRef<number>(0);
   const totalPausedTimeRef = useRef<number>(0);
   const effectiveDuration = toast.duration ?? DEFAULT_TOAST_DURATION;
@@ -230,21 +207,42 @@ export const Toast: FC<ToastProps> = ({ toast, onDismiss }) => {
     );
   }, [onDismiss, toast.id, prefersReducedMotion]);
 
-  // Setup auto-dismiss timer with pause tracking
+  // Setup progress updates and auto-dismiss timer
   useEffect(() => {
     if (effectiveDuration <= 0) {
       return;
     }
 
-    // Clear any existing timeout
+    // Clear any existing interval and timeout
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
     if (dismissTimeoutRef.current) {
       clearTimeout(dismissTimeoutRef.current);
     }
 
     // Reset state
+    startTimeRef.current = Date.now();
     totalPausedTimeRef.current = 0;
     pauseStartTimeRef.current = 0;
-    setAnimationDuration(effectiveDuration);
+    setProgress(100);
+
+    // Update progress every 100ms
+    intervalRef.current = setInterval(() => {
+      if (!isPaused) {
+        const elapsed = Date.now() - startTimeRef.current - totalPausedTimeRef.current;
+        const remaining = effectiveDuration - elapsed;
+        const newProgress = Math.max(0, (remaining / effectiveDuration) * 100);
+        setProgress(newProgress);
+
+        if (remaining <= 0) {
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
+        }
+      }
+    }, 100);
 
     // Schedule dismiss
     dismissTimeoutRef.current = setTimeout(() => {
@@ -252,12 +250,16 @@ export const Toast: FC<ToastProps> = ({ toast, onDismiss }) => {
     }, effectiveDuration);
 
     return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
       if (dismissTimeoutRef.current) {
         clearTimeout(dismissTimeoutRef.current);
         dismissTimeoutRef.current = null;
       }
     };
-  }, [effectiveDuration, handleDismiss]);
+  }, [effectiveDuration, isPaused, handleDismiss]);
 
   // Handle pause - track when paused and calculate remaining time
   useEffect(() => {
@@ -276,12 +278,10 @@ export const Toast: FC<ToastProps> = ({ toast, onDismiss }) => {
       totalPausedTimeRef.current += pauseDuration;
 
       // Calculate remaining time
-      const remainingTime = effectiveDuration - totalPausedTimeRef.current;
+      const elapsed = Date.now() - startTimeRef.current - totalPausedTimeRef.current;
+      const remainingTime = effectiveDuration - elapsed;
 
       if (remainingTime > 0) {
-        // Update animation duration to remaining time
-        setAnimationDuration(remainingTime);
-
         // Reschedule dismiss
         dismissTimeoutRef.current = setTimeout(() => {
           handleDismiss();
@@ -312,31 +312,14 @@ export const Toast: FC<ToastProps> = ({ toast, onDismiss }) => {
     toast.type === 'info' && styles.iconInfo
   );
 
-  // Build progress fill class names based on animation state
-  const progressFillBaseClasses = mergeClasses(
+  // Build progress fill class names based on type
+  const progressClassName = mergeClasses(
     styles.progressFill,
     toast.type === 'success' && styles.progressSuccess,
     toast.type === 'error' && styles.progressError,
     toast.type === 'warning' && styles.progressWarning,
     toast.type === 'info' && styles.progressInfo
   );
-
-  const progressClassName = prefersReducedMotion
-    ? progressFillBaseClasses
-    : mergeClasses(
-        progressFillBaseClasses,
-        styles.progressFillAnimated,
-        isPaused && styles.progressFillPaused
-      );
-
-  // For reduced motion, use transform with JS-controlled value
-  // For normal motion, use animation shorthand to trigger animation
-  const progressStyle = prefersReducedMotion
-    ? { transform: `scaleX(${isPaused ? 1 : 0})` }
-    : {
-        animation: `progressShrink ${animationDuration}ms linear forwards`,
-        animationPlayState: isPaused ? 'paused' : 'running',
-      };
 
   return (
     <div
@@ -380,7 +363,7 @@ export const Toast: FC<ToastProps> = ({ toast, onDismiss }) => {
       {/* Progress bar for auto-dismiss */}
       {effectiveDuration > 0 && (
         <div className={styles.progressBar}>
-          <div className={progressClassName} style={progressStyle} />
+          <div className={progressClassName} style={{ width: `${progress}%` }} />
         </div>
       )}
     </div>
