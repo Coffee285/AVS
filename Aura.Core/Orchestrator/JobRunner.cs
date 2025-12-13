@@ -34,13 +34,13 @@ public partial class JobRunner
     private const int RenderStartPercent = 80;
     private const double RenderProgressMultiplier = 0.19;
 
-    private static readonly IReadOnlyList<string> OutputMissingSuggestions = Array.AsReadOnly(new[]
+    private static readonly IReadOnlyList<string> OutputMissingSuggestions = new[]
     {
         "Verify TTS succeeded or silent fallback was created",
         "Check FFmpeg logs for render errors",
         "Ensure visual assets exist on disk before rendering",
         "Retry the render with updated settings"
-    });
+    };
     
     // Compiled regex patterns for performance (used in progress message parsing)
     [GeneratedRegex(@"(\d+(?:\.\d+)?)\s*%", RegexOptions.Compiled)]
@@ -753,7 +753,7 @@ public partial class JobRunner
                     CorrelationId = job.CorrelationId ?? string.Empty,
                     FailedAt = DateTime.UtcNow,
                     ErrorCode = "E305-OUTPUT_NULL",
-                    SuggestedActions = OutputMissingSuggestions
+                    SuggestedActions = OutputMissingSuggestions.ToArray()
                 };
 
                 job = UpdateJob(
@@ -780,7 +780,7 @@ public partial class JobRunner
                     CorrelationId = job.CorrelationId ?? string.Empty,
                     FailedAt = DateTime.UtcNow,
                     ErrorCode = "E305-OUTPUT_NOT_FOUND",
-                    SuggestedActions = OutputMissingSuggestions
+                    SuggestedActions = OutputMissingSuggestions.ToArray()
                 };
 
                 job = UpdateJob(
