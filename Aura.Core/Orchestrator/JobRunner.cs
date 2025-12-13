@@ -33,6 +33,14 @@ public partial class JobRunner
     // Changed to 0.19 to allow progression to 99%, reserving 100% for explicit completion.
     private const int RenderStartPercent = 80;
     private const double RenderProgressMultiplier = 0.19;
+
+    private static readonly IReadOnlyList<string> OutputMissingSuggestions = new[]
+    {
+        "Verify TTS succeeded or silent fallback was created",
+        "Check FFmpeg logs for render errors",
+        "Ensure visual assets exist on disk before rendering",
+        "Retry the render with updated settings"
+    };
     
     // Compiled regex patterns for performance (used in progress message parsing)
     [GeneratedRegex(@"(\d+(?:\.\d+)?)\s*%", RegexOptions.Compiled)]
@@ -732,21 +740,59 @@ public partial class JobRunner
 
             // CRITICAL FIX: Fail the job immediately if orchestrator returned with null/missing output path
             // This prevents jobs from being marked as "complete" without an actual output file
-            if (string.IsNullOrEmpty(generationResult.OutputPath))
+            var renderOutputPath = generationResult.OutputPath;
+
+            if (string.IsNullOrEmpty(renderOutputPath))
             {
-                var failureMsg = "Video generation orchestrator returned successfully but produced no output file. " +
-                                 "Check logs for TTS, image generation, or FFmpeg errors.";
+                var failureMsg = "Video generation completed but no output file was produced. Check logs for TTS, image generation, or FFmpeg errors.";
+
+                var failure = new JobFailure
+                {
+                    Stage = job.Stage,
+                    Message = failureMsg,
+                    CorrelationId = job.CorrelationId ?? string.Empty,
+                    FailedAt = DateTime.UtcNow,
+                    ErrorCode = "E305-OUTPUT_NULL",
+                    SuggestedActions = OutputMissingSuggestions.ToArray()
+                };
+
+                job = UpdateJob(
+                    job,
+                    status: JobStatus.Failed,
+                    progressMessage: failureMsg,
+                    errorMessage: failureMsg,
+                    failureDetails: failure,
+                    finishedAt: DateTime.UtcNow,
+                    outputPath: null);
+
                 _logger.LogError("[Job {JobId}] {Error}", jobId, failureMsg);
-                
                 throw new InvalidOperationException(failureMsg);
             }
-            
-            if (!File.Exists(generationResult.OutputPath))
+
+            if (!File.Exists(renderOutputPath))
             {
-                var failureMsg = $"Video generation orchestrator reported output path '{generationResult.OutputPath}' " +
-                                 "but file does not exist on disk. FFmpeg may have failed during render.";
+                var failureMsg = $"Video generation orchestrator reported output path '{renderOutputPath}' but file does not exist on disk. FFmpeg may have failed during render.";
+
+                var failure = new JobFailure
+                {
+                    Stage = job.Stage,
+                    Message = failureMsg,
+                    CorrelationId = job.CorrelationId ?? string.Empty,
+                    FailedAt = DateTime.UtcNow,
+                    ErrorCode = "E305-OUTPUT_NOT_FOUND",
+                    SuggestedActions = OutputMissingSuggestions.ToArray()
+                };
+
+                job = UpdateJob(
+                    job,
+                    status: JobStatus.Failed,
+                    progressMessage: failureMsg,
+                    errorMessage: failureMsg,
+                    failureDetails: failure,
+                    finishedAt: DateTime.UtcNow,
+                    outputPath: null);
+
                 _logger.LogError("[Job {JobId}] {Error}", jobId, failureMsg);
-                
                 throw new InvalidOperationException(failureMsg);
             }
 
