@@ -126,6 +126,142 @@ public class FfmpegVideoComposerValidationTests : IDisposable
     }
 
     [Fact]
+    public async Task RenderAsync_WithEmptyScenesList_ShouldThrowInvalidOperationException()
+    {
+        // Arrange - test the new ValidateTimelinePrerequisites check for empty scenes
+        var ffmpegLocator = new FfmpegLocator(_loggerFactory.CreateLogger<FfmpegLocator>());
+        
+        var composer = new FfmpegVideoComposer(
+            _loggerFactory.CreateLogger<FfmpegVideoComposer>(),
+            ffmpegLocator,
+            outputDirectory: _testOutputDir);
+
+        // Create a valid narration file
+        var narrationPath = Path.Combine(_testOutputDir, "valid_audio.wav");
+        CreateValidWavFile(narrationPath);
+
+        // Timeline with empty scenes list - this should trigger the new pre-flight check
+        var timeline = new ProviderTimeline(
+            Scenes: new List<Scene>(), // Empty scenes list
+            SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
+            NarrationPath: narrationPath,
+            SceneAudioPaths: null,
+            MusicPath: "",
+            SubtitlesPath: null);
+
+        var spec = new RenderSpec(
+            Res: new Resolution(1280, 720),
+            Container: "mp4",
+            VideoBitrateK: 2500,
+            AudioBitrateK: 128,
+            Fps: 30,
+            Codec: "H264",
+            QualityLevel: 50,
+            EnableSceneCut: true);
+
+        var progress = new Progress<RenderProgress>();
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await composer.RenderAsync(timeline, spec, progress, CancellationToken.None);
+        });
+
+        // Verify the error message mentions zero scenes
+        Assert.Contains("zero scenes", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RenderAsync_WithNullNarrationPath_ShouldThrowInvalidOperationException()
+    {
+        // Arrange - test the new ValidateTimelinePrerequisites check for null narration
+        var ffmpegLocator = new FfmpegLocator(_loggerFactory.CreateLogger<FfmpegLocator>());
+        
+        var composer = new FfmpegVideoComposer(
+            _loggerFactory.CreateLogger<FfmpegVideoComposer>(),
+            ffmpegLocator,
+            outputDirectory: _testOutputDir);
+
+        // Use explicit cast to create a null reference for a non-nullable string parameter
+        // This intentionally tests the null validation path
+        string? nullPath = null;
+
+        // Timeline with scenes but null narration path
+        var timeline = new ProviderTimeline(
+            Scenes: new List<Scene> 
+            { 
+                new Scene(0, "Test", "Test script", TimeSpan.Zero, TimeSpan.FromSeconds(5))
+            },
+            SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
+            NarrationPath: nullPath,
+            SceneAudioPaths: null,
+            MusicPath: "",
+            SubtitlesPath: null);
+
+        var spec = new RenderSpec(
+            Res: new Resolution(1280, 720),
+            Container: "mp4",
+            VideoBitrateK: 2500,
+            AudioBitrateK: 128,
+            Fps: 30,
+            Codec: "H264",
+            QualityLevel: 50,
+            EnableSceneCut: true);
+
+        var progress = new Progress<RenderProgress>();
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await composer.RenderAsync(timeline, spec, progress, CancellationToken.None);
+        });
+
+        // Verify the error message mentions narration
+        Assert.Contains("narration", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Creates a minimal valid WAV file for testing
+    /// </summary>
+    private static void CreateValidWavFile(string path)
+    {
+        // WAV header for a 1-second, 44100Hz, mono, 16-bit audio file
+        using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
+        using var writer = new BinaryWriter(fs);
+
+        var sampleRate = 44100;
+        var durationSeconds = 1;
+        var numChannels = 1;
+        var bitsPerSample = 16;
+        var numSamples = sampleRate * durationSeconds;
+        var dataSize = numSamples * numChannels * (bitsPerSample / 8);
+        var fileSize = 36 + dataSize;
+
+        // RIFF header
+        writer.Write("RIFF".ToCharArray());
+        writer.Write(fileSize);
+        writer.Write("WAVE".ToCharArray());
+
+        // fmt subchunk
+        writer.Write("fmt ".ToCharArray());
+        writer.Write(16); // Subchunk1Size for PCM
+        writer.Write((short)1); // AudioFormat (PCM)
+        writer.Write((short)numChannels);
+        writer.Write(sampleRate);
+        writer.Write(sampleRate * numChannels * bitsPerSample / 8); // ByteRate
+        writer.Write((short)(numChannels * bitsPerSample / 8)); // BlockAlign
+        writer.Write((short)bitsPerSample);
+
+        // data subchunk
+        writer.Write("data".ToCharArray());
+        writer.Write(dataSize);
+
+        // Write silent audio data (zeros)
+        var silence = new byte[dataSize];
+        writer.Write(silence);
+    }
+
+    [Fact]
     public void Constructor_ShouldCreateRequiredDirectories()
     {
         // Arrange
