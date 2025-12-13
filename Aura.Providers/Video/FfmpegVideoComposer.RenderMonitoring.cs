@@ -62,7 +62,21 @@ public partial class FfmpegVideoComposer
                     var line = await process.StandardError.ReadLineAsync(ct).ConfigureAwait(false);
                     if (string.IsNullOrEmpty(line)) continue;
 
-                    if (line.Contains("time="))
+                    // Detect "muxing overhead" - FFmpeg's final output indicating completion
+                    if (line.Contains("muxing overhead", StringComparison.OrdinalIgnoreCase))
+                    {
+                        lastProgressTime = DateTime.Now;
+                        lastProgress = 100f;
+                        _logger.LogInformation("[{JobId}] Detected FFmpeg muxing overhead - encoding complete", jobId);
+                        
+                        var elapsed = DateTime.Now - startTime;
+                        progress.Report(new RenderProgress(
+                            100f,
+                            elapsed,
+                            TimeSpan.Zero,
+                            "muxing overhead"));
+                    }
+                    else if (line.Contains("time="))
                     {
                         var match = Regex.Match(line, @"time=(\d{2}:\d{2}:\d{2}\.\d{2})");
                         if (match.Success && TimeSpan.TryParse(match.Groups[1].Value, out var time))
@@ -94,6 +108,15 @@ public partial class FfmpegVideoComposer
                 throw new InvalidOperationException(
                     $"FFmpeg failed with exit code {process.ExitCode}");
             }
+
+            // CRITICAL: Emit explicit 100% completion signal after FFmpeg exits successfully
+            // This ensures the completion state propagates even if "muxing overhead" wasn't detected
+            _logger.LogInformation("[{JobId}] FFmpeg process completed with exit code 0, reporting 100% completion", jobId);
+            progress.Report(new RenderProgress(
+                100f,
+                DateTime.Now - startTime,
+                TimeSpan.Zero,
+                "Render complete"));
 
             // Verify and finalize output
             return await FinalizeOutputFileAsync(

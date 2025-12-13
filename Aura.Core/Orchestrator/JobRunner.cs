@@ -1505,8 +1505,9 @@ public partial class JobRunner
             var percentMatch = PercentageRegex().Match(message);
             if (percentMatch.Success && double.TryParse(percentMatch.Groups[1].Value, out double renderPercent))
             {
-                // Map render progress (0-100%) to overall progress (80-95%)
-                percent = 80 + (int)(renderPercent * 0.15);
+                // Map render progress (0-100%) to overall progress (80-99%)
+                // Changed from 0.15 to 0.19 so that 100% FFmpeg progress maps to 99% overall
+                percent = 80 + (int)(renderPercent * 0.19);
             }
             else
             {
@@ -1517,9 +1518,11 @@ public partial class JobRunner
         else if (message.Contains("Render complete", StringComparison.OrdinalIgnoreCase) ||
                  message.Contains("Rendering complete", StringComparison.OrdinalIgnoreCase) ||
                  message.Contains("Video export complete", StringComparison.OrdinalIgnoreCase) ||
-                 message.Contains("Progress reported as 100%", StringComparison.OrdinalIgnoreCase))
+                 message.Contains("Progress reported as 100%", StringComparison.OrdinalIgnoreCase) ||
+                 message.Contains("muxing overhead", StringComparison.OrdinalIgnoreCase))
         {
             // FFmpeg render has finished - transition to Complete stage
+            // "muxing overhead" is FFmpeg's final output line indicating completion
             stage = "Complete";
             percent = 100;
             formattedMessage = "Video export complete";
