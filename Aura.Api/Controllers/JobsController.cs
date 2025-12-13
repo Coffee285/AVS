@@ -2016,7 +2016,7 @@ public class JobsController : ControllerBase
     [HttpGet("{jobId}/output")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public IActionResult GetJobOutput(string jobId)
+    public async Task<IActionResult> GetJobOutput(string jobId)
     {
         var correlationId = HttpContext.TraceIdentifier;
 
@@ -2028,7 +2028,7 @@ public class JobsController : ControllerBase
                 // Check export job service as fallback
                 if (_exportJobService != null)
                 {
-                    var exportJob = _exportJobService.GetJobAsync(jobId).GetAwaiter().GetResult();
+                    var exportJob = await _exportJobService.GetJobAsync(jobId).ConfigureAwait(false);
                     if (exportJob != null && !string.IsNullOrEmpty(exportJob.OutputPath))
                     {
                         if (System.IO.File.Exists(exportJob.OutputPath))
