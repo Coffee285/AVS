@@ -784,9 +784,23 @@ export const FinalExport: FC<FinalExportProps> = ({
               }
             }, JOB_TIMEOUT_MS);
 
+            // Handle immediate connection acknowledgment from backend
+            eventSource.addEventListener('connected', (event) => {
+              try {
+                if (!connectionEstablished) {
+                  connectionEstablished = true;
+                  clearTimeout(connectionTimeoutId);
+                  const data = JSON.parse(event.data);
+                  console.info('[FinalExport] SSE connection acknowledged by backend:', data.message);
+                }
+              } catch (err) {
+                console.warn('[FinalExport] Failed to parse connected event:', err);
+              }
+            });
+
             eventSource.addEventListener('job-progress', (event) => {
               try {
-                // Mark connection as established once we receive progress
+                // Mark connection as established once we receive progress (fallback if connected event missed)
                 if (!connectionEstablished) {
                   connectionEstablished = true;
                   clearTimeout(connectionTimeoutId);

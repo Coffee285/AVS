@@ -806,6 +806,24 @@ public class JobsController : ControllerBase
 
         try
         {
+            // CRITICAL FIX: Send immediate acknowledgment so client knows connection is established
+            // This prevents the frontend from timing out and falling back to polling
+            try
+            {
+                await SendSseEventWithId("connected", new {
+                    jobId,
+                    message = "SSE connection established",
+                    timestamp = DateTime.UtcNow,
+                    correlationId
+                }, GenerateEventId(), cancellationToken).ConfigureAwait(false);
+                
+                Log.Information("[{CorrelationId}] SSE acknowledgment sent for job {JobId}", correlationId, jobId);
+            }
+            catch (Exception ackEx)
+            {
+                Log.Warning(ackEx, "[{CorrelationId}] Failed to send SSE acknowledgment for job {JobId}", correlationId, jobId);
+            }
+
             // CRITICAL FIX: Wait for job to appear (it may take a moment after creation)
             // This prevents race condition where SSE connects before job is fully registered
             Job? job = null;
