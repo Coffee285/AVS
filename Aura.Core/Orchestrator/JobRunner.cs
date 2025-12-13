@@ -775,10 +775,10 @@ public partial class JobRunner
             job = UpdateJob(job,
                 status: JobStatus.Done,
                 percent: 100,
-                stage: "Complete",
+                stage: StageNames.Complete,
                 artifacts: artifacts,
                 outputPath: generationResult.OutputPath,
-                progressMessage: "Video generation complete",
+                progressMessage: StageNames.CompletionMessage,
                 finishedAt: DateTime.UtcNow,
                 completedUtc: DateTime.UtcNow);
 

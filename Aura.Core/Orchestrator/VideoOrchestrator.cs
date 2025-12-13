@@ -719,14 +719,14 @@ public class VideoOrchestrator
             }
 
             // CRITICAL: Report explicit completion signal to ensure progress reaches 100%
-            progress?.Report("Video generation complete!");
+            progress?.Report(StageNames.CompletionMessage + "!");
             if (detailedProgress != null)
             {
                 detailedProgress.Report(new GenerationProgress
                 {
-                    Stage = "Complete",
+                    Stage = StageNames.Complete,
                     OverallPercent = 100,
-                    Message = "Video generation complete!",
+                    Message = StageNames.CompletionMessage + "!",
                     StagePercent = 100,
                     CorrelationId = correlationId
                 });
