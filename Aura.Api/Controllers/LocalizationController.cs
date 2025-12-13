@@ -641,30 +641,85 @@ public class LocalizationController : ControllerBase
 
         try
         {
+            // Configure options based on thoroughMode
+            var options = new TranslationOptions
+            {
+                Mode = TranslationMode.Localized,
+                EnableBackTranslation = request.ThoroughMode,
+                EnableQualityScoring = request.ThoroughMode,
+                AdjustTimings = request.ThoroughMode,
+                PreserveNames = true,
+                PreserveBrands = true,
+                AdaptMeasurements = true
+            };
+
             var translationRequest = new TranslationRequest
             {
                 SourceLanguage = request.SourceLanguage,
                 TargetLanguage = request.TargetLanguage,
                 SourceText = request.SourceText,
                 ScriptLines = new List<ScriptLine>(),
-                Options = new TranslationOptions(),
+                Options = options,
                 Provider = request.Provider,
                 ModelId = request.ModelId
             };
 
-            _logger.LogInformation("Translation request with model selection: Provider={Provider}, ModelId={ModelId}, CorrelationId: {CorrelationId}",
-                request.Provider ?? "(default)", request.ModelId ?? "(default)", HttpContext.TraceIdentifier);
+            _logger.LogInformation("Simple translation request: Mode={Mode}, Provider={Provider}, ModelId={ModelId}, CorrelationId: {CorrelationId}",
+                request.ThoroughMode ? "Thorough" : "Standard", 
+                request.Provider ?? "(default)", 
+                request.ModelId ?? "(default)", 
+                HttpContext.TraceIdentifier);
 
             var result = await _localizationService.TranslateAsync(translationRequest, null, linkedCts.Token).ConfigureAwait(false);
 
-            _logger.LogInformation("Simple translation completed in {Time:F2}s, CorrelationId: {CorrelationId}",
-                result.TranslationTimeSeconds, HttpContext.TraceIdentifier);
+            _logger.LogInformation("Simple translation completed in {Time:F2}s, Mode={Mode}, CorrelationId: {CorrelationId}",
+                result.TranslationTimeSeconds, 
+                request.ThoroughMode ? "Thorough" : "Standard",
+                HttpContext.TraceIdentifier);
+
+            // Map quality and cultural adaptations if in thorough mode
+            TranslationQualityDto? qualityDto = null;
+            List<CulturalAdaptationDto>? culturalAdaptationsDto = null;
+
+            if (request.ThoroughMode && result.Quality != null)
+            {
+                qualityDto = new TranslationQualityDto(
+                    result.Quality.OverallScore,
+                    result.Quality.FluencyScore,
+                    result.Quality.AccuracyScore,
+                    result.Quality.CulturalAppropriatenessScore,
+                    result.Quality.TerminologyConsistencyScore,
+                    result.Quality.BackTranslationScore,
+                    result.Quality.BackTranslatedText,
+                    result.Quality.Issues.Select(i => new QualityIssueDto(
+                        i.Severity.ToString(),
+                        i.Category,
+                        i.Description,
+                        i.Suggestion,
+                        i.LineNumber
+                    )).ToList()
+                );
+
+                if (result.CulturalAdaptations.Count > 0)
+                {
+                    culturalAdaptationsDto = result.CulturalAdaptations.Select(ca => new CulturalAdaptationDto(
+                        ca.Category,
+                        ca.SourcePhrase,
+                        ca.AdaptedPhrase,
+                        ca.Reasoning,
+                        ca.LineNumber
+                    )).ToList();
+                }
+            }
 
             return Ok(new SimpleTranslationDto(
                 result.TranslatedText,
                 result.ProviderUsed,
                 result.ModelUsed,
-                result.IsOfflineFallback));
+                result.IsOfflineFallback,
+                result.TranslationTimeSeconds,
+                qualityDto,
+                culturalAdaptationsDto));
         }
         catch (BrokenCircuitException ex)
         {

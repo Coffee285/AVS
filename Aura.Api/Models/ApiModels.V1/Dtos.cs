@@ -2737,7 +2737,8 @@ public record SimpleTranslationRequest(
     string SourceLanguage,
     string TargetLanguage,
     string? Provider = null,
-    string? ModelId = null);
+    string? ModelId = null,
+    bool ThoroughMode = false);
 
 /// <summary>
 /// Simple translation response with just the translated text
@@ -2747,7 +2748,10 @@ public record SimpleTranslationDto(
     string TranslatedText,
     string ProviderUsed,
     string? ModelUsed = null,
-    bool IsFallback = false);
+    bool IsFallback = false,
+    double TranslationTimeSeconds = 0,
+    TranslationQualityDto? Quality = null,
+    List<CulturalAdaptationDto>? CulturalAdaptations = null);
 
 // ============================================================================
 // PROVIDER HEALTH DTOs - for translation provider validation
