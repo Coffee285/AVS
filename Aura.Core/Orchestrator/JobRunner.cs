@@ -752,13 +752,19 @@ public partial class JobRunner
             // Clear retry state if job queue service is available
             _jobQueueService?.ClearRetryState(jobId);
 
-            // Mark as done with output path
+            // CRITICAL: Force 100% completion immediately after orchestrator returns
+            // This ensures the job reaches terminal state even if progress parsing missed the final signal
+            _logger.LogInformation("[Job {JobId}] Orchestrator returned successfully, forcing completion to 100%", jobId);
+
+            // Mark as done with output path - this will trigger JobProgress event
+            // which updates SSE and polling endpoints
             job = UpdateJob(job,
                 status: JobStatus.Done,
                 percent: 100,
                 stage: "Complete",
                 artifacts: artifacts,
                 outputPath: generationResult.OutputPath,
+                progressMessage: "Video generation complete",
                 finishedAt: DateTime.UtcNow,
                 completedUtc: DateTime.UtcNow);
 
@@ -1508,7 +1514,8 @@ public partial class JobRunner
             percent = 80;
             formattedMessage = "Starting video rendering";
         }
-        else if (message.Contains("Rendering:", StringComparison.OrdinalIgnoreCase))
+        else if (message.Contains("Rendering:", StringComparison.OrdinalIgnoreCase) ||
+                 message.Contains("Rendering video", StringComparison.OrdinalIgnoreCase))
         {
             // Extract percentage from render progress if available
             stage = "Rendering";

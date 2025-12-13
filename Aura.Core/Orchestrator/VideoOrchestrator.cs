@@ -718,6 +718,20 @@ public class VideoOrchestrator
                 _logger.LogWarning("Video orchestration completed without a captured timeline for job {JobId}", jobId ?? "unknown");
             }
 
+            // CRITICAL: Report explicit completion signal to ensure progress reaches 100%
+            progress?.Report("Video generation complete!");
+            if (detailedProgress != null)
+            {
+                detailedProgress.Report(new GenerationProgress
+                {
+                    Stage = "Complete",
+                    OverallPercent = 100,
+                    Message = "Video generation complete!",
+                    StagePercent = 100,
+                    CorrelationId = correlationId
+                });
+            }
+
             var editableTimeline = providerTimeline != null ? ConvertToEditableTimeline(providerTimeline) : null;
             return new VideoGenerationResult(
                 outputPath,
