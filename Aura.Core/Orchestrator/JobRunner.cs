@@ -34,13 +34,13 @@ public partial class JobRunner
     private const int RenderStartPercent = 80;
     private const double RenderProgressMultiplier = 0.19;
 
-    private static readonly string[] OutputMissingSuggestions =
+    private static readonly IReadOnlyList<string> OutputMissingSuggestions = Array.AsReadOnly(new[]
     {
         "Verify TTS succeeded or silent fallback was created",
         "Check FFmpeg logs for render errors",
         "Ensure visual assets exist on disk before rendering",
         "Retry the render with updated settings"
-    };
+    });
     
     // Compiled regex patterns for performance (used in progress message parsing)
     [GeneratedRegex(@"(\d+(?:\.\d+)?)\s*%", RegexOptions.Compiled)]
