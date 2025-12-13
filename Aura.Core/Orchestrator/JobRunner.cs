@@ -730,6 +730,26 @@ public partial class JobRunner
             _logger.LogInformation("[Job {JobId}] Orchestrator returned successfully with output: {OutputPath}", 
                 jobId, generationResult.OutputPath);
 
+            // CRITICAL FIX: Fail the job immediately if orchestrator returned with null/missing output path
+            // This prevents jobs from being marked as "complete" without an actual output file
+            if (string.IsNullOrEmpty(generationResult.OutputPath))
+            {
+                var failureMsg = "Video generation completed but no output file was produced. " +
+                                 "Check logs for TTS, image generation, or FFmpeg errors.";
+                _logger.LogError("[Job {JobId}] {Error}", jobId, failureMsg);
+                
+                throw new InvalidOperationException(failureMsg);
+            }
+            
+            if (!File.Exists(generationResult.OutputPath))
+            {
+                var failureMsg = $"Video generation reported output path '{generationResult.OutputPath}' " +
+                                 "but file does not exist. FFmpeg may have failed during render.";
+                _logger.LogError("[Job {JobId}] {Error}", jobId, failureMsg);
+                
+                throw new InvalidOperationException(failureMsg);
+            }
+
             // DIAGNOSTIC: Orchestrator completed successfully
             LogDiagnostic(jobId, "Orchestrator returned successfully, about to force completion");
 

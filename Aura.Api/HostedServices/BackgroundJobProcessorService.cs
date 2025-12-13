@@ -227,6 +227,9 @@ public class BackgroundJobProcessorService : BackgroundService
     /// <summary>
     /// Checks for jobs that have been stuck in "Processing" status for too long and marks them as failed.
     /// CRITICAL FIX: Prevents jobs from hanging indefinitely at 95% or any other stage.
+    /// Uses different thresholds based on stage:
+    /// - Rendering stage at 90%+: 5 minutes (FFmpeg should complete or fail quickly once started)
+    /// - Other stages: 10 minutes
     /// </summary>
     private async Task CheckForStuckJobsAsync(CancellationToken cancellationToken)
     {
@@ -235,11 +238,19 @@ public class BackgroundJobProcessorService : BackgroundService
             using var scope = _serviceScopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<AuraDbContext>();
 
-            // Find jobs that have been processing for more than 10 minutes without progress
-            var stuckThreshold = DateTime.UtcNow.AddMinutes(-10);
+            // Find jobs that have been processing without progress
+            // Use 5-minute threshold for rendering stage at 90%+, 10 minutes for others
+            var now = DateTime.UtcNow;
+            var shortThreshold = now.AddMinutes(-5);  // For rendering at 90%+
+            var longThreshold = now.AddMinutes(-10);  // For other stages
             
             var stuckJobs = await dbContext.JobQueue
-                .Where(j => j.Status == "Processing" && j.UpdatedAt < stuckThreshold)
+                .Where(j => j.Status == "Processing" && (
+                    // Rendering at 90%+ stuck for 5+ minutes
+                    (j.CurrentStage == "Rendering" && j.ProgressPercent >= 90 && j.UpdatedAt < shortThreshold) ||
+                    // Other cases stuck for 10+ minutes
+                    j.UpdatedAt < longThreshold
+                ))
                 .ToListAsync(cancellationToken).ConfigureAwait(false);
 
             if (stuckJobs.Count == 0)
@@ -247,25 +258,33 @@ public class BackgroundJobProcessorService : BackgroundService
                 return; // No stuck jobs found
             }
 
-            _logger.LogWarning("[STUCK-JOB-DETECTION] Found {Count} stuck jobs that haven't updated in over 10 minutes", stuckJobs.Count);
+            _logger.LogWarning("[STUCK-JOB-DETECTION] Found {Count} stuck jobs", stuckJobs.Count);
 
             foreach (var job in stuckJobs)
             {
-                var stuckDuration = DateTime.UtcNow - job.UpdatedAt;
+                var stuckDuration = now - job.UpdatedAt;
+                var isRenderingStuck = job.CurrentStage == "Rendering" && job.ProgressPercent >= 90;
+                
                 _logger.LogWarning(
-                    "[STUCK-JOB-DETECTION] Job {JobId} stuck at {Stage} ({Progress}%) for {Duration} minutes",
+                    "[STUCK-JOB-DETECTION] Job {JobId} stuck at {Stage} ({Progress}%) for {Duration} minutes. " +
+                    "RenderingStuck: {IsRenderingStuck}",
                     job.JobId, 
                     job.CurrentStage ?? "Unknown", 
                     job.ProgressPercent,
-                    Math.Round(stuckDuration.TotalMinutes, 1));
+                    Math.Round(stuckDuration.TotalMinutes, 1),
+                    isRenderingStuck);
 
-                // Mark job as failed
+                // Mark job as failed with specific error message
                 job.Status = "Failed";
-                job.LastError = $"Job timed out - no progress for {Math.Round(stuckDuration.TotalMinutes, 1)} minutes. " +
-                               $"Last stage: {job.CurrentStage ?? "Unknown"}, Last progress: {job.ProgressPercent}%. " +
-                               "This may indicate an issue with FFmpeg, provider timeouts, or system resources.";
-                job.CompletedAt = DateTime.UtcNow;
-                job.UpdatedAt = DateTime.UtcNow;
+                job.LastError = isRenderingStuck
+                    ? $"Job timed out at {job.ProgressPercent}% during rendering - no progress for {Math.Round(stuckDuration.TotalMinutes, 1)} minutes. " +
+                      "FFmpeg may have failed to start or stalled. " +
+                      "Possible causes: missing audio/images, FFmpeg not found, or insufficient disk space."
+                    : $"Job timed out - no progress for {Math.Round(stuckDuration.TotalMinutes, 1)} minutes. " +
+                      $"Last stage: {job.CurrentStage ?? "Unknown"}, Last progress: {job.ProgressPercent}%. " +
+                      "This may indicate an issue with FFmpeg, provider timeouts, or system resources.";
+                job.CompletedAt = now;
+                job.UpdatedAt = now;
                 
                 _logger.LogError(
                     "[STUCK-JOB-DETECTION] Marked job {JobId} as failed due to timeout. Error: {Error}",
