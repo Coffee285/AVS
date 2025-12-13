@@ -732,11 +732,13 @@ public partial class JobRunner
 
             // CRITICAL FIX: Fail the job immediately if orchestrator returned with null/missing output path
             // This prevents jobs from being marked as "complete" without an actual output file
-            if (string.IsNullOrEmpty(generationResult.OutputPath) || !File.Exists(generationResult.OutputPath))
+            var outputPath = generationResult.OutputPath;
+
+            if (string.IsNullOrEmpty(outputPath) || !File.Exists(outputPath))
             {
-                var failureMsg = string.IsNullOrEmpty(generationResult.OutputPath)
+                var failureMsg = string.IsNullOrEmpty(outputPath)
                     ? "Video generation completed but no output file was produced. Check logs for TTS, image generation, or FFmpeg errors."
-                    : $"Video generation orchestrator reported output path '{generationResult.OutputPath}' but file does not exist on disk. FFmpeg may have failed during render.";
+                    : $"Video generation orchestrator reported output path '{outputPath}' but file does not exist on disk. FFmpeg may have failed during render.";
 
                 var failure = new JobFailure
                 {
@@ -761,7 +763,7 @@ public partial class JobRunner
                     errorMessage: failureMsg,
                     failureDetails: failure,
                     finishedAt: DateTime.UtcNow,
-                    outputPath: generationResult.OutputPath);
+                    outputPath: outputPath);
 
                 _logger.LogError("[Job {JobId}] {Error}", jobId, failureMsg);
                 throw new InvalidOperationException(failureMsg);
