@@ -2170,7 +2170,10 @@ public class VideoOrchestrator
                         throw new InvalidOperationException(error);
                     }
                     
-                    var recoveredAudioPath = state.RecoveryResults.TryGetValue("audio", out var recoveredAudio) ? recoveredAudio as string : null;
+                    // Narration resolution priority: state value → recovery fallback → closure variable
+                    var recoveredAudioPath = state.RecoveryResults.TryGetValue("audio", out var recoveredAudio) && recoveredAudio is string recoveredPath
+                        ? recoveredPath
+                        : null;
                     var compositionNarrationPath = state.NarrationPath
                         ?? recoveredAudioPath
                         ?? narrationPath;
@@ -2185,7 +2188,7 @@ public class VideoOrchestrator
                     if (string.IsNullOrEmpty(compositionNarrationPath))
                     {
                         throw new InvalidOperationException(
-                            "Cannot render video:  No narration audio available. TTS failed and no recovery audio was generated.  " +
+                            "Cannot render video: No narration audio available. TTS failed and no recovery audio was generated. " +
                             "Check TTS provider configuration or enable silent audio fallback.");
                     }
 
@@ -2384,7 +2387,7 @@ public class VideoOrchestrator
                         state.RenderError = ex.Message;
 
                         throw new InvalidOperationException(
-                            $"Video composition failed: {ex.Message}. Check FFmpeg logs and asset validation errors.",
+                            $"Video composition failed: {ex.Message}. Check FFmpeg logs and render diagnostics for details.",
                             ex);
                     }
 

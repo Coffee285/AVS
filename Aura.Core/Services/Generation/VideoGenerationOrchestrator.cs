@@ -790,12 +790,9 @@ public class VideoGenerationOrchestrator
                     _taskResults[node.TaskId] = new TaskResult(node.TaskId, true, silentAudioPath, 
                         $"Using silent audio fallback due to TTS failure: {errorDetail}");
                     
-                    // CRITICAL FIX: Store recovery result in callback dictionary so executor can access it
-                    // This allows composition task to find the narration path even when audio task failed and was recovered
-                    foreach (var key in new[] { node.TaskId, "audio" })
-                    {
-                        recoveryResultsCallback?.Invoke(key, silentAudioPath);
-                    }
+                    // CRITICAL FIX: Store recovery result so composition can access recovered narration audio
+                    // Use canonical "audio" key for downstream consumers
+                    recoveryResultsCallback?.Invoke("audio", silentAudioPath);
                     _logger.LogInformation("[Recovery] Stored audio recovery result in callback for executor access: {Path}", silentAudioPath);
                     
                     anyRecovered = true;
