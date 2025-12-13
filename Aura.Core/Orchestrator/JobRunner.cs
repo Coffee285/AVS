@@ -733,6 +733,13 @@ public partial class JobRunner
             // CRITICAL FIX: Fail the job immediately if orchestrator returned with null/missing output path
             // This prevents jobs from being marked as "complete" without an actual output file
             var renderOutputPath = generationResult.OutputPath;
+            var outputMissingSuggestions = new[]
+            {
+                "Verify TTS succeeded or silent fallback was created",
+                "Check FFmpeg logs for render errors",
+                "Ensure visual assets exist on disk before rendering",
+                "Retry the render with updated settings"
+            };
 
             if (string.IsNullOrEmpty(renderOutputPath))
             {
@@ -744,14 +751,8 @@ public partial class JobRunner
                     Message = failureMsg,
                     CorrelationId = job.CorrelationId ?? string.Empty,
                     FailedAt = DateTime.UtcNow,
-                    ErrorCode = "E305-OUTPUT_MISSING",
-                    SuggestedActions = new[]
-                    {
-                        "Verify TTS succeeded or silent fallback was created",
-                        "Check FFmpeg logs for render errors",
-                        "Ensure visual assets exist on disk before rendering",
-                        "Retry the render with updated settings"
-                    }
+                    ErrorCode = "E305-OUTPUT_NULL",
+                    SuggestedActions = outputMissingSuggestions
                 };
 
                 job = UpdateJob(
@@ -777,14 +778,8 @@ public partial class JobRunner
                     Message = failureMsg,
                     CorrelationId = job.CorrelationId ?? string.Empty,
                     FailedAt = DateTime.UtcNow,
-                    ErrorCode = "E305-OUTPUT_MISSING",
-                    SuggestedActions = new[]
-                    {
-                        "Verify TTS succeeded or silent fallback was created",
-                        "Check FFmpeg logs for render errors",
-                        "Ensure visual assets exist on disk before rendering",
-                        "Retry the render with updated settings"
-                    }
+                    ErrorCode = "E305-OUTPUT_NOT_FOUND",
+                    SuggestedActions = outputMissingSuggestions
                 };
 
                 job = UpdateJob(
