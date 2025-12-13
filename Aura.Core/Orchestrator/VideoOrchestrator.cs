@@ -2073,14 +2073,29 @@ public class VideoOrchestrator
                     state.NarrationPath = narrationPath;
                     _logger.LogInformation("[Audio] Narration path stored in state: {Path}", state.NarrationPath);
                     
+                    // DEFENSIVE: Also store in RecoveryResults as a backup for composition task access
+                    // This ensures composition can find the path even if state.NarrationPath gets cleared
+                    state.RecoveryResults["audio"] = narrationPath;
+                    _logger.LogInformation("[Audio] Narration path also stored in RecoveryResults for safety: {Path}", narrationPath);
+                    
                     return narrationPath;
 
                 case GenerationTaskType.ImageGeneration:
                     // Generate images for specific scene
-                    if (parsedScenes == null || resolvedImageProvider == null)
+                    if (parsedScenes == null)
                     {
-                        // Return empty asset list if no image provider available
-                        return Array.Empty<Asset>();
+                        var error = "CRITICAL: parsedScenes is null. Script must be generated before image generation.";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
+                    }
+                    
+                    if (resolvedImageProvider == null)
+                    {
+                        var error = "CRITICAL: No image provider available for image generation. " +
+                            "At minimum, FallbackImageProvider with PlaceholderImageProvider should be configured. " +
+                            "Video cannot render without visual assets.";
+                        _logger.LogError(error);
+                        throw new InvalidOperationException(error);
                     }
 
                     // Extract scene index from task ID (e.g., "visual_0" -> 0)
@@ -2162,31 +2177,47 @@ public class VideoOrchestrator
                     string? compositionNarrationPath = null;
                     string narrationSource = "unknown";
                     
+                    // DIAGNOSTIC: Log all available narration sources for debugging
+                    _logger.LogInformation(
+                        "[Composition] [NARRATION-SOURCE-CHECK] Available sources: " +
+                        "state.NarrationPath={StateNarration}, " +
+                        "RecoveryResults count={RecoveryCount}, " +
+                        "RecoveryResults['audio']={RecoveryAudio}, " +
+                        "closure narrationPath={ClosurePath}",
+                        state.NarrationPath ?? "(null)",
+                        state.RecoveryResults.Count,
+                        state.RecoveryResults.TryGetValue("audio", out var debugRecovery) ? debugRecovery?.ToString() ?? "(null)" : "(key not found)",
+                        narrationPath ?? "(null)");
+                    
                     // Priority 1: Check state.NarrationPath (set by successful audio generation)
                     if (!string.IsNullOrEmpty(state.NarrationPath))
                     {
                         compositionNarrationPath = state.NarrationPath;
                         narrationSource = "state.NarrationPath";
+                        _logger.LogInformation("[Composition] Using state.NarrationPath: {Path}", compositionNarrationPath);
                     }
                     // Priority 2: Check recovery results (set by orchestrator when audio fails and silent audio is used)
-                    else if (state.RecoveryResults.TryGetValue("audio", out var recoveryResult) && recoveryResult is string recoveryPath)
+                    else if (state.RecoveryResults.TryGetValue("audio", out var recoveryResult) && recoveryResult is string recoveryPath && !string.IsNullOrEmpty(recoveryPath))
                     {
                         compositionNarrationPath = recoveryPath;
                         narrationSource = "recovery results (silent audio fallback)";
                         _logger.LogInformation("[Composition] Using recovered audio from silent fallback: {Path}", recoveryPath);
                     }
                     // Priority 3: Fall back to closure variable (works when tasks run synchronously)
-                    else if (narrationPath != null)
+                    else if (!string.IsNullOrEmpty(narrationPath))
                     {
                         compositionNarrationPath = narrationPath;
                         narrationSource = "closure variable";
+                        _logger.LogInformation("[Composition] Using closure variable narrationPath: {Path}", compositionNarrationPath);
                     }
                     
                     if (compositionNarrationPath == null)
                     {
-                        var error = "CRITICAL: narrationPath is null. Audio must be generated before composition. " +
+                        var error = "CRITICAL: narrationPath is null from ALL sources. Audio must be generated before composition. " +
                             "This may indicate the audio generation stage failed silently or was skipped. " +
-                            "Checked state.NarrationPath, recovery results, and closure variable - all null.";
+                            $"Checked: state.NarrationPath={(state.NarrationPath ?? "(null)")}, " +
+                            $"RecoveryResults['audio']={(state.RecoveryResults.TryGetValue("audio", out var r) ? r?.ToString() ?? "(null)" : "(not found)")}, " +
+                            $"closure narrationPath={(narrationPath ?? "(null)")}";
                         _logger.LogError(error);
                         throw new InvalidOperationException(error);
                     }
@@ -2198,35 +2229,47 @@ public class VideoOrchestrator
 
                     // Report progress BEFORE starting render - this ensures frontend sees the transition
                     var renderStartMsg = "Starting video composition and rendering...";
-                    _logger.LogInformation("[Stage Transition] {Message}", renderStartMsg);
+                    _logger.LogWarning("[DIAGNOSTIC] [COMPOSITION-STAGE-1] {Message} at {Timestamp}", renderStartMsg, DateTime.UtcNow.ToString("HH:mm:ss.fff"));
                     progress?.Report(renderStartMsg);
                     detailedProgress?.Report(ProgressBuilder.CreateRenderProgress(0, renderStartMsg, correlationId: correlationId));
 
                     // Explicit logging at stage transition (70% mark) - helps diagnose hangs
-                    _logger.LogInformation(
-                        "[Stage Transition] Starting video composition at 70%% mark. " +
+                    _logger.LogWarning(
+                        "[DIAGNOSTIC] [COMPOSITION-STAGE-2] Starting video composition at 70%% mark at {Timestamp}. " +
                         "Scenes: {SceneCount}, Assets: {AssetCount}, NarrationPath: {NarrationPath}",
+                        DateTime.UtcNow.ToString("HH:mm:ss.fff"),
                         parsedScenes.Count,
                         sceneAssets.Values.Sum(assets => assets.Count),
                         compositionNarrationPath);
 
                     // CRITICAL VALIDATION: Ensure narration file exists and is valid before composition
                     // This is the last checkpoint before FFmpeg render - catch issues early
-                    _logger.LogInformation("[Composition] Validating narration file: {Path}", compositionNarrationPath);
+                    _logger.LogWarning("[DIAGNOSTIC] [COMPOSITION-STAGE-3] About to validate narration file at {Timestamp}: {Path}", 
+                        DateTime.UtcNow.ToString("HH:mm:ss.fff"), compositionNarrationPath);
                     
-                    if (!File.Exists(compositionNarrationPath))
+                    _logger.LogWarning("[DIAGNOSTIC] [COMPOSITION-STAGE-4] Calling File.Exists() for narration path at {Timestamp}", 
+                        DateTime.UtcNow.ToString("HH:mm:ss.fff"));
+                    
+                    bool narrationFileExists = File.Exists(compositionNarrationPath);
+                    
+                    _logger.LogWarning("[DIAGNOSTIC] [COMPOSITION-STAGE-5] File.Exists() returned {Exists} at {Timestamp}", 
+                        narrationFileExists, DateTime.UtcNow.ToString("HH:mm:ss.fff"));
+                    
+                    if (!narrationFileExists)
                     {
                         var error = $"CRITICAL: Narration file not found at: {compositionNarrationPath}. " +
                             "Cannot proceed with video composition. This indicates TTS stage did not complete successfully. " +
                             "Check earlier logs for TTS synthesis errors or fallback to silent audio.";
-                        _logger.LogError(error);
+                        _logger.LogError("[COMPOSITION-FAILURE] {Error}", error);
                         throw new InvalidOperationException(error);
                     }
                     
-                    _logger.LogInformation("[Composition] Narration file exists: {Path}", compositionNarrationPath);
+                    _logger.LogWarning("[DIAGNOSTIC] [COMPOSITION-STAGE-6] Narration file exists, getting FileInfo at {Timestamp}", 
+                        DateTime.UtcNow.ToString("HH:mm:ss.fff"));
 
                     // Validate narration file is not empty or corrupted
-                    _logger.LogInformation("[Composition] Checking narration file size");
+                    _logger.LogWarning("[DIAGNOSTIC] [COMPOSITION-STAGE-7] Checking narration file size at {Timestamp}", 
+                        DateTime.UtcNow.ToString("HH:mm:ss.fff"));
                     var narrationFileInfo = new FileInfo(compositionNarrationPath);
                     
                     if (narrationFileInfo.Length < MinValidAudioFileSizeBytes)
@@ -2242,19 +2285,23 @@ public class VideoOrchestrator
                         compositionNarrationPath, narrationFileInfo.Length);
 
                     // Validate that all scenes have visual assets before render
-                    _logger.LogInformation("[Composition] Validating scene assets");
+                    _logger.LogWarning("[DIAGNOSTIC] [COMPOSITION-STAGE-8] About to validate scene assets at {Timestamp}", 
+                        DateTime.UtcNow.ToString("HH:mm:ss.fff"));
                     try
                     {
                         ValidateSceneAssets(parsedScenes, sceneAssets);
-                        _logger.LogInformation("[Composition] Scene assets validation passed");
+                        _logger.LogWarning("[DIAGNOSTIC] [COMPOSITION-STAGE-9] Scene assets validation passed at {Timestamp}", 
+                            DateTime.UtcNow.ToString("HH:mm:ss.fff"));
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "[Composition] Scene assets validation failed");
+                        _logger.LogError(ex, "[COMPOSITION] Scene assets validation failed at {Timestamp}", 
+                            DateTime.UtcNow.ToString("HH:mm:ss.fff"));
                         throw;
                     }
 
-                    _logger.LogInformation("[Composition] Creating timeline structure");
+                    _logger.LogWarning("[DIAGNOSTIC] [COMPOSITION-STAGE-10] Creating timeline structure at {Timestamp}", 
+                        DateTime.UtcNow.ToString("HH:mm:ss.fff"));
                     var timeline = new Providers.Timeline(
                         Scenes: parsedScenes,
                         SceneAssets: sceneAssets,
@@ -2265,14 +2312,16 @@ public class VideoOrchestrator
                     );
                     state.Timeline = timeline;
                     
-                    _logger.LogInformation(
-                        "[Composition] Timeline created successfully. Scenes: {SceneCount}, NarrationPath: {NarrationPath}, " +
+                    _logger.LogWarning(
+                        "[DIAGNOSTIC] [COMPOSITION-STAGE-11] Timeline created at {Timestamp}. Scenes: {SceneCount}, NarrationPath: {NarrationPath}, " +
                         "SceneAssets: {AssetCount} scenes with assets",
+                        DateTime.UtcNow.ToString("HH:mm:ss.fff"),
                         timeline.Scenes.Count, timeline.NarrationPath, timeline.SceneAssets.Count);
 
                     // Report timeline creation progress
                     var timelineCreatedMsg = "Timeline created, preparing FFmpeg render...";
-                    _logger.LogInformation("[Render Prep] {Message}", timelineCreatedMsg);
+                    _logger.LogWarning("[DIAGNOSTIC] [COMPOSITION-STAGE-12] {Message} at {Timestamp}", 
+                        timelineCreatedMsg, DateTime.UtcNow.ToString("HH:mm:ss.fff"));
                     progress?.Report(timelineCreatedMsg);
                     detailedProgress?.Report(ProgressBuilder.CreateRenderProgress(10, timelineCreatedMsg, correlationId: correlationId));
 
@@ -2314,8 +2363,10 @@ public class VideoOrchestrator
                         }
                     });
 
-                    _logger.LogInformation("[Render Start] Beginning FFmpeg render operation");
-                    _logger.LogInformation("[Render Start] RenderSpec: Resolution={Width}x{Height}, FPS={Fps}, Codec={Codec}, JobId={JobId}",
+                    _logger.LogWarning("[DIAGNOSTIC] [COMPOSITION-STAGE-13] Beginning FFmpeg render operation at {Timestamp}", 
+                        DateTime.UtcNow.ToString("HH:mm:ss.fff"));
+                    _logger.LogWarning("[DIAGNOSTIC] [COMPOSITION-STAGE-14] RenderSpec at {Timestamp}: Resolution={Width}x{Height}, FPS={Fps}, Codec={Codec}, JobId={JobId}",
+                        DateTime.UtcNow.ToString("HH:mm:ss.fff"),
                         renderSpec.Res.Width, renderSpec.Res.Height, renderSpec.Fps, renderSpec.Codec, renderSpec.JobId);
                     progress?.Report("Executing FFmpeg render...");
 
@@ -2323,8 +2374,21 @@ public class VideoOrchestrator
                     try
                     {
                         _logger.LogWarning(
-                            "[DIAGNOSTIC] [COMPOSITION-RENDER-START] Calling _videoComposer.RenderAsync for job {JobId} at {Timestamp}",
+                            "[DIAGNOSTIC] [COMPOSITION-STAGE-15-CRITICAL] About to call _videoComposer.RenderAsync for job {JobId} at {Timestamp}. " +
+                            "If you see this but not FFMPEG-START, the call is blocking or composer is null.",
                             renderSpec.JobId ?? "unknown", DateTime.UtcNow.ToString("HH:mm:ss.fff"));
+
+                        // DEFENSIVE: Check if _videoComposer is null before calling
+                        if (_videoComposer == null)
+                        {
+                            var error = "CRITICAL: _videoComposer is null! Cannot render video.";
+                            _logger.LogError("[COMPOSITION-FAILURE] {Error}", error);
+                            throw new InvalidOperationException(error);
+                        }
+
+                        _logger.LogWarning(
+                            "[DIAGNOSTIC] [COMPOSITION-STAGE-16-CALLING] _videoComposer is NOT null, making the actual call at {Timestamp}",
+                            DateTime.UtcNow.ToString("HH:mm:ss.fff"));
 
                         outputPath = await _videoComposer.RenderAsync(timeline, renderSpec, renderProgress, ct).ConfigureAwait(false);
                         
@@ -2577,12 +2641,18 @@ public class VideoOrchestrator
         }
         
         var missingScenes = new List<int>();
+        var emptyScenes = new List<int>();
         
         for (int i = 0; i < sceneCount; i++)
         {
             if (!sceneAssets.ContainsKey(i) || sceneAssets[i] == null)
             {
                 missingScenes.Add(i);
+            }
+            else if (sceneAssets[i].Count == 0)
+            {
+                emptyScenes.Add(i);
+                _logger.LogWarning("Scene {SceneIndex} has empty asset list - this may cause black frames", i);
             }
         }
         
@@ -2594,7 +2664,17 @@ public class VideoOrchestrator
                 ". Total scenes: " + sceneCount + ", Assets found: " + sceneAssets.Count);
         }
         
-        _logger.LogInformation("Validated {AssetCount} scene assets for {SceneCount} scenes", 
-            sceneAssets.Count, sceneCount);
+        // Log warning for empty scenes but allow rendering to continue
+        // (FFmpeg validation will catch this and fail if ALL scenes are empty)
+        if (emptyScenes.Count > 0)
+        {
+            _logger.LogWarning(
+                "[Composition] {EmptyCount} scenes have empty asset lists (scenes: {EmptyScenes}). " +
+                "FFmpeg will validate that at least some valid assets exist.",
+                emptyScenes.Count, string.Join(", ", emptyScenes));
+        }
+        
+        _logger.LogInformation("Validated {AssetCount} scene assets for {SceneCount} scenes ({EmptyCount} empty)", 
+            sceneAssets.Count, sceneCount, emptyScenes.Count);
     }
 }

@@ -795,6 +795,8 @@ public class VideoGenerationOrchestrator
                     if (recoveryResultsCallback != null)
                     {
                         recoveryResultsCallback[node.TaskId] = silentAudioPath;
+                        // ALSO store with "audio" key explicitly for compatibility
+                        recoveryResultsCallback["audio"] = silentAudioPath;
                         _logger.LogInformation("[Recovery] Stored audio recovery result in callback for executor access: {Path}", silentAudioPath);
                     }
                     
