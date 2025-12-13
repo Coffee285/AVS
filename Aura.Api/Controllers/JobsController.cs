@@ -810,12 +810,13 @@ public class JobsController : ControllerBase
             // This prevents the frontend from timing out and falling back to polling
             try
             {
-                await SendSseEventWithId("connected", new {
-                    jobId,
-                    message = "SSE connection established",
-                    timestamp = DateTime.UtcNow,
-                    correlationId
-                }, GenerateEventId(), cancellationToken).ConfigureAwait(false);
+                var connectedEvent = new ConnectedEventDto(
+                    JobId: jobId,
+                    Message: "SSE connection established",
+                    Timestamp: DateTime.UtcNow,
+                    CorrelationId: correlationId
+                );
+                await SendSseEventWithId("connected", connectedEvent, GenerateEventId(), cancellationToken).ConfigureAwait(false);
                 
                 Log.Information("[{CorrelationId}] SSE acknowledgment sent for job {JobId}", correlationId, jobId);
             }

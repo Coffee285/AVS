@@ -2700,6 +2700,15 @@ public record HeartbeatEventDto(
     string Status = "alive");
 
 /// <summary>
+/// SSE connection acknowledgment event sent immediately upon connection establishment
+/// </summary>
+public record ConnectedEventDto(
+    string JobId,
+    string Message,
+    DateTime Timestamp,
+    string CorrelationId);
+
+/// <summary>
 /// Provider cancellation status for reporting non-cancellable providers
 /// </summary>
 public record ProviderCancellationStatusDto(

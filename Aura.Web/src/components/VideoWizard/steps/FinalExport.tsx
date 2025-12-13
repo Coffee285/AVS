@@ -226,6 +226,16 @@ interface JobStatusData {
 }
 
 /**
+ * SSE connection acknowledgment event data structure
+ */
+interface ConnectedEventData {
+  jobId: string;
+  message: string;
+  timestamp: string;
+  correlationId: string;
+}
+
+/**
  * Normalize a file path by trimming and returning undefined for empty values.
  */
 function normalizePath(path?: string | null): string | undefined {
@@ -790,8 +800,11 @@ export const FinalExport: FC<FinalExportProps> = ({
                 if (!connectionEstablished) {
                   connectionEstablished = true;
                   clearTimeout(connectionTimeoutId);
-                  const data = JSON.parse(event.data);
-                  console.info('[FinalExport] SSE connection acknowledged by backend:', data.message);
+                  const data = JSON.parse(event.data) as ConnectedEventData;
+                  console.info(
+                    '[FinalExport] SSE connection acknowledged by backend:',
+                    data.message || 'Connected'
+                  );
                 }
               } catch (err) {
                 console.warn('[FinalExport] Failed to parse connected event:', err);
