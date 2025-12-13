@@ -806,7 +806,24 @@ public class JobsController : ControllerBase
 
         try
         {
-            var job = _jobRunner.GetJob(jobId);
+            // CRITICAL FIX: Wait for job to appear (it may take a moment after creation)
+            // This prevents race condition where SSE connects before job is fully registered
+            Job? job = null;
+            var waitAttempts = 0;
+            const int waitIntervalMs = 250;
+            const int maxWaitTimeMs = 20_000; // 20 seconds
+            const int maxWaitAttempts = maxWaitTimeMs / waitIntervalMs;
+
+            while (job == null && waitAttempts < maxWaitAttempts && !cancellationToken.IsCancellationRequested)
+            {
+                job = _jobRunner.GetJob(jobId);
+                if (job == null)
+                {
+                    waitAttempts++;
+                    await Task.Delay(waitIntervalMs, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
             if (job == null)
             {
                 // Check if job exists in ExportJobService as fallback
@@ -818,14 +835,21 @@ public class JobsController : ControllerBase
                 
                 if (exportJob == null)
                 {
-                    Log.Warning("[{CorrelationId}] SSE: Job {JobId} not found in JobRunner or ExportJobService", correlationId, jobId);
+                    Log.Warning("[{CorrelationId}] SSE: Job {JobId} not found in JobRunner or ExportJobService after {WaitAttempts} attempts", 
+                        correlationId, jobId, waitAttempts);
                     await SendSseEventWithId("error", new { message = "Job not found", jobId, correlationId }, GenerateEventId(), cancellationToken).ConfigureAwait(false);
                     return;
                 }
                 else
                 {
-                    Log.Information("[{CorrelationId}] SSE: Job {JobId} found in ExportJobService but not JobRunner", correlationId, jobId);
+                    Log.Information("[{CorrelationId}] SSE: Job {JobId} found in ExportJobService but not JobRunner after {WaitAttempts} attempts", 
+                        correlationId, jobId, waitAttempts);
                 }
+            }
+            else
+            {
+                Log.Information("[{CorrelationId}] SSE: Job {JobId} found in JobRunner after {WaitAttempts} attempts", 
+                    correlationId, jobId, waitAttempts);
             }
 
             // Ensure job is not null before proceeding
