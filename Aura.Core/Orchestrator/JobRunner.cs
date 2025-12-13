@@ -722,9 +722,9 @@ public partial class JobRunner
 
             _logger.LogWarning(
                 "[DIAGNOSTIC] [JOB-RESULT-RECEIVED] Orchestrator returned for job {JobId} at {Timestamp}. " +
-                "OutputPath: {Path}, Success: {Success}, File exists: {Exists}",
+                "OutputPath: {Path}, File exists: {Exists}",
                 jobId, DateTime.UtcNow.ToString("HH:mm:ss.fff"),
-                generationResult.OutputPath ?? "NULL", generationResult.Success,
+                generationResult.OutputPath ?? "NULL",
                 generationResult.OutputPath != null && File.Exists(generationResult.OutputPath));
 
             _logger.LogInformation("[Job {JobId}] Orchestrator returned successfully with output: {OutputPath}", 
