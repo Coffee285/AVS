@@ -4,6 +4,7 @@ import {
   Text,
   Title1,
   Title2,
+  Title3,
   Spinner,
   makeStyles,
   tokens,
@@ -20,6 +21,9 @@ import {
   MessageBarBody,
   MessageBarTitle,
   MessageBarActions,
+  Radio,
+  RadioGroup,
+  Badge,
 } from '@fluentui/react-components';
 import {
   LocalLanguage24Regular,
@@ -27,6 +31,8 @@ import {
   TextDescription24Regular,
   ArrowClockwise24Regular,
   Info24Regular,
+  Flash24Regular,
+  BeakerSettings24Regular,
 } from '@fluentui/react-icons';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { LlmModelSelector, type LlmSelection } from '../../components/ModelSelection';
@@ -38,6 +44,7 @@ import {
   getErrorSeverity,
   type ParsedLocalizationError,
 } from '../../utils/localizationErrors';
+import type { TranslationQualityDto, CulturalAdaptationDto } from '../../types/api-v1';
 
 const useStyles = makeStyles({
   container: {
@@ -188,6 +195,118 @@ const useStyles = makeStyles({
     lineHeight: '1.6',
     padding: tokens.spacingHorizontalM,
   },
+  modeSelector: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalM,
+  },
+  modeOption: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: tokens.spacingHorizontalM,
+    padding: tokens.spacingVerticalM,
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+  },
+  modeIcon: {
+    fontSize: '24px',
+    marginTop: tokens.spacingVerticalXS,
+  },
+  modeContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalXS,
+    flex: 1,
+  },
+  modeName: {
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase300,
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+  },
+  modeDescription: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground3,
+    lineHeight: '1.5',
+  },
+  metadataBar: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalL,
+    flexWrap: 'wrap',
+    marginBottom: tokens.spacingVerticalM,
+    padding: tokens.spacingVerticalS,
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    backgroundColor: tokens.colorNeutralBackground3,
+    borderRadius: tokens.borderRadiusSmall,
+  },
+  metadataItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalXXS,
+  },
+  metadataLabel: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+    textTransform: 'uppercase',
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  metadataValue: {
+    fontSize: tokens.fontSizeBase300,
+    color: tokens.colorNeutralForeground1,
+  },
+  qualityGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: tokens.spacingHorizontalM,
+    marginTop: tokens.spacingVerticalM,
+    padding: tokens.spacingVerticalM,
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    backgroundColor: tokens.colorNeutralBackground3,
+    borderRadius: tokens.borderRadiusSmall,
+  },
+  qualityMetric: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalXXS,
+  },
+  qualityLabel: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+  },
+  qualityValue: {
+    fontSize: tokens.fontSizeBase400,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorBrandForeground1,
+  },
+  culturalAdaptationsSection: {
+    marginTop: tokens.spacingVerticalL,
+    padding: tokens.spacingVerticalM,
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    backgroundColor: tokens.colorNeutralBackground3,
+    borderRadius: tokens.borderRadiusSmall,
+  },
+  culturalAdaptation: {
+    padding: tokens.spacingVerticalS,
+    paddingLeft: tokens.spacingHorizontalS,
+    paddingRight: tokens.spacingHorizontalS,
+    marginTop: tokens.spacingVerticalS,
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: tokens.borderRadiusSmall,
+    borderLeft: `3px solid ${tokens.colorBrandForeground1}`,
+  },
+  adaptationPhrase: {
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase200,
+  },
+  adaptationReasoning: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+    marginTop: tokens.spacingVerticalXXS,
+  },
   '@media (max-width: 900px)': {
     container: {
       paddingLeft: tokens.spacingHorizontalL,
@@ -220,6 +339,12 @@ export const LocalizationPage: React.FC = () => {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [lastOperation, setLastOperation] = useState<'translate' | 'analyze' | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Translation mode and quality data
+  const [thoroughMode, setThoroughMode] = useState(false);
+  const [translationTime, setTranslationTime] = useState<number>(0);
+  const [qualityData, setQualityData] = useState<TranslationQualityDto | null>(null);
+  const [culturalAdaptations, setCulturalAdaptations] = useState<CulturalAdaptationDto[]>([]);
   const startTimeRef = useRef<number | null>(null);
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -353,11 +478,21 @@ export const LocalizationPage: React.FC = () => {
 
     setLoading(true);
     setParsedError(null);
+
+    // Set loading message based on mode
+    const modeLabel = thoroughMode ? 'thorough analysis' : 'translation';
+    const estimatedTime = thoroughMode ? '2-3 min' : '20-40s';
     setLoadingMessage(
-      llmSelection.provider ? `Translating with ${llmSelection.provider}...` : 'Translating...'
+      llmSelection.provider
+        ? `Running ${modeLabel} with ${llmSelection.provider}... (typically ${estimatedTime})`
+        : `Running ${modeLabel}... (typically ${estimatedTime})`
     );
+
     setLastOperation('translate');
     setTranslatedProviderInfo('');
+    setQualityData(null);
+    setCulturalAdaptations([]);
+    setTranslationTime(0);
     startElapsedTimer();
 
     // Signal to ResourceMonitor that a critical LLM operation is active
@@ -378,22 +513,16 @@ export const LocalizationPage: React.FC = () => {
     }, localizationTimeout);
 
     try {
-      const response = await fetch('/api/localization/translate', {
+      const response = await fetch('/api/localization/translate/simple', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceText: sourceText,
           sourceLanguage,
           targetLanguage,
-          scriptLines: [],
-          options: {
-            mode: 'Localized',
-            enableBackTranslation: false,
-            enableQualityScoring: false,
-            adjustTimings: false,
-          },
           provider: llmSelection.provider || undefined,
           modelId: llmSelection.modelId || undefined,
+          thoroughMode: thoroughMode,
         }),
         signal: abortController.signal,
       });
@@ -408,13 +537,28 @@ export const LocalizationPage: React.FC = () => {
 
       const data = await response.json();
       setTranslatedText(data.translatedText || '');
+
+      // Store translation metadata
+      setTranslationTime(data.translationTimeSeconds || 0);
+
+      // Store quality data if available (thorough mode)
+      if (data.quality) {
+        setQualityData(data.quality);
+      }
+
+      // Store cultural adaptations if available (thorough mode)
+      if (data.culturalAdaptations && data.culturalAdaptations.length > 0) {
+        setCulturalAdaptations(data.culturalAdaptations);
+      }
+
+      // Set provider info
       const providerLabel = [
-        data.metrics?.providerUsed || llmSelection.provider || 'Unknown provider',
-        data.metrics?.modelUsed || llmSelection.modelId,
+        data.providerUsed || llmSelection.provider || 'Unknown provider',
+        data.modelUsed || llmSelection.modelId,
       ]
         .filter(Boolean)
         .join(' / ');
-      const fallbackLabel = data.metrics?.isFallback ? ' (fallback)' : '';
+      const fallbackLabel = data.isFallback ? ' (fallback)' : '';
       setTranslatedProviderInfo(`${providerLabel}${fallbackLabel}`.trim());
     } catch (err: unknown) {
       clearTimeout(timeoutId);
@@ -432,6 +576,7 @@ export const LocalizationPage: React.FC = () => {
     sourceText,
     sourceLanguage,
     targetLanguage,
+    thoroughMode,
     llmSelection,
     handleRequestError,
     startElapsedTimer,
@@ -691,6 +836,57 @@ export const LocalizationPage: React.FC = () => {
 
           <div className={styles.form}>
             <div className={styles.fieldGroup}>
+              <Field label="Translation Mode">
+                <RadioGroup
+                  value={thoroughMode ? 'thorough' : 'standard'}
+                  onChange={(_, data) => setThoroughMode(data.value === 'thorough')}
+                  disabled={loading}
+                >
+                  <div className={styles.modeOption}>
+                    <Flash24Regular className={styles.modeIcon} />
+                    <div className={styles.modeContent}>
+                      <Radio
+                        value="standard"
+                        label={
+                          <div className={styles.modeName}>
+                            Standard (Fast)
+                            <Badge appearance="filled" color="success" size="small">
+                              ~20-40s
+                            </Badge>
+                          </div>
+                        }
+                      />
+                      <Text className={styles.modeDescription}>
+                        Quick translation optimized for speed. Best for everyday use, rapid
+                        iteration, and when you need results fast.
+                      </Text>
+                    </div>
+                  </div>
+                  <div className={styles.modeOption}>
+                    <BeakerSettings24Regular className={styles.modeIcon} />
+                    <div className={styles.modeContent}>
+                      <Radio
+                        value="thorough"
+                        label={
+                          <div className={styles.modeName}>
+                            Thorough Analysis
+                            <Badge appearance="filled" color="informative" size="small">
+                              ~2-3 min
+                            </Badge>
+                          </div>
+                        }
+                      />
+                      <Text className={styles.modeDescription}>
+                        Comprehensive analysis with quality scoring, back-translation verification,
+                        and cultural adaptation insights. Use when translation quality and cultural
+                        nuance are critical.
+                      </Text>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </Field>
+            </div>
+            <div className={styles.fieldGroup}>
               <Field label="Source Language">
                 <Combobox
                   value={sourceLanguage}
@@ -800,10 +996,141 @@ export const LocalizationPage: React.FC = () => {
           {translatedText && (
             <div className={styles.resultsSection}>
               <Title2 className={styles.sectionTitle}>Translation Result</Title2>
-              {translatedProviderInfo && (
-                <Text className={styles.providerInfo}>Provider: {translatedProviderInfo}</Text>
-              )}
+
+              {/* Metadata Bar */}
+              <div className={styles.metadataBar}>
+                <div className={styles.metadataItem}>
+                  <Text className={styles.metadataLabel}>Provider</Text>
+                  <Text className={styles.metadataValue}>
+                    {translatedProviderInfo || 'Unknown'}
+                  </Text>
+                </div>
+                <div className={styles.metadataItem}>
+                  <Text className={styles.metadataLabel}>Time</Text>
+                  <Text className={styles.metadataValue}>
+                    {translationTime > 0 ? `${translationTime.toFixed(1)}s` : 'N/A'}
+                  </Text>
+                </div>
+                <div className={styles.metadataItem}>
+                  <Text className={styles.metadataLabel}>Mode</Text>
+                  <Text className={styles.metadataValue}>
+                    {thoroughMode ? 'Thorough Analysis' : 'Standard'}
+                  </Text>
+                </div>
+              </div>
+
+              {/* Translated Text */}
               <div className={styles.resultText}>{translatedText}</div>
+
+              {/* Quality Metrics (Thorough Mode Only) */}
+              {qualityData && (
+                <div>
+                  <Title3
+                    style={{
+                      marginTop: tokens.spacingVerticalL,
+                      marginBottom: tokens.spacingVerticalM,
+                    }}
+                  >
+                    Quality Analysis
+                  </Title3>
+                  <div className={styles.qualityGrid}>
+                    <div className={styles.qualityMetric}>
+                      <Text className={styles.qualityLabel}>Overall Score</Text>
+                      <Text className={styles.qualityValue}>
+                        {(qualityData.overallScore * 100).toFixed(0)}%
+                      </Text>
+                    </div>
+                    <div className={styles.qualityMetric}>
+                      <Text className={styles.qualityLabel}>Fluency</Text>
+                      <Text className={styles.qualityValue}>
+                        {(qualityData.fluencyScore * 100).toFixed(0)}%
+                      </Text>
+                    </div>
+                    <div className={styles.qualityMetric}>
+                      <Text className={styles.qualityLabel}>Accuracy</Text>
+                      <Text className={styles.qualityValue}>
+                        {(qualityData.accuracyScore * 100).toFixed(0)}%
+                      </Text>
+                    </div>
+                    <div className={styles.qualityMetric}>
+                      <Text className={styles.qualityLabel}>Cultural Fit</Text>
+                      <Text className={styles.qualityValue}>
+                        {(qualityData.culturalAppropriatenessScore * 100).toFixed(0)}%
+                      </Text>
+                    </div>
+                    <div className={styles.qualityMetric}>
+                      <Text className={styles.qualityLabel}>Terminology</Text>
+                      <Text className={styles.qualityValue}>
+                        {(qualityData.terminologyConsistencyScore * 100).toFixed(0)}%
+                      </Text>
+                    </div>
+                    <div className={styles.qualityMetric}>
+                      <Text className={styles.qualityLabel}>Back-Translation</Text>
+                      <Text className={styles.qualityValue}>
+                        {(qualityData.backTranslationScore * 100).toFixed(0)}%
+                      </Text>
+                    </div>
+                  </div>
+
+                  {qualityData.backTranslatedText && (
+                    <div style={{ marginTop: tokens.spacingVerticalM }}>
+                      <Text
+                        style={{
+                          fontSize: tokens.fontSizeBase200,
+                          color: tokens.colorNeutralForeground3,
+                          display: 'block',
+                          marginBottom: tokens.spacingVerticalXS,
+                        }}
+                      >
+                        Back-Translation (for verification):
+                      </Text>
+                      <div
+                        style={{
+                          padding: tokens.spacingVerticalS,
+                          paddingLeft: tokens.spacingHorizontalM,
+                          paddingRight: tokens.spacingHorizontalM,
+                          backgroundColor: tokens.colorNeutralBackground3,
+                          borderRadius: tokens.borderRadiusSmall,
+                          fontSize: tokens.fontSizeBase200,
+                          fontStyle: 'italic',
+                          color: tokens.colorNeutralForeground2,
+                        }}
+                      >
+                        {qualityData.backTranslatedText}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Cultural Adaptations (Thorough Mode Only) */}
+              {culturalAdaptations.length > 0 && (
+                <div className={styles.culturalAdaptationsSection}>
+                  <Title3 style={{ marginBottom: tokens.spacingVerticalM }}>
+                    Cultural Adaptations
+                  </Title3>
+                  <Text
+                    style={{
+                      fontSize: tokens.fontSizeBase200,
+                      color: tokens.colorNeutralForeground3,
+                      display: 'block',
+                      marginBottom: tokens.spacingVerticalM,
+                    }}
+                  >
+                    {culturalAdaptations.length} cultural adaptation
+                    {culturalAdaptations.length !== 1 ? 's' : ''} identified
+                  </Text>
+                  {culturalAdaptations.map((adaptation, idx) => (
+                    <div key={idx} className={styles.culturalAdaptation}>
+                      <Text className={styles.adaptationPhrase}>
+                        <strong>{adaptation.category}:</strong> "{adaptation.sourcePhrase}" → "
+                        {adaptation.adaptedPhrase}"
+                      </Text>
+                      <Text className={styles.adaptationReasoning}>{adaptation.reasoning}</Text>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </Card>

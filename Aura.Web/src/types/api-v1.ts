@@ -628,6 +628,33 @@ export interface TranslationResultDto {
 }
 
 /**
+ * Simple translation request for direct text translation
+ * Used by LocalizationPage frontend
+ */
+export interface SimpleTranslationRequest {
+  sourceText: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  provider?: string;
+  modelId?: string;
+  thoroughMode?: boolean;
+}
+
+/**
+ * Simple translation response with just the translated text
+ * Used by LocalizationPage frontend
+ */
+export interface SimpleTranslationDto {
+  translatedText: string;
+  providerUsed: string;
+  modelUsed?: string;
+  isFallback: boolean;
+  translationTimeSeconds: number;
+  quality?: TranslationQualityDto;
+  culturalAdaptations?: CulturalAdaptationDto[];
+}
+
+/**
  * Translation quality metrics for monitoring performance
  */
 export interface TranslationMetricsDto {
