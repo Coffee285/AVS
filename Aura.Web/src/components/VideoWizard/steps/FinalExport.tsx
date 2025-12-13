@@ -807,7 +807,12 @@ export const FinalExport: FC<FinalExportProps> = ({
                   );
                 }
               } catch (err) {
-                console.warn('[FinalExport] Failed to parse connected event:', err);
+                console.warn(
+                  '[FinalExport] Failed to parse connected event. Raw data:',
+                  event.data,
+                  'Error:',
+                  err
+                );
               }
             });
 
