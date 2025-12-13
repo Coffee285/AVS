@@ -5,7 +5,6 @@ import {
   ToastFooter,
   Toaster,
   makeStyles,
-  mergeClasses,
   shorthands,
   tokens,
   useToastController,
@@ -172,39 +171,11 @@ const useStyles = makeStyles({
     },
   },
 
-  // Progress bar fill - uses transform for smooth, hardware-accelerated animation
+  // Progress bar fill - uses width transition for smooth animation
   progressFill: {
     height: '100%',
     backgroundColor: tokens.colorBrandBackground,
-    transformOrigin: 'left',
-    willChange: 'transform',
-    '@media (prefers-reduced-motion: reduce)': {
-      transitionProperty: 'transform',
-      transitionDuration: '0.1s',
-      transitionTimingFunction: 'linear',
-    },
-  },
-
-  // Keyframes for progress bar animation - defined at root level for Griffel
-  '@keyframes progressShrink': {
-    '0%': {
-      transform: 'scaleX(1)',
-    },
-    '100%': {
-      transform: 'scaleX(0)',
-    },
-  },
-
-  // Applied when animation is active (not in reduced motion mode)
-  progressFillAnimated: {
-    animationName: 'progressShrink',
-    animationTimingFunction: 'linear',
-    animationFillMode: 'forwards',
-  },
-
-  // Applied when animation should be paused
-  progressFillPaused: {
-    animationPlayState: 'paused',
+    transition: 'width 100ms linear',
   },
 
   // Success progress fill
@@ -321,7 +292,7 @@ const TOASTER_ID = 'notifications-toaster';
 /**
  * Toast component with auto-dismiss progress bar and close button
  * Supports ESC key to dismiss and mouse hover to pause auto-dismiss
- * Uses CSS animation for smooth, hardware-accelerated progress indication
+ * Uses setInterval with CSS transition for smooth progress indication
  */
 function ToastWithProgress({
   children,
@@ -333,40 +304,61 @@ function ToastWithProgress({
   onDismiss?: () => void;
 }) {
   const styles = useStyles();
+  const [progress, setProgress] = useState(100);
   const [isPaused, setIsPaused] = useState(false);
-  const [animationDuration, setAnimationDuration] = useState(timeout);
+  const isPausedRef = useRef(false);
   const onDismissRef = useRef(onDismiss);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startTimeRef = useRef<number>(0);
   const pauseStartTimeRef = useRef<number>(0);
   const totalPausedTimeRef = useRef<number>(0);
-  const progressBarRef = useRef<HTMLDivElement>(null);
 
-  // Detect reduced motion preference
-  const prefersReducedMotion =
-    typeof window !== 'undefined' &&
-    window.matchMedia &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  // Keep onDismiss callback in sync
+  // Keep refs in sync
   useEffect(() => {
     onDismissRef.current = onDismiss;
   }, [onDismiss]);
 
-  // Setup auto-dismiss timer with pause tracking
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
+  // Setup progress updates and auto-dismiss timer
   useEffect(() => {
     if (timeout <= 0) {
       return;
     }
 
-    // Clear any existing timeout
+    // Clear any existing interval and timeout
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
     if (dismissTimeoutRef.current) {
       clearTimeout(dismissTimeoutRef.current);
     }
 
     // Reset state
+    startTimeRef.current = Date.now();
     totalPausedTimeRef.current = 0;
     pauseStartTimeRef.current = 0;
-    setAnimationDuration(timeout);
+    setProgress(100);
+
+    // Update progress every 100ms
+    intervalRef.current = setInterval(() => {
+      if (!isPausedRef.current) {
+        const elapsed = Date.now() - startTimeRef.current - totalPausedTimeRef.current;
+        const remaining = timeout - elapsed;
+        const newProgress = Math.max(0, (remaining / timeout) * 100);
+        setProgress(newProgress);
+
+        if (remaining <= 0) {
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
+        }
+      }
+    }, 100);
 
     // Schedule dismiss
     dismissTimeoutRef.current = setTimeout(() => {
@@ -374,6 +366,10 @@ function ToastWithProgress({
     }, timeout);
 
     return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
       if (dismissTimeoutRef.current) {
         clearTimeout(dismissTimeoutRef.current);
         dismissTimeoutRef.current = null;
@@ -398,12 +394,10 @@ function ToastWithProgress({
       totalPausedTimeRef.current += pauseDuration;
 
       // Calculate remaining time
-      const remainingTime = timeout - totalPausedTimeRef.current;
+      const elapsed = Date.now() - startTimeRef.current - totalPausedTimeRef.current;
+      const remainingTime = timeout - elapsed;
 
       if (remainingTime > 0) {
-        // Update animation duration to remaining time
-        setAnimationDuration(remainingTime);
-
         // Reschedule dismiss
         dismissTimeoutRef.current = setTimeout(() => {
           onDismissRef.current?.();
@@ -437,24 +431,6 @@ function ToastWithProgress({
     setIsPaused(false);
   };
 
-  // Determine progress fill class names - use mergeClasses for Griffel compatibility
-  const progressFillClassName = prefersReducedMotion
-    ? styles.progressFill
-    : mergeClasses(
-        styles.progressFill,
-        styles.progressFillAnimated,
-        isPaused && styles.progressFillPaused
-      );
-
-  // For reduced motion, use transform with JS-controlled value
-  // For normal motion, use animation shorthand to trigger animation
-  const progressStyle = prefersReducedMotion
-    ? { transform: `scaleX(${isPaused ? 1 : 0})` }
-    : {
-        animation: `progressShrink ${animationDuration}ms linear forwards`,
-        animationPlayState: isPaused ? 'paused' : 'running',
-      };
-
   return (
     // This div is for hover detection to pause toast auto-dismiss, not for interactive content
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -462,7 +438,7 @@ function ToastWithProgress({
       {children}
       {timeout > 0 && (
         <div className={styles.progressBar}>
-          <div ref={progressBarRef} className={progressFillClassName} style={progressStyle} />
+          <div className={styles.progressFill} style={{ width: `${progress}%` }} />
         </div>
       )}
     </div>
