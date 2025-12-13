@@ -146,10 +146,13 @@ public class ExportPathPropagationTests
         // Act - Try to mark as completed WITHOUT outputPath
         await _exportJobService.UpdateJobStatusAsync(jobId, "completed", 100, outputPath: null);
 
-        // Assert - Job should NOT transition to completed status
+        // Assert - Job should transition to "failed" status (not remain "queued")
+        // This is the fix for the 95% stuck issue - instead of silently rejecting the update,
+        // we now force-fail the job so the frontend receives a terminal state
         var updatedJob = await _exportJobService.GetJobAsync(jobId);
         updatedJob.Should().NotBeNull();
-        updatedJob!.Status.Should().Be("queued", "job should reject transition to completed without outputPath");
+        updatedJob!.Status.Should().Be("failed", "job should be force-failed when completed without outputPath to prevent 95% stuck issue");
+        updatedJob.ErrorMessage.Should().Contain("output file path was not captured");
         updatedJob.OutputPath.Should().BeNull();
     }
 

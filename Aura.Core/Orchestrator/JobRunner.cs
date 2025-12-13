@@ -1206,6 +1206,16 @@ public partial class JobRunner
                 _logger.LogInformation(
                     "[Job {JobId}] Syncing terminal state to ExportJobService: Status={Status}, OutputPath={OutputPath}",
                     updated.Id, exportStatus, updated.OutputPath ?? "NULL");
+                
+                // CRITICAL: Warn if completing without an output path - this will cause ExportJobService to force-fail
+                if (exportStatus == "completed" && string.IsNullOrWhiteSpace(updated.OutputPath))
+                {
+                    _logger.LogError(
+                        "[Job {JobId}] CRITICAL: Attempting to sync 'completed' status without outputPath. " +
+                        "ExportJobService will force-fail this job to prevent 95% stuck issue. " +
+                        "Check upstream pipeline for output path extraction failures.",
+                        updated.Id);
+                }
             }
             
             try
@@ -1245,6 +1255,20 @@ public partial class JobRunner
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[Job {JobId}] Failed to sync to ExportJobService", updated.Id);
+            }
+        }
+        else
+        {
+            // CRITICAL: Log when ExportJobService is not available
+            // This helps diagnose DI issues that cause progress sync failures
+            var isTerminal = IsTerminalStatus(updated.Status);
+            if (isTerminal)
+            {
+                _logger.LogError(
+                    "[Job {JobId}] CRITICAL: ExportJobService is NULL - cannot sync terminal state '{Status}' " +
+                    "(Percent={Percent}, OutputPath={OutputPath}). " +
+                    "Frontend will NOT receive job completion notification. Check DI registration.",
+                    updated.Id, updated.Status, updated.Percent, updated.OutputPath ?? "NULL");
             }
         }
 
