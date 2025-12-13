@@ -23,6 +23,13 @@ namespace Aura.Core.Orchestrator;
 /// </summary>
 public partial class JobRunner
 {
+    // Progress mapping constants
+    // Render progress (FFmpeg output 0-100%) maps to overall progress 80-99%
+    // Formula: OverallPercent = RenderStartPercent + (RenderPercent * RenderProgressMultiplier)
+    // With RenderPercent=100: 80 + (100 * 0.19) = 99 (leaves 100 for completion signal)
+    private const int RenderStartPercent = 80;
+    private const double RenderProgressMultiplier = 0.19;
+    
     // Compiled regex patterns for performance (used in progress message parsing)
     [GeneratedRegex(@"(\d+(?:\.\d+)?)\s*%", RegexOptions.Compiled)]
     private static partial Regex PercentageRegex();
@@ -1506,8 +1513,7 @@ public partial class JobRunner
             if (percentMatch.Success && double.TryParse(percentMatch.Groups[1].Value, out double renderPercent))
             {
                 // Map render progress (0-100%) to overall progress (80-99%)
-                // Changed from 0.15 to 0.19 so that 100% FFmpeg progress maps to 99% overall
-                percent = 80 + (int)(renderPercent * 0.19);
+                percent = RenderStartPercent + (int)(renderPercent * RenderProgressMultiplier);
             }
             else
             {

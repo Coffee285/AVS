@@ -290,6 +290,8 @@ public class ExportJobService : IExportJobService
 
     /// <summary>
     /// Notify all subscribers of a job update.
+    /// This method executes synchronously to ensure all subscribers receive the update
+    /// before the calling method returns (critical for terminal state transitions).
     /// </summary>
     private void NotifySubscribers(string jobId, VideoJob job)
     {
