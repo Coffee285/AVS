@@ -93,6 +93,9 @@ public static class StageNames
     public const string ImageGeneration = "Image generation";
     public const string CaptionGeneration = "Caption generation";
     public const string VideoComposition = "Video composition (rendering)";
+    
+    // Completion message (used when job reaches 100%)
+    public const string CompletionMessage = "Video generation complete";
 }
 
 /// <summary>

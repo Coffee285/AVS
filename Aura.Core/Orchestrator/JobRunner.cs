@@ -707,13 +707,25 @@ public partial class JobRunner
             imageProviderOverride
             ).ConfigureAwait(false);
 
+            _logger.LogInformation("[Job {JobId}] Orchestrator returned successfully with output: {OutputPath}", 
+                jobId, generationResult.OutputPath);
+
             // Add final artifact
             var artifact = _artifactManager.CreateArtifact(jobId, "video.mp4", generationResult.OutputPath, "video/mp4");
             var artifacts = new List<JobArtifact>(job.Artifacts) { artifact };
 
             if (generationResult.EditableTimeline != null)
             {
-                await _artifactManager.SaveTimelineAsync(jobId, generationResult.EditableTimeline, ct).ConfigureAwait(false);
+                try
+                {
+                    _logger.LogDebug("[Job {JobId}] Saving timeline artifact", jobId);
+                    await _artifactManager.SaveTimelineAsync(jobId, generationResult.EditableTimeline, ct).ConfigureAwait(false);
+                    _logger.LogDebug("[Job {JobId}] Timeline artifact saved successfully", jobId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[Job {JobId}] Failed to save timeline artifact, continuing with completion", jobId);
+                }
             }
 
             // Mark project as completed if checkpoint manager is available
@@ -752,13 +764,21 @@ public partial class JobRunner
             // Clear retry state if job queue service is available
             _jobQueueService?.ClearRetryState(jobId);
 
-            // Mark as done with output path
+            // CRITICAL: Force 100% completion immediately - this MUST succeed
+            // Even if cleanup operations above failed, we still mark the job as complete
+            // because the video was successfully generated
+            _logger.LogInformation("[Job {JobId}] Forcing completion to 100% (output exists: {OutputExists})", 
+                jobId, System.IO.File.Exists(generationResult.OutputPath));
+
+            // Mark as done with output path - this will trigger JobProgress event
+            // which updates SSE and polling endpoints
             job = UpdateJob(job,
                 status: JobStatus.Done,
                 percent: 100,
-                stage: "Complete",
+                stage: StageNames.Complete,
                 artifacts: artifacts,
                 outputPath: generationResult.OutputPath,
+                progressMessage: StageNames.CompletionMessage,
                 finishedAt: DateTime.UtcNow,
                 completedUtc: DateTime.UtcNow);
 
@@ -1508,7 +1528,8 @@ public partial class JobRunner
             percent = 80;
             formattedMessage = "Starting video rendering";
         }
-        else if (message.Contains("Rendering:", StringComparison.OrdinalIgnoreCase))
+        else if (message.Contains("Rendering:", StringComparison.OrdinalIgnoreCase) ||
+                 message.Contains("Rendering video", StringComparison.OrdinalIgnoreCase))
         {
             // Extract percentage from render progress if available
             stage = "Rendering";
