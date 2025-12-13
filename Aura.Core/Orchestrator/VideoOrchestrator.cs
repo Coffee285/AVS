@@ -295,22 +295,25 @@ public class VideoOrchestrator
             using var process = new System.Diagnostics.Process { StartInfo = startInfo };
             process.Start();
             
-            // Wait with timeout
-            var processTask = process.WaitForExitAsync(timeoutCts.Token);
-            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5), timeoutCts.Token);
-            var completed = await Task.WhenAny(processTask, timeoutTask).ConfigureAwait(false);
+            // Wait for process to complete with timeout (cancellation token handles the timeout)
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
             
-            if (completed == timeoutTask || !process.HasExited)
+            // If we reach here without exception, process completed within timeout
+            if (!process.HasExited)
             {
-                try
+                // Process didn't exit cleanly - kill it
+                if (!process.HasExited)  // Double-check before killing
                 {
-                    process.Kill();
+                    try
+                    {
+                        process.Kill();
+                    }
+                    catch
+                    {
+                        // Ignore kill errors - process may have exited between checks
+                    }
                 }
-                catch
-                {
-                    // Ignore kill errors
-                }
-                _logger.LogError("[FFMPEG-HEALTH] FFmpeg health check timed out after 5 seconds");
+                _logger.LogError("[FFMPEG-HEALTH] FFmpeg health check did not complete properly");
                 return false;
             }
 

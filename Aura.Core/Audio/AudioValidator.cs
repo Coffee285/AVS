@@ -225,15 +225,8 @@ public class AudioValidator
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            // Timeout occurred - kill the process if still running
-            try
-            {
-                _logger.LogError("[AUDIO-VAL] ffprobe validation timed out after 30 seconds: {Path}", audioPath);
-            }
-            catch
-            {
-                // Ignore errors during cleanup
-            }
+            // Timeout occurred
+            _logger.LogError("[AUDIO-VAL] ffprobe validation timed out after 30 seconds: {Path}", audioPath);
             
             return new AudioValidationResult
             {
