@@ -511,26 +511,47 @@ export function GlobalLlmSelector() {
   );
 
   // Auto-select first Ollama model when models are loaded and no model is selected
+  // CRITICAL FIX: Only auto-select if we don't have a saved preference already
   useEffect(() => {
     if (selectedProvider === 'Ollama' && ollamaModels.length > 0 && !selectedModel) {
-      const firstModel = getDefaultOllamaModel(ollamaModels);
-      if (firstModel) {
-        setSelection({ provider: 'Ollama', modelId: firstModel });
-        saveOllamaModel(firstModel);
-        console.info('[GlobalLlmSelector] Auto-selected Ollama model:', firstModel);
+      const defaultModel = getDefaultOllamaModel(ollamaModels);
+      if (defaultModel) {
+        // Only auto-select if this is genuinely a new selection (no saved preference)
+        // savedOllamaModel takes precedence - don't override user's saved choice
+        const modelToSelect = savedOllamaModel || defaultModel;
+
+        setSelection({ provider: 'Ollama', modelId: modelToSelect });
+
+        // Only save if we're using a new auto-selected model (not the saved one)
+        if (!savedOllamaModel) {
+          saveOllamaModel(modelToSelect);
+          console.info(
+            '[GlobalLlmSelector] Auto-selected Ollama model (no saved preference):',
+            modelToSelect
+          );
+        } else {
+          console.info('[GlobalLlmSelector] Using saved Ollama model preference:', modelToSelect);
+        }
       }
     }
   }, [
     selectedProvider,
     ollamaModels,
     selectedModel,
+    savedOllamaModel,
     getDefaultOllamaModel,
     setSelection,
     saveOllamaModel,
   ]);
 
   // Auto-select first model for API-based providers when provider is set but no model
+  // CRITICAL FIX: Only runs AFTER initialization to avoid race with saved preferences
   useEffect(() => {
+    // Skip if not initialized yet - prevents racing with saved model loading
+    if (!isInitialized) {
+      return;
+    }
+
     // Skip if it's Ollama (handled separately above), or if we already have a model
     if (selectedProvider === 'Ollama' || !selectedProvider || selectedModel) {
       return;
@@ -565,7 +586,7 @@ export function GlobalLlmSelector() {
           .catch((err) => console.warn('[GlobalLlmSelector] Failed to save selection:', err));
       }
     }
-  }, [selectedProvider, selectedModel, availableModels, setSelection]);
+  }, [isInitialized, selectedProvider, selectedModel, availableModels, setSelection]);
 
   // Refresh models for a specific provider (force re-fetch from API)
   const refreshModels = useCallback(async () => {
