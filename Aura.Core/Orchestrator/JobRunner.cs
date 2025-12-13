@@ -743,7 +743,7 @@ public partial class JobRunner
 
             if (string.IsNullOrEmpty(renderOutputPath))
             {
-                const string failureMsg = "Video generation completed but no output file was produced. Check logs for TTS, image generation, or FFmpeg errors.";
+                var failureMsg = "Video generation completed but no output file was produced. Check logs for TTS, image generation, or FFmpeg errors.";
 
                 var failure = new JobFailure
                 {
