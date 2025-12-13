@@ -108,6 +108,19 @@ public partial class JobRunner
     }
 
     /// <summary>
+    /// Diagnostic helper method to track 95% stuck issue.
+    /// Logs with Warning level and [DIAGNOSTIC] prefix for easy filtering.
+    /// </summary>
+    private void LogDiagnostic(string jobId, string message, int? percent = null)
+    {
+        var timestamp = DateTime.UtcNow.ToString("HH:mm:ss.fff");
+        var threadId = Environment.CurrentManagedThreadId;
+        _logger.LogWarning(
+            "[DIAGNOSTIC] [{Timestamp}] [Thread {ThreadId}] [Job {JobId}] {Message} {Percent}",
+            timestamp, threadId, jobId, message, percent.HasValue ? $"({percent}%)" : "");
+    }
+
+    /// <summary>
     /// Creates a new job and starts execution.
     /// </summary>
     public async Task<Job> CreateAndStartJobAsync(
@@ -710,6 +723,9 @@ public partial class JobRunner
             _logger.LogInformation("[Job {JobId}] Orchestrator returned successfully with output: {OutputPath}", 
                 jobId, generationResult.OutputPath);
 
+            // DIAGNOSTIC: Orchestrator completed successfully
+            LogDiagnostic(jobId, "Orchestrator returned successfully, about to force completion");
+
             // Add final artifact
             var artifact = _artifactManager.CreateArtifact(jobId, "video.mp4", generationResult.OutputPath, "video/mp4");
             var artifacts = new List<JobArtifact>(job.Artifacts) { artifact };
@@ -781,6 +797,9 @@ public partial class JobRunner
                 progressMessage: StageNames.CompletionMessage,
                 finishedAt: DateTime.UtcNow,
                 completedUtc: DateTime.UtcNow);
+
+            // DIAGNOSTIC: Forced completion to 100%
+            LogDiagnostic(jobId, "Forced completion - job should be Done/100%");
 
             _logger.LogInformation("Job {JobId} completed successfully. Output: {OutputPath}", jobId, generationResult.OutputPath);
 
@@ -1079,6 +1098,9 @@ public partial class JobRunner
         DateTime? canceledUtc = null,
         string? outputPath = null)
     {
+        // DIAGNOSTIC: Log UpdateJob call
+        LogDiagnostic(job.Id, "UpdateJob called", percent);
+
         // Validate state transition if status is changing
         var newStatus = status ?? job.Status;
         if (newStatus != job.Status && !job.CanTransitionTo(newStatus))
@@ -1170,6 +1192,9 @@ public partial class JobRunner
             {
                 if (isTerminal)
                 {
+                    // DIAGNOSTIC: Before syncing terminal state
+                    LogDiagnostic(updated.Id, $"About to sync terminal state '{exportStatus}' to ExportJobService", updated.Percent);
+
                     // AWAIT terminal state sync SYNCHRONOUSLY to avoid race condition
                     // Frontend polls immediately after job completes - sync must complete first
                     _exportJobService.UpdateJobStatusAsync(
@@ -1178,6 +1203,9 @@ public partial class JobRunner
                         updated.Percent,
                         updated.OutputPath,
                         updated.ErrorMessage).GetAwaiter().GetResult();
+                    
+                    // DIAGNOSTIC: After syncing terminal state
+                    LogDiagnostic(updated.Id, "Synced terminal state to ExportJobService", updated.Percent);
                         
                     _logger.LogInformation(
                         "[Job {JobId}] Successfully synced terminal state to ExportJobService",
