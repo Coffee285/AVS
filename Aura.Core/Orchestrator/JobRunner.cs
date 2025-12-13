@@ -763,7 +763,7 @@ public partial class JobRunner
                     errorMessage: failureMsg,
                     failureDetails: failure,
                     finishedAt: DateTime.UtcNow,
-                    outputPath: outputPath);
+                    outputPath: string.IsNullOrEmpty(outputPath) ? null : outputPath);
 
                 _logger.LogError("[Job {JobId}] {Error}", jobId, failureMsg);
                 throw new InvalidOperationException(failureMsg);
