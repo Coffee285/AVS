@@ -622,7 +622,8 @@ public class VideoOrchestrator
 
             // Execute smart orchestration, passing recovery results dictionary for task communication
             var result = await _smartOrchestrator.OrchestrateGenerationAsync(
-                brief, planSpec, systemProfile, taskExecutor, orchestrationProgress, ct, executorContext.RecoveryResults
+                brief, planSpec, systemProfile, taskExecutor, orchestrationProgress, ct,
+                recoveryResultsCallback: (key, value) => executorContext.RecoveryResults[key] = value
             ).ConfigureAwait(false);
 
             if (!result.Succeeded)
@@ -2169,63 +2170,38 @@ public class VideoOrchestrator
                         throw new InvalidOperationException(error);
                     }
                     
-                    // CRITICAL FIX: Retrieve narrationPath from multiple sources
-                    // When tasks execute asynchronously via VideoGenerationOrchestrator, closure variables
-                    // are not shared across task invocations. The audio task stores the path in state.NarrationPath.
-                    // Additionally, if audio task fails and orchestrator recovery creates silent audio,
-                    // the recovery result is stored in state.RecoveryResults["audio"].
-                    string? compositionNarrationPath = null;
-                    string narrationSource = "unknown";
-                    
-                    // DIAGNOSTIC: Log all available narration sources for debugging
+                    // Narration resolution priority: state value → recovery fallback → closure variable
+                    var recoveredAudioPath = state.RecoveryResults.TryGetValue("audio", out var recoveredAudio) && recoveredAudio is string recoveredPath
+                        ? recoveredPath
+                        : null;
+                    var compositionNarrationPath = state.NarrationPath
+                        ?? recoveredAudioPath
+                        ?? narrationPath;
+
                     _logger.LogInformation(
-                        "[Composition] [NARRATION-SOURCE-CHECK] Available sources: " +
-                        "state.NarrationPath={StateNarration}, " +
-                        "RecoveryResults count={RecoveryCount}, " +
-                        "RecoveryResults['audio']={RecoveryAudio}, " +
-                        "closure narrationPath={ClosurePath}",
-                        state.NarrationPath ?? "(null)",
-                        state.RecoveryResults.Count,
-                        state.RecoveryResults.TryGetValue("audio", out var debugRecovery) ? debugRecovery?.ToString() ?? "(null)" : "(key not found)",
-                        narrationPath ?? "(null)");
-                    
-                    // Priority 1: Check state.NarrationPath (set by successful audio generation)
-                    if (!string.IsNullOrEmpty(state.NarrationPath))
+                        "[Composition] Narration path resolution: state.NarrationPath={StateNarration}, RecoveryResults={Recovery}, Closure={Closure}, Final={Final}",
+                        state.NarrationPath ?? "NULL",
+                        recoveredAudioPath ?? "NOT_FOUND",
+                        narrationPath ?? "NULL",
+                        compositionNarrationPath ?? "NULL");
+
+                    if (string.IsNullOrEmpty(compositionNarrationPath))
                     {
-                        compositionNarrationPath = state.NarrationPath;
-                        narrationSource = "state.NarrationPath";
-                        _logger.LogInformation("[Composition] Using state.NarrationPath: {Path}", compositionNarrationPath);
+                        throw new InvalidOperationException(
+                            "Cannot render video: No narration audio available. TTS failed and no recovery audio was generated. " +
+                            "Check TTS provider configuration or enable silent audio fallback.");
                     }
-                    // Priority 2: Check recovery results (set by orchestrator when audio fails and silent audio is used)
-                    else if (state.RecoveryResults.TryGetValue("audio", out var recoveryResult) && recoveryResult is string recoveryPath && !string.IsNullOrEmpty(recoveryPath))
+
+                    if (!File.Exists(compositionNarrationPath))
                     {
-                        compositionNarrationPath = recoveryPath;
-                        narrationSource = "recovery results (silent audio fallback)";
-                        _logger.LogInformation("[Composition] Using recovered audio from silent fallback: {Path}", recoveryPath);
-                    }
-                    // Priority 3: Fall back to closure variable (works when tasks run synchronously)
-                    else if (!string.IsNullOrEmpty(narrationPath))
-                    {
-                        compositionNarrationPath = narrationPath;
-                        narrationSource = "closure variable";
-                        _logger.LogInformation("[Composition] Using closure variable narrationPath: {Path}", compositionNarrationPath);
-                    }
-                    
-                    if (compositionNarrationPath == null)
-                    {
-                        var error = "CRITICAL: narrationPath is null from ALL sources. Audio must be generated before composition. " +
-                            "This may indicate the audio generation stage failed silently or was skipped. " +
-                            $"Checked: state.NarrationPath={(state.NarrationPath ?? "(null)")}, " +
-                            $"RecoveryResults['audio']={(state.RecoveryResults.TryGetValue("audio", out var r) ? r?.ToString() ?? "(null)" : "(not found)")}, " +
-                            $"closure narrationPath={(narrationPath ?? "(null)")}";
-                        _logger.LogError(error);
-                        throw new InvalidOperationException(error);
+                        throw new InvalidOperationException(
+                            $"Cannot render video: Narration file not found at '{compositionNarrationPath}'. " +
+                            "The audio file may have been cleaned up prematurely.");
                     }
 
                     _logger.LogInformation(
-                        "[Composition] Prerequisites validated. Scenes: {SceneCount}, NarrationPath: {NarrationPath}, " +
-                        "Source: {Source}",
-                        parsedScenes.Count, compositionNarrationPath, narrationSource);
+                        "[Composition] Prerequisites validated. Scenes: {SceneCount}, NarrationPath: {NarrationPath}",
+                        parsedScenes.Count, compositionNarrationPath);
 
                     // Report progress BEFORE starting render - this ensures frontend sees the transition
                     var renderStartMsg = "Starting video composition and rendering...";
@@ -2405,7 +2381,14 @@ public class VideoOrchestrator
                         _logger.LogError(ex, 
                             "[Render FAILED] FFmpeg render threw exception. Type: {Type}, Message: {Message}",
                             ex.GetType().Name, ex.Message);
-                        throw;
+                        // Clear any cached render outputs to avoid returning stale paths when render fails
+                        state.FinalVideoPath = null;
+                        state.RenderOutput = null;
+                        state.RenderError = ex.Message;
+
+                        throw new InvalidOperationException(
+                            $"Video composition failed: {ex.Message}. Check FFmpeg logs and render diagnostics for details.",
+                            ex);
                     }
 
                     // Validate the output file was actually created
@@ -2446,6 +2429,8 @@ public class VideoOrchestrator
 
                     // Store final video path in state for reliable fallback extraction
                     state.FinalVideoPath = outputPath;
+                    state.RenderOutput = outputPath;
+                    state.RenderError = null;
 
                     // DIAGNOSTIC: Track output path storage in state
                     var stateFileInfo = new FileInfo(outputPath);
@@ -2479,6 +2464,8 @@ public class VideoOrchestrator
         public Providers.Timeline? Timeline { get; set; }
         public string? NarrationPath { get; set; }
         public string? FinalVideoPath { get; set; }
+        public string? RenderOutput { get; set; }
+        public string? RenderError { get; set; }
         
         /// <summary>
         /// Recovery results from orchestrator when tasks fail and are recovered (e.g., silent audio).

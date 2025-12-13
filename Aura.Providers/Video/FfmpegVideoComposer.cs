@@ -918,10 +918,26 @@ public partial class FfmpegVideoComposer : IVideoComposer
         _logger.LogInformation("Building FFmpeg command for render spec: {Codec} @ {Width}x{Height}, {Fps}fps, {VideoBitrate}kbps",
             spec.Codec, spec.Res.Width, spec.Res.Height, spec.Fps, spec.VideoBitrateK);
 
-        // Validate input files
-        if (string.IsNullOrEmpty(timeline.NarrationPath) || !File.Exists(timeline.NarrationPath))
+        if (timeline.Scenes == null || timeline.Scenes.Count == 0)
         {
-            throw new ArgumentException($"Narration file not found: {timeline.NarrationPath}", nameof(timeline));
+            throw new InvalidOperationException(
+                "Cannot render: Timeline has zero scenes. " +
+                "Script parsing or timeline construction may have failed.");
+        }
+
+        _logger.LogInformation("[FFMPEG-BUILD] Building command for {SceneCount} scenes", timeline.Scenes.Count);
+
+        if (string.IsNullOrEmpty(timeline.NarrationPath))
+        {
+            throw new InvalidOperationException(
+                "Cannot render: Timeline has no narration audio path. " +
+                "TTS synthesis may have failed without recovery.");
+        }
+
+        if (!File.Exists(timeline.NarrationPath))
+        {
+            throw new InvalidOperationException(
+                $"Cannot render: Narration file not found: {timeline.NarrationPath}");
         }
 
         if (!string.IsNullOrEmpty(timeline.MusicPath) && !File.Exists(timeline.MusicPath))
@@ -931,8 +947,29 @@ public partial class FfmpegVideoComposer : IVideoComposer
 
         // Collect visual assets from scenes for video composition
         var visualAssets = CollectVisualAssets(timeline);
-        _logger.LogInformation("Collected {AssetCount} visual assets from {SceneCount} scenes",
-            visualAssets.Count, timeline.Scenes.Count);
+        _logger.LogInformation("[FFMPEG-BUILD] Collected {AssetCount} visual assets", visualAssets.Count);
+
+        if (visualAssets.Count == 0)
+        {
+            // Build diagnostics for error message to aid investigation when no assets are available
+            var sceneDiagnostics = GetSceneDiagnostics(timeline);
+
+            throw new InvalidOperationException(
+                "Cannot render: No visual assets found in timeline. " +
+                "Image generation may have failed or returned placeholder references. " +
+                $"Scenes: {sceneDiagnostics}");
+        }
+
+        foreach (var asset in visualAssets)
+        {
+            if (!File.Exists(asset.Path))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot render: Visual asset not found: {asset.Path}");
+            }
+        }
+
+        _logger.LogInformation("[FFMPEG-BUILD] All {Count} visual assets validated", visualAssets.Count);
 
         // Determine aspect ratio from resolution
         var aspectRatio = spec.Res.Width == spec.Res.Height ? AspectRatio.OneByOne :
@@ -1195,6 +1232,18 @@ public partial class FfmpegVideoComposer : IVideoComposer
         }
 
         return assets;
+    }
+
+    private static string GetSceneDiagnostics(Timeline timeline)
+    {
+        return string.Join(", ",
+            timeline.Scenes.Select(scene =>
+            {
+                var assetCount = timeline.SceneAssets.TryGetValue(scene.Index, out var sceneAssets)
+                    ? sceneAssets?.Count ?? 0
+                    : 0;
+                return $"[{scene.Index}:{assetCount} assets]";
+            }));
     }
 
     /// <summary>
