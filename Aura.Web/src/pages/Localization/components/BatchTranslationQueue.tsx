@@ -13,6 +13,7 @@ import {
   tokens,
   Field,
   Dropdown,
+  Combobox,
   Option,
   Textarea,
   Badge,
@@ -35,6 +36,16 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalL,
+  },
+  fieldGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalXS,
+  },
+  fieldHint: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground3,
+    marginTop: tokens.spacingVerticalXS,
   },
   languageRow: {
     display: 'grid',
@@ -116,10 +127,18 @@ export const BatchTranslationQueue: React.FC<BatchTranslationQueueProps> = ({
 }) => {
   const styles = useStyles();
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
+  const [customLanguage, setCustomLanguage] = useState<string>('');
 
   const addTargetLanguage = (langCode: string) => {
-    if (!targetLanguages.includes(langCode)) {
+    if (langCode && !targetLanguages.includes(langCode)) {
       onTargetLanguagesChange([...targetLanguages, langCode]);
+    }
+  };
+
+  const addCustomLanguage = () => {
+    if (customLanguage.trim()) {
+      addTargetLanguage(customLanguage.trim());
+      setCustomLanguage('');
     }
   };
 
@@ -140,37 +159,16 @@ export const BatchTranslationQueue: React.FC<BatchTranslationQueueProps> = ({
 
         <div className={styles.form}>
           <div className={styles.languageRow}>
-            <Field label="Source Language">
-              <Dropdown
-                value={languages.find((l) => l.code === sourceLanguage)?.name || sourceLanguage}
-                onOptionSelect={(_, data) => onSourceLanguageChange(data.optionValue as string)}
-                disabled={loadingLanguages}
-              >
-                {languages.map((lang) => (
-                  <Option
-                    key={lang.code}
-                    value={lang.code}
-                    text={`${lang.name} (${lang.nativeName})`}
-                  >
-                    {lang.name} ({lang.nativeName})
-                  </Option>
-                ))}
-              </Dropdown>
-            </Field>
-
-            <Field label="Target Languages">
-              <Dropdown
-                placeholder="Select languages to add..."
-                onOptionSelect={(_, data) => {
-                  addTargetLanguage(data.optionValue as string);
-                }}
-                disabled={loadingLanguages}
-              >
-                {languages
-                  .filter(
-                    (lang) => lang.code !== sourceLanguage && !targetLanguages.includes(lang.code)
-                  )
-                  .map((lang) => (
+            <div>
+              <Field label="Source Language">
+                <Combobox
+                  value={languages.find((l) => l.code === sourceLanguage)?.name || sourceLanguage}
+                  onOptionSelect={(_, data) => onSourceLanguageChange(data.optionValue as string)}
+                  onChange={(e) => onSourceLanguageChange((e.target as HTMLInputElement).value)}
+                  disabled={loadingLanguages}
+                  freeform
+                >
+                  {languages.map((lang) => (
                     <Option
                       key={lang.code}
                       value={lang.code}
@@ -179,8 +177,55 @@ export const BatchTranslationQueue: React.FC<BatchTranslationQueueProps> = ({
                       {lang.name} ({lang.nativeName})
                     </Option>
                   ))}
-              </Dropdown>
-            </Field>
+                </Combobox>
+              </Field>
+              <Text className={styles.fieldHint}>
+                Type any language, dialect, regional variant, or creative style
+              </Text>
+            </div>
+
+            <div>
+              <Field label="Target Languages">
+                <Combobox
+                  value={customLanguage}
+                  placeholder="Type or select languages to add..."
+                  onOptionSelect={(_, data) => {
+                    const value = data.optionValue as string;
+                    addTargetLanguage(value);
+                    setCustomLanguage('');
+                  }}
+                  onChange={(e) => setCustomLanguage((e.target as HTMLInputElement).value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && customLanguage.trim()) {
+                      addCustomLanguage();
+                      e.preventDefault();
+                    }
+                  }}
+                  disabled={loadingLanguages}
+                  freeform
+                >
+                  {languages
+                    .filter(
+                      (lang) => lang.code !== sourceLanguage && !targetLanguages.includes(lang.code)
+                    )
+                    .map((lang) => (
+                      <Option
+                        key={lang.code}
+                        value={lang.code}
+                        text={`${lang.name} (${lang.nativeName})`}
+                      >
+                        {lang.name} ({lang.nativeName})
+                      </Option>
+                    ))}
+                </Combobox>
+              </Field>
+              <Text className={styles.fieldHint}>
+                Type any language, dialect, regional variant, or creative style (e.g.,
+                &quot;Medieval English&quot;, &quot;Pirate Speak&quot;, &quot;1950s American
+                Commercial&quot;, &quot;Formal Spanish&quot;, &quot;Cockney English&quot;), then
+                press Enter or select from the dropdown
+              </Text>
+            </div>
           </div>
 
           {targetLanguages.length > 0 && (

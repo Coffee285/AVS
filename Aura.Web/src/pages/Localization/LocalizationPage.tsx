@@ -12,6 +12,7 @@ import {
   Field,
   Input,
   Dropdown,
+  Combobox,
   Option,
   Textarea,
   ProgressBar,
@@ -221,7 +222,7 @@ export const LocalizationPage: React.FC = () => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const startTimeRef = useRef<number | null>(null);
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  
+
   // Progress state for streaming translation
   const [progress, setProgress] = useState<{
     stage: string;
@@ -358,7 +359,7 @@ export const LocalizationPage: React.FC = () => {
     setLastOperation('translate');
     setTranslatedProviderInfo('');
     startElapsedTimer();
-    
+
     // Signal to ResourceMonitor that a critical LLM operation is active
     sessionStorage.setItem('active-export-job', 'true');
 
@@ -377,13 +378,20 @@ export const LocalizationPage: React.FC = () => {
     }, localizationTimeout);
 
     try {
-      const response = await fetch('/api/localization/translate/simple', {
+      const response = await fetch('/api/localization/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceText: sourceText,
           sourceLanguage,
           targetLanguage,
+          scriptLines: [],
+          options: {
+            mode: 'Localized',
+            enableBackTranslation: false,
+            enableQualityScoring: false,
+            adjustTimings: false,
+          },
           provider: llmSelection.provider || undefined,
           modelId: llmSelection.modelId || undefined,
         }),
@@ -401,12 +409,12 @@ export const LocalizationPage: React.FC = () => {
       const data = await response.json();
       setTranslatedText(data.translatedText || '');
       const providerLabel = [
-        data.providerUsed || llmSelection.provider || 'Unknown provider',
-        data.modelUsed || llmSelection.modelId,
+        data.metrics?.providerUsed || llmSelection.provider || 'Unknown provider',
+        data.metrics?.modelUsed || llmSelection.modelId,
       ]
         .filter(Boolean)
         .join(' / ');
-      const fallbackLabel = data.isFallback ? ' (fallback)' : '';
+      const fallbackLabel = data.metrics?.isFallback ? ' (fallback)' : '';
       setTranslatedProviderInfo(`${providerLabel}${fallbackLabel}`.trim());
     } catch (err: unknown) {
       clearTimeout(timeoutId);
@@ -495,7 +503,7 @@ export const LocalizationPage: React.FC = () => {
     );
     setLastOperation('analyze');
     startElapsedTimer();
-    
+
     // Signal to ResourceMonitor that a critical LLM operation is active
     sessionStorage.setItem('active-export-job', 'true');
 
@@ -684,9 +692,11 @@ export const LocalizationPage: React.FC = () => {
           <div className={styles.form}>
             <div className={styles.fieldGroup}>
               <Field label="Source Language">
-                <Dropdown
+                <Combobox
                   value={sourceLanguage}
                   onOptionSelect={(_, data) => setSourceLanguage(data.optionValue as string)}
+                  onChange={(e) => setSourceLanguage((e.target as HTMLInputElement).value)}
+                  freeform
                 >
                   <Option value="en">English</Option>
                   <Option value="es">Spanish</Option>
@@ -697,18 +707,22 @@ export const LocalizationPage: React.FC = () => {
                   <Option value="zh">Chinese</Option>
                   <Option value="ja">Japanese</Option>
                   <Option value="ko">Korean</Option>
-                </Dropdown>
+                </Combobox>
               </Field>
               <Text className={styles.fieldHint}>
-                Select source language or type custom descriptions like &quot;Medieval English&quot;
+                Type any language, dialect, regional variant, or creative style (e.g.,
+                &quot;Medieval English&quot;, &quot;Pirate Speak&quot;, &quot;1950s American
+                Commercial&quot;, &quot;Formal Spanish&quot;, &quot;Cockney English&quot;)
               </Text>
             </div>
 
             <div className={styles.fieldGroup}>
               <Field label="Target Language">
-                <Dropdown
+                <Combobox
                   value={targetLanguage}
                   onOptionSelect={(_, data) => setTargetLanguage(data.optionValue as string)}
+                  onChange={(e) => setTargetLanguage((e.target as HTMLInputElement).value)}
+                  freeform
                 >
                   <Option value="es">Spanish</Option>
                   <Option value="fr">French</Option>
@@ -719,10 +733,12 @@ export const LocalizationPage: React.FC = () => {
                   <Option value="ja">Japanese</Option>
                   <Option value="ko">Korean</Option>
                   <Option value="en">English</Option>
-                </Dropdown>
+                </Combobox>
               </Field>
               <Text className={styles.fieldHint}>
-                Select target language or type custom descriptions like &quot;Pirate Speak&quot;
+                Type any language, dialect, regional variant, or creative style (e.g.,
+                &quot;Medieval English&quot;, &quot;Pirate Speak&quot;, &quot;1950s American
+                Commercial&quot;, &quot;Formal Spanish&quot;, &quot;Cockney English&quot;)
               </Text>
             </div>
 
@@ -766,9 +782,7 @@ export const LocalizationPage: React.FC = () => {
                   {elapsedSeconds > 0 && ` (${elapsedSeconds}s elapsed)`}
                 </Text>
                 {progress && progress.currentText && (
-                  <Text className={styles.progressText}>
-                    Current: {progress.currentText}
-                  </Text>
+                  <Text className={styles.progressText}>Current: {progress.currentText}</Text>
                 )}
                 {llmSelection.provider && (
                   <Text className={styles.providerInfo}>
