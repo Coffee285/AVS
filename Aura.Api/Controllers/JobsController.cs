@@ -816,10 +816,10 @@ public class JobsController : ControllerBase
 
             while (job == null && waitAttempts < maxWaitAttempts && !cancellationToken.IsCancellationRequested)
             {
+                waitAttempts++;
                 job = _jobRunner.GetJob(jobId);
                 if (job == null)
                 {
-                    waitAttempts++;
                     await Task.Delay(waitIntervalMs, cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -842,23 +842,17 @@ public class JobsController : ControllerBase
                 }
                 else
                 {
-                    Log.Information("[{CorrelationId}] SSE: Job {JobId} found in ExportJobService but not JobRunner after {WaitAttempts} attempts", 
+                    // Job exists in ExportJobService but not in JobRunner - cannot stream
+                    // This can happen for completed/old jobs that have been archived
+                    Log.Warning("[{CorrelationId}] SSE: Job {JobId} found in ExportJobService but not in JobRunner after {WaitAttempts} attempts - cannot stream", 
                         correlationId, jobId, waitAttempts);
+                    await SendSseEventWithId("error", new { message = "Job not available for streaming", jobId, correlationId }, GenerateEventId(), cancellationToken).ConfigureAwait(false);
+                    return;
                 }
             }
-            else
-            {
-                Log.Information("[{CorrelationId}] SSE: Job {JobId} found in JobRunner after {WaitAttempts} attempts", 
-                    correlationId, jobId, waitAttempts);
-            }
 
-            // Ensure job is not null before proceeding
-            if (job == null)
-            {
-                Log.Error("[{CorrelationId}] SSE: Job {JobId} is null after fallback check", correlationId, jobId);
-                await SendSseEventWithId("error", new { message = "Job not available for streaming", jobId, correlationId }, GenerateEventId(), cancellationToken).ConfigureAwait(false);
-                return;
-            }
+            Log.Information("[{CorrelationId}] SSE: Job {JobId} found in JobRunner after {WaitAttempts} attempts", 
+                correlationId, jobId, waitAttempts);
 
             // Send initial job status with artifacts - wrap in try-catch to prevent 500 errors
             try
