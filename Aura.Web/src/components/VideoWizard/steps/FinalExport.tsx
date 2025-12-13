@@ -650,6 +650,75 @@ export const FinalExport: FC<FinalExportProps> = ({
     console.info('[FinalExport] Retrying export from beginning');
   }, []);
 
+  // Handler to force complete a stuck job by checking output endpoint
+  const handleForceComplete = useCallback(async () => {
+    if (!stuckJobId) return;
+
+    try {
+      console.info('[FinalExport] Force completing stuck job:', stuckJobId);
+      setExportStage('Checking for output file...');
+
+      // Check if output file exists
+      const outputResponse = await fetch(apiUrl(`/api/jobs/${stuckJobId}/output`), {
+        headers: { Accept: 'application/json' },
+      });
+
+      if (!outputResponse.ok) {
+        throw new Error('Failed to check output file');
+      }
+
+      const outputData = await outputResponse.json();
+
+      if (!outputData.exists || !outputData.path || outputData.sizeBytes === 0) {
+        setExportStage(
+          'Output file not found or empty. Job may still be processing. Please wait or try canceling.'
+        );
+        console.warn('[FinalExport] Force complete failed: no valid output file found');
+        return;
+      }
+
+      // Output exists! Complete the export
+      console.info(
+        '[FinalExport] Output file verified:',
+        outputData.path,
+        `(${outputData.sizeBytes} bytes)`
+      );
+
+      // Reset stuck state and mark as complete
+      setIsJobStuck(false);
+      setStuckJobId(null);
+      setExportStatus('completed');
+      setExportProgress(100);
+      setExportStage('Video export complete!');
+
+      // Update results with the verified output
+      const resolvedPath = await resolvePathOnBackend(outputData.path);
+      const lastSeparatorIndex = Math.max(
+        resolvedPath.lastIndexOf('/'),
+        resolvedPath.lastIndexOf('\\')
+      );
+      const resolvedFolder =
+        lastSeparatorIndex >= 0 ? resolvedPath.substring(0, lastSeparatorIndex) : resolvedPath;
+      const fileName =
+        lastSeparatorIndex >= 0 ? resolvedPath.substring(lastSeparatorIndex + 1) : outputData.path;
+
+      setExportResults([
+        {
+          format: data.format,
+          filePath: resolvedPath,
+          fileName: fileName,
+          fileSize: outputData.sizeBytes,
+        },
+      ]);
+      setResolvedPaths({ [data.format]: resolvedFolder });
+
+      console.info('[FinalExport] Force complete successful, job marked as completed');
+    } catch (error) {
+      console.error('[FinalExport] Failed to force complete:', error);
+      setExportStage('Failed to verify output file. Please try canceling and retrying.');
+    }
+  }, [stuckJobId, data.format]);
+
   // eslint-disable-next-line sonarjs/cognitive-complexity
   const startExport = useCallback(async () => {
     // Reset stuck state when starting new export
@@ -1172,6 +1241,49 @@ export const FinalExport: FC<FinalExportProps> = ({
                           break;
                         }
 
+                        // FALLBACK COMPLETION DETECTION: Check /output endpoint to see if file exists
+                        // This handles the case where the job completes on backend but progress stops updating
+                        if (jobProgress >= 95) {
+                          try {
+                            console.info(
+                              '[FinalExport] Job stuck at >=95%, checking output endpoint for completion'
+                            );
+                            const outputCheckResponse = await fetch(
+                              apiUrl(`/api/jobs/${pollJobId}/output`),
+                              { headers: { Accept: 'application/json' } }
+                            );
+                            
+                            if (outputCheckResponse.ok) {
+                              const outputData = await outputCheckResponse.json();
+                              if (outputData.exists && outputData.path && outputData.sizeBytes > 0) {
+                                console.info(
+                                  '[FinalExport] Output file verified via /output endpoint:',
+                                  outputData.path,
+                                  `(${outputData.sizeBytes} bytes) - treating as completed`
+                                );
+                                
+                                // Update lastJobData with the verified output path
+                                lastJobData = {
+                                  ...typedJobData,
+                                  status: 'completed',
+                                  percent: 100,
+                                  outputPath: outputData.path,
+                                  stage: 'Complete',
+                                };
+                                
+                                jobCompleted = true;
+                                break;
+                              }
+                            }
+                          } catch (outputCheckError) {
+                            console.warn(
+                              '[FinalExport] Failed to check output endpoint:',
+                              outputCheckError
+                            );
+                            // Continue with normal stuck detection flow
+                          }
+                        }
+
                         // Near-complete jobs can linger while the renderer writes the file.
                         // Instead of failing early, give more time but signal stuck state to UI
                         if (jobProgress >= 70) {
@@ -1673,7 +1785,12 @@ export const FinalExport: FC<FinalExportProps> = ({
               </Title3>
               <Text style={{ marginTop: tokens.spacingVerticalS }}>
                 The video export is stuck at {stuckProgress}% in the &quot;{stuckStage}&quot; stage.
-                You can continue waiting, retry from the beginning, or cancel.
+                {stuckProgress >= 95 && (
+                  <> The video may have finished rendering. Try &quot;Force Complete&quot; to verify the output file exists.</>
+                )}
+                {stuckProgress < 95 && (
+                  <> You can continue waiting, retry from the beginning, or cancel.</>
+                )}
               </Text>
               <div
                 style={{
@@ -1683,12 +1800,26 @@ export const FinalExport: FC<FinalExportProps> = ({
                   flexWrap: 'wrap',
                 }}
               >
+                {stuckProgress >= 95 && (
+                  <Tooltip
+                    content="Check if output file exists and complete the job if video was successfully rendered"
+                    relationship="label"
+                  >
+                    <Button
+                      appearance="primary"
+                      icon={<CheckmarkCircle24Regular />}
+                      onClick={handleForceComplete}
+                    >
+                      Force Complete
+                    </Button>
+                  </Tooltip>
+                )}
                 <Tooltip
                   content="Start the export process over from the beginning"
                   relationship="label"
                 >
                   <Button
-                    appearance="primary"
+                    appearance={stuckProgress >= 95 ? 'secondary' : 'primary'}
                     icon={<ArrowClockwise24Regular />}
                     onClick={handleRetryExport}
                   >
