@@ -310,7 +310,7 @@ public class JobsController : ControllerBase
             var job = _jobRunner.GetJob(jobId);
 
             // DIAGNOSTIC: Polling request details
-            Log.Information(
+            Log.Warning(
                 "[DIAGNOSTIC] [{Timestamp}] Polling request for job {JobId}: Status={Status}, Percent={Percent}, OutputPath={OutputPath}",
                 DateTime.UtcNow.ToString("HH:mm:ss.fff"), 
                 jobId, 
