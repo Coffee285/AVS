@@ -23,6 +23,17 @@ namespace Aura.Core.Orchestrator;
 /// </summary>
 public partial class JobRunner
 {
+    // Progress mapping constants
+    // Render progress (FFmpeg output 0-100%) maps to overall progress 80-99%
+    // Formula: OverallPercent = RenderStartPercent + (RenderPercent * RenderProgressMultiplier)
+    // With RenderPercent=100: 80 + (100 * 0.19) = 99 (leaves 100 for completion signal)
+    // 
+    // HISTORY: Previously used 0.15 which caused a mathematical cap at 95% (80 + 100*0.15 = 95).
+    // This prevented jobs from ever reaching 100%, causing the "stuck at 95%" bug.
+    // Changed to 0.19 to allow progression to 99%, reserving 100% for explicit completion.
+    private const int RenderStartPercent = 80;
+    private const double RenderProgressMultiplier = 0.19;
+    
     // Compiled regex patterns for performance (used in progress message parsing)
     [GeneratedRegex(@"(\d+(?:\.\d+)?)\s*%", RegexOptions.Compiled)]
     private static partial Regex PercentageRegex();
@@ -1505,8 +1516,8 @@ public partial class JobRunner
             var percentMatch = PercentageRegex().Match(message);
             if (percentMatch.Success && double.TryParse(percentMatch.Groups[1].Value, out double renderPercent))
             {
-                // Map render progress (0-100%) to overall progress (80-95%)
-                percent = 80 + (int)(renderPercent * 0.15);
+                // Map render progress (0-100%) to overall progress (80-99%)
+                percent = RenderStartPercent + (int)(renderPercent * RenderProgressMultiplier);
             }
             else
             {
@@ -1517,9 +1528,11 @@ public partial class JobRunner
         else if (message.Contains("Render complete", StringComparison.OrdinalIgnoreCase) ||
                  message.Contains("Rendering complete", StringComparison.OrdinalIgnoreCase) ||
                  message.Contains("Video export complete", StringComparison.OrdinalIgnoreCase) ||
-                 message.Contains("Progress reported as 100%", StringComparison.OrdinalIgnoreCase))
+                 message.Contains("Progress reported as 100%", StringComparison.OrdinalIgnoreCase) ||
+                 message.Contains("muxing overhead", StringComparison.OrdinalIgnoreCase))
         {
             // FFmpeg render has finished - transition to Complete stage
+            // "muxing overhead" is FFmpeg's final output line indicating completion
             stage = "Complete";
             percent = 100;
             formattedMessage = "Video export complete";

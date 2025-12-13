@@ -149,6 +149,14 @@ public class ExportJobService : IExportJobService
                 _logger.LogInformation(
                     "Export job {JobId} reached terminal state: {Status} (OutputPath: {OutputPath}, Error: {Error})", 
                     jobId, status, outputPath ?? "none", errorMessage ?? "none");
+                
+                // Additional logging for completion debugging
+                if (status == "completed")
+                {
+                    _logger.LogInformation(
+                        "✅ [JobId={JobId}] Job completed successfully. Progress={Progress}%, OutputPath={OutputPath}",
+                        jobId, percent, outputPath);
+                }
             }
             else
             {
@@ -156,8 +164,16 @@ public class ExportJobService : IExportJobService
                     jobId, status, percent);
             }
 
-            // Notify subscribers of status update
+            // Notify subscribers of status update (synchronous to ensure delivery before return)
             NotifySubscribers(jobId, updatedJob);
+            
+            // Log subscriber notification for terminal states
+            if (isTerminal)
+            {
+                _logger.LogInformation(
+                    "[JobId={JobId}] Notified {Count} subscriber channel(s) of terminal state: {Status}",
+                    jobId, _subscribers.TryGetValue(jobId, out var channels) ? channels.Count : 0, status);
+            }
         }
         else
         {
@@ -274,6 +290,8 @@ public class ExportJobService : IExportJobService
 
     /// <summary>
     /// Notify all subscribers of a job update.
+    /// This method executes synchronously to ensure all subscribers receive the update
+    /// before the calling method returns (critical for terminal state transitions).
     /// </summary>
     private void NotifySubscribers(string jobId, VideoJob job)
     {
