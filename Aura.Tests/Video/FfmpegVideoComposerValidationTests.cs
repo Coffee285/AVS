@@ -182,6 +182,10 @@ public class FfmpegVideoComposerValidationTests : IDisposable
             ffmpegLocator,
             outputDirectory: _testOutputDir);
 
+        // Use explicit cast to create a null reference for a non-nullable string parameter
+        // This intentionally tests the null validation path
+        string? nullPath = null;
+
         // Timeline with scenes but null narration path
         var timeline = new ProviderTimeline(
             Scenes: new List<Scene> 
@@ -189,7 +193,7 @@ public class FfmpegVideoComposerValidationTests : IDisposable
                 new Scene(0, "Test", "Test script", TimeSpan.Zero, TimeSpan.FromSeconds(5))
             },
             SceneAssets: new Dictionary<int, IReadOnlyList<Asset>>(),
-            NarrationPath: null!, // Null narration path
+            NarrationPath: nullPath,
             SceneAudioPaths: null,
             MusicPath: "",
             SubtitlesPath: null);

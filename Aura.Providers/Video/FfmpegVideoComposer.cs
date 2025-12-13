@@ -38,6 +38,10 @@ public partial class FfmpegVideoComposer : IVideoComposer
     // Default fade transition duration between scenes (in seconds)
     private const double DefaultFadeTransitionDuration = 0.5;
 
+    // Minimum file size thresholds for pre-flight validation
+    private const int MinNarrationFileSizeBytes = 1024; // 1KB minimum for valid audio file
+    private const int MaxMissingAssetsToLog = 10; // Limit logged missing assets to avoid log spam
+
     private readonly ILogger<FfmpegVideoComposer> _logger;
     private readonly IFfmpegLocator _ffmpegLocator;
     private readonly string? _configuredFfmpegPath;
@@ -1814,10 +1818,10 @@ public partial class FfmpegVideoComposer : IVideoComposer
         }
 
         var narrationInfo = new FileInfo(timeline.NarrationPath);
-        if (narrationInfo.Length < 1024)
+        if (narrationInfo.Length < MinNarrationFileSizeBytes)
         {
             var error = $"Cannot render: Narration file is too small ({narrationInfo.Length} bytes). " +
-                $"Expected at least 1KB for valid audio. File may be corrupted or empty. " +
+                $"Expected at least {MinNarrationFileSizeBytes} bytes for valid audio. File may be corrupted or empty. " +
                 $"(JobId={jobId}, CorrelationId={correlationId})";
             _logger.LogError("[{JobId}] [FFMPEG-PRECHECK] FAILED: {Error}", jobId, error);
             throw new InvalidOperationException(error);
@@ -1877,16 +1881,16 @@ public partial class FfmpegVideoComposer : IVideoComposer
 
         if (missingAssets.Count > 0)
         {
-            // Log each missing asset for debugging
-            foreach (var missing in missingAssets.Take(10))
+            // Log each missing asset for debugging (limit to avoid log spam)
+            foreach (var missing in missingAssets.Take(MaxMissingAssetsToLog))
             {
                 _logger.LogWarning("[{JobId}] [FFMPEG-PRECHECK] Missing asset: {Asset}", jobId, missing);
             }
 
-            if (missingAssets.Count > 10)
+            if (missingAssets.Count > MaxMissingAssetsToLog)
             {
                 _logger.LogWarning("[{JobId}] [FFMPEG-PRECHECK] ... and {Count} more missing assets", 
-                    jobId, missingAssets.Count - 10);
+                    jobId, missingAssets.Count - MaxMissingAssetsToLog);
             }
 
             // Allow rendering to continue if at least some assets are valid
