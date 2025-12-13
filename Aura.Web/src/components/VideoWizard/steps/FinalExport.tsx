@@ -226,6 +226,16 @@ interface JobStatusData {
 }
 
 /**
+ * SSE connection acknowledgment event data structure
+ */
+interface ConnectedEventData {
+  jobId: string;
+  message: string;
+  timestamp: string;
+  correlationId: string;
+}
+
+/**
  * Normalize a file path by trimming and returning undefined for empty values.
  */
 function normalizePath(path?: string | null): string | undefined {
@@ -784,9 +794,31 @@ export const FinalExport: FC<FinalExportProps> = ({
               }
             }, JOB_TIMEOUT_MS);
 
+            // Handle immediate connection acknowledgment from backend
+            eventSource.addEventListener('connected', (event) => {
+              try {
+                if (!connectionEstablished) {
+                  connectionEstablished = true;
+                  clearTimeout(connectionTimeoutId);
+                  const data = JSON.parse(event.data) as ConnectedEventData;
+                  console.info(
+                    '[FinalExport] SSE connection acknowledged by backend:',
+                    data.message || 'Connected'
+                  );
+                }
+              } catch (err) {
+                console.warn(
+                  '[FinalExport] Failed to parse connected event. Raw data:',
+                  event.data,
+                  'Error:',
+                  err
+                );
+              }
+            });
+
             eventSource.addEventListener('job-progress', (event) => {
               try {
-                // Mark connection as established once we receive progress
+                // Mark connection as established once we receive progress (fallback if connected event missed)
                 if (!connectionEstablished) {
                   connectionEstablished = true;
                   clearTimeout(connectionTimeoutId);
