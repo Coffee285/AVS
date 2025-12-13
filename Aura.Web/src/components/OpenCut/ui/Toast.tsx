@@ -187,6 +187,7 @@ export const Toast: FC<ToastProps> = ({ toast, onDismiss }) => {
   const [isExiting, setIsExiting] = useState(false);
   const [progress, setProgress] = useState(100);
   const [isPaused, setIsPaused] = useState(false);
+  const isPausedRef = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startTimeRef = useRef<number>(0);
@@ -206,6 +207,11 @@ export const Toast: FC<ToastProps> = ({ toast, onDismiss }) => {
       prefersReducedMotion ? 0 : 150
     );
   }, [onDismiss, toast.id, prefersReducedMotion]);
+
+  // Keep isPausedRef in sync with isPaused state
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   // Setup progress updates and auto-dismiss timer
   useEffect(() => {
@@ -229,7 +235,7 @@ export const Toast: FC<ToastProps> = ({ toast, onDismiss }) => {
 
     // Update progress every 100ms
     intervalRef.current = setInterval(() => {
-      if (!isPaused) {
+      if (!isPausedRef.current) {
         const elapsed = Date.now() - startTimeRef.current - totalPausedTimeRef.current;
         const remaining = effectiveDuration - elapsed;
         const newProgress = Math.max(0, (remaining / effectiveDuration) * 100);
@@ -259,7 +265,7 @@ export const Toast: FC<ToastProps> = ({ toast, onDismiss }) => {
         dismissTimeoutRef.current = null;
       }
     };
-  }, [effectiveDuration, isPaused, handleDismiss]);
+  }, [effectiveDuration, handleDismiss]);
 
   // Handle pause - track when paused and calculate remaining time
   useEffect(() => {

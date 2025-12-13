@@ -306,6 +306,7 @@ function ToastWithProgress({
   const styles = useStyles();
   const [progress, setProgress] = useState(100);
   const [isPaused, setIsPaused] = useState(false);
+  const isPausedRef = useRef(false);
   const onDismissRef = useRef(onDismiss);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -313,10 +314,14 @@ function ToastWithProgress({
   const pauseStartTimeRef = useRef<number>(0);
   const totalPausedTimeRef = useRef<number>(0);
 
-  // Keep onDismiss callback in sync
+  // Keep refs in sync
   useEffect(() => {
     onDismissRef.current = onDismiss;
   }, [onDismiss]);
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   // Setup progress updates and auto-dismiss timer
   useEffect(() => {
@@ -340,7 +345,7 @@ function ToastWithProgress({
 
     // Update progress every 100ms
     intervalRef.current = setInterval(() => {
-      if (!isPaused) {
+      if (!isPausedRef.current) {
         const elapsed = Date.now() - startTimeRef.current - totalPausedTimeRef.current;
         const remaining = timeout - elapsed;
         const newProgress = Math.max(0, (remaining / timeout) * 100);
@@ -370,7 +375,7 @@ function ToastWithProgress({
         dismissTimeoutRef.current = null;
       }
     };
-  }, [timeout, isPaused]);
+  }, [timeout]);
 
   // Handle pause - track when paused and calculate remaining time
   useEffect(() => {
