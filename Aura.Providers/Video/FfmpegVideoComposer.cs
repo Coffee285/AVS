@@ -595,9 +595,9 @@ public partial class FfmpegVideoComposer : IVideoComposer
             _logger.LogInformation("[FFMPEG-CMD] Output file exists: {Exists}", File.Exists(outputFilePath));
             if (File.Exists(outputFilePath))
             {
-                var fileInfo = new FileInfo(outputFilePath);
+                var outputFileInfo = new FileInfo(outputFilePath);
                 _logger.LogInformation("[FFMPEG-CMD] Output file size: {Size} bytes ({SizeMB:F2} MB)", 
-                    fileInfo.Length, fileInfo.Length / 1024.0 / 1024.0);
+                    outputFileInfo.Length, outputFileInfo.Length / 1024.0 / 1024.0);
             }
             
             // Close log file
