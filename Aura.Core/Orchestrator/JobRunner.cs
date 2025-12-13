@@ -1734,6 +1734,63 @@ public partial class JobRunner
             _jobProgressTracking.Remove(jobId);
         }
     }
+
+    /// <summary>
+    /// Forces a job into failed state when it has stalled (no progress for extended period).
+    /// This is called by SSE endpoints when they detect a job has been stuck with no progress.
+    /// </summary>
+    /// <param name="jobId">The ID of the stalled job</param>
+    /// <param name="lastStage">The last known stage of the job</param>
+    /// <param name="lastPercent">The last known progress percentage</param>
+    /// <param name="stallDuration">How long the job has been stalled</param>
+    /// <param name="correlationId">Correlation ID for tracking</param>
+    public void FailJobAsStalled(string jobId, string lastStage, int lastPercent, TimeSpan stallDuration, string correlationId)
+    {
+        var job = GetJob(jobId);
+        if (job == null)
+        {
+            _logger.LogWarning("[{CorrelationId}] Cannot fail stalled job {JobId}: job not found", correlationId, jobId);
+            return;
+        }
+
+        // Only fail if job is still running (avoid double-failure)
+        if (job.Status != JobStatus.Running && job.Status != JobStatus.Queued)
+        {
+            _logger.LogInformation(
+                "[{CorrelationId}] Job {JobId} is already in terminal state {Status}, not failing as stalled",
+                correlationId, jobId, job.Status);
+            return;
+        }
+
+        var errorMessage = $"Job stalled at {lastStage} stage ({lastPercent}%) with no progress for {(int)stallDuration.TotalSeconds} seconds";
+        
+        _logger.LogError(
+            "[{CorrelationId}] Failing job {JobId} as stalled. Stage: {Stage}, Percent: {Percent}%, Duration: {Duration:F0}s",
+            correlationId, jobId, lastStage, lastPercent, stallDuration.TotalSeconds);
+
+        var failure = new JobFailure
+        {
+            Stage = lastStage,
+            Message = errorMessage,
+            CorrelationId = correlationId,
+            FailedAt = DateTime.UtcNow,
+            ErrorCode = "E306-JOB_STALLED",
+            SuggestedActions = new[]
+            {
+                "Check backend logs for FFmpeg errors or hangs",
+                "Verify system resources (CPU, RAM, disk space)",
+                "Try canceling and restarting the job",
+                "Check if FFmpeg process is actually running"
+            }
+        };
+
+        UpdateJob(
+            job,
+            status: JobStatus.Failed,
+            errorMessage: errorMessage,
+            failureDetails: failure,
+            finishedAt: DateTime.UtcNow);
+    }
 }
 
 /// <summary>

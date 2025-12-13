@@ -2251,8 +2251,12 @@ public class VideoOrchestrator
                         throw new InvalidOperationException(error);
                     }
 
-                    _logger.LogInformation("[Render Complete] Video rendered successfully to: {Path}, Size: {Size} bytes",
-                        outputPath, outputFileInfo.Length);
+                    // COMPREHENSIVE LOGGING: Log detailed render completion information
+                    _logger.LogInformation(
+                        "[RENDER SUCCESS] Video rendered successfully. Path: {Path}, Size: {Size:N0} bytes, Created: {Created}, Timestamp: {Timestamp}",
+                        outputPath, outputFileInfo.Length, outputFileInfo.CreationTimeUtc.ToString("yyyy-MM-dd HH:mm:ss.fff"), 
+                        DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"));
+                    
                     progress?.Report("Video rendering complete");
                     detailedProgress?.Report(ProgressBuilder.CreateRenderProgress(100, "Video rendering complete", correlationId: correlationId));
 
@@ -2262,10 +2266,10 @@ public class VideoOrchestrator
                     // CRITICAL FIX: Log the output path being returned to ensure it's captured
                     // The return value should automatically be stored in TaskResults["composition"]
                     _logger.LogInformation(
-                        "[Composition Complete] Output path: {Path}, Exists: {Exists}, Length: {Length} bytes, " +
-                        "Stored in state.FinalVideoPath: {StatePath}",
+                        "[Composition Complete] Output path: {Path}, Exists: {Exists}, Length: {Length:N0} bytes, " +
+                        "Stored in state.FinalVideoPath: {StatePath}, Timestamp: {Timestamp}",
                         outputPath, File.Exists(outputPath), File.Exists(outputPath) ? new FileInfo(outputPath).Length : 0,
-                        state.FinalVideoPath);
+                        state.FinalVideoPath, DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"));
 
                     return outputPath;
 
