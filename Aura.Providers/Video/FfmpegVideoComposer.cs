@@ -233,6 +233,13 @@ public partial class FfmpegVideoComposer : IVideoComposer
             EnableRaisingEvents = true
         };
 
+        // DIAGNOSTIC LOGGING: Log FFmpeg execution details for debugging 95% freeze
+        _logger.LogInformation("[FFMPEG-CMD] Executing FFmpeg for job {JobId}", jobId);
+        _logger.LogInformation("[FFMPEG-CMD] FFmpeg path: {Path}", ffmpegPath);
+        _logger.LogInformation("[FFMPEG-CMD] Working directory: {Dir}", _workingDirectory);
+        _logger.LogInformation("[FFMPEG-CMD] Output target: {Output}", outputFilePath);
+        _logger.LogInformation("[FFMPEG-CMD] Command: {Command}", ffmpegCommand);
+        
         // Log run metadata (only if log writer is available)
         logWriter?.WriteLine($"Resolution: {spec.Res.Width}x{spec.Res.Height}");
         logWriter?.WriteLine($"FFmpeg Path: {ffmpegPath}");
@@ -582,6 +589,17 @@ public partial class FfmpegVideoComposer : IVideoComposer
                 // Ignore cleanup errors
             }
 
+            // DIAGNOSTIC LOGGING: Log FFmpeg completion status
+            _logger.LogInformation("[FFMPEG-CMD] FFmpeg process completed for job {JobId}", jobId);
+            _logger.LogInformation("[FFMPEG-CMD] Exit code: {ExitCode}", process.ExitCode);
+            _logger.LogInformation("[FFMPEG-CMD] Output file exists: {Exists}", File.Exists(outputFilePath));
+            if (File.Exists(outputFilePath))
+            {
+                var fileInfo = new FileInfo(outputFilePath);
+                _logger.LogInformation("[FFMPEG-CMD] Output file size: {Size} bytes ({SizeMB:F2} MB)", 
+                    fileInfo.Length, fileInfo.Length / 1024.0 / 1024.0);
+            }
+            
             // Close log file
             try
             {
