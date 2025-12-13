@@ -1261,8 +1261,8 @@ public partial class JobRunner
         {
             // CRITICAL: Log when ExportJobService is not available
             // This helps diagnose DI issues that cause progress sync failures
-            var isTerminal = IsTerminalStatus(updated.Status);
-            if (isTerminal)
+            // Only log for terminal states since those are when sync is most critical
+            if (updated.Status is JobStatus.Done or JobStatus.Succeeded or JobStatus.Failed or JobStatus.Canceled)
             {
                 _logger.LogError(
                     "[Job {JobId}] CRITICAL: ExportJobService is NULL - cannot sync terminal state '{Status}' " +

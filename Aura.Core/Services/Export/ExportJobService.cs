@@ -147,8 +147,8 @@ public class ExportJobService : IExportJobService
                     "Please check the backend logs for details and try again.";
                 
                 _logger.LogWarning(
-                    "[DIAGNOSTIC] [{Timestamp}] Job {JobId} forced to 'failed' state due to missing outputPath",
-                    DateTime.UtcNow.ToString("HH:mm:ss.fff"), jobId);
+                    "[DIAGNOSTIC] Job {JobId} forced to 'failed' state due to missing outputPath",
+                    jobId);
             }
 
             var updatedJob = job with
