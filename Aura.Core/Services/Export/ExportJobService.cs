@@ -129,15 +129,26 @@ public class ExportJobService : IExportJobService
         {
             var isTerminal = status is "completed" or "failed" or "cancelled";
 
-            // CRITICAL FIX: Ensure outputPath is REQUIRED when status is "completed"
-            // This prevents the "job completes but outputPath is null" bug
+            // CRITICAL FIX: Handle missing outputPath when status is "completed"
+            // Instead of silently rejecting (which causes the 95% stuck bug), transition to "failed"
+            // with an explicit error message so the frontend receives a terminal state
             if (status == "completed" && string.IsNullOrWhiteSpace(outputPath))
             {
                 _logger.LogError(
                     "CRITICAL: Job {JobId} attempted to transition to 'completed' without outputPath. " +
-                    "This will cause frontend polling to fail. Rejecting status update.", 
+                    "This would cause frontend polling to fail. Transitioning to 'failed' instead.", 
                     jobId);
-                return Task.CompletedTask; // Don't update - force caller to provide outputPath
+                
+                // FORCE FAIL: Override status to failed with clear error message
+                // This ensures the job reaches a terminal state rather than appearing stuck at 95%
+                status = "failed";
+                errorMessage = "Video generation completed but output file path was not captured. " +
+                    "This may indicate an issue with the video composition stage. " +
+                    "Please check the backend logs for details and try again.";
+                
+                _logger.LogWarning(
+                    "[DIAGNOSTIC] Job {JobId} forced to 'failed' state due to missing outputPath",
+                    jobId);
             }
 
             var updatedJob = job with
