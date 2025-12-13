@@ -744,11 +744,12 @@ public partial class JobRunner
 
             if (string.IsNullOrEmpty(renderOutputPath))
             {
-                var failureMsg = "Video generation completed but no output file was produced. Check logs for TTS, image generation, or FFmpeg errors.";
+                var failureMsg = "Video generation completed but no output file was produced. " +
+                                 "This typically indicates FFmpeg never executed due to missing timeline prerequisites.";
 
                 var failure = new JobFailure
                 {
-                    Stage = job.Stage,
+                    Stage = StageNames.Rendering,
                     Message = failureMsg,
                     CorrelationId = job.CorrelationId ?? string.Empty,
                     FailedAt = DateTime.UtcNow,
