@@ -12,6 +12,10 @@ namespace Aura.Providers.Video;
 
 public partial class FfmpegVideoComposer
 {
+    // FFmpeg completion signals
+    private const string FfmpegMuxingOverheadMessage = "muxing overhead";
+    private const string RenderCompleteMessage = "Render complete";
+    
     /// <summary>
     /// Execute FFmpeg with stuck detection and forced termination
     /// </summary>
@@ -63,18 +67,13 @@ public partial class FfmpegVideoComposer
                     if (string.IsNullOrEmpty(line)) continue;
 
                     // Detect "muxing overhead" - FFmpeg's final output indicating completion
-                    if (line.Contains("muxing overhead", StringComparison.OrdinalIgnoreCase))
+                    if (line.Contains(FfmpegMuxingOverheadMessage, StringComparison.OrdinalIgnoreCase))
                     {
                         lastProgressTime = DateTime.Now;
                         lastProgress = 100f;
                         _logger.LogInformation("[{JobId}] Detected FFmpeg muxing overhead - encoding complete", jobId);
                         
-                        var elapsed = DateTime.Now - startTime;
-                        progress.Report(new RenderProgress(
-                            100f,
-                            elapsed,
-                            TimeSpan.Zero,
-                            "muxing overhead"));
+                        ReportCompletion(progress, startTime, FfmpegMuxingOverheadMessage);
                     }
                     else if (line.Contains("time="))
                     {
@@ -112,11 +111,7 @@ public partial class FfmpegVideoComposer
             // CRITICAL: Emit explicit 100% completion signal after FFmpeg exits successfully
             // This ensures the completion state propagates even if "muxing overhead" wasn't detected
             _logger.LogInformation("[{JobId}] FFmpeg process completed with exit code 0, reporting 100% completion", jobId);
-            progress.Report(new RenderProgress(
-                100f,
-                DateTime.Now - startTime,
-                TimeSpan.Zero,
-                "Render complete"));
+            ReportCompletion(progress, startTime, RenderCompleteMessage);
 
             // Verify and finalize output
             return await FinalizeOutputFileAsync(
@@ -253,5 +248,17 @@ public partial class FfmpegVideoComposer
             jobId, outputFilePath, fileInfo.Length / 1024.0 / 1024.0);
 
         return outputFilePath;
+    }
+    
+    /// <summary>
+    /// Report 100% completion progress with consistent formatting.
+    /// </summary>
+    private static void ReportCompletion(IProgress<RenderProgress> progress, DateTime startTime, string message)
+    {
+        progress.Report(new RenderProgress(
+            100f,
+            DateTime.Now - startTime,
+            TimeSpan.Zero,
+            message));
     }
 }

@@ -27,6 +27,10 @@ public partial class JobRunner
     // Render progress (FFmpeg output 0-100%) maps to overall progress 80-99%
     // Formula: OverallPercent = RenderStartPercent + (RenderPercent * RenderProgressMultiplier)
     // With RenderPercent=100: 80 + (100 * 0.19) = 99 (leaves 100 for completion signal)
+    // 
+    // HISTORY: Previously used 0.15 which caused a mathematical cap at 95% (80 + 100*0.15 = 95).
+    // This prevented jobs from ever reaching 100%, causing the "stuck at 95%" bug.
+    // Changed to 0.19 to allow progression to 99%, reserving 100% for explicit completion.
     private const int RenderStartPercent = 80;
     private const double RenderProgressMultiplier = 0.19;
     
