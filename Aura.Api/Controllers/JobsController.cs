@@ -816,10 +816,10 @@ public class JobsController : ControllerBase
 
             while (job == null && waitAttempts < maxWaitAttempts && !cancellationToken.IsCancellationRequested)
             {
-                waitAttempts++;
                 job = _jobRunner.GetJob(jobId);
                 if (job == null)
                 {
+                    waitAttempts++;
                     await Task.Delay(waitIntervalMs, cancellationToken).ConfigureAwait(false);
                 }
             }
