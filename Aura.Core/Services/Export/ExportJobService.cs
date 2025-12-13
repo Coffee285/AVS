@@ -173,10 +173,11 @@ public class ExportJobService : IExportJobService
             }
 
             // DIAGNOSTIC: About to notify subscribers
+            var subscriberCount = _subscribers.TryGetValue(jobId, out var channels) ? channels.Count : 0;
             _logger.LogWarning(
                 "[DIAGNOSTIC] [{Timestamp}] About to notify {Count} subscriber(s)",
                 DateTime.UtcNow.ToString("HH:mm:ss.fff"), 
-                _subscribers.TryGetValue(jobId, out var channels) ? channels.Count : 0);
+                subscriberCount);
 
             // Notify subscribers of status update (synchronous to ensure delivery before return)
             NotifySubscribers(jobId, updatedJob);
@@ -191,7 +192,7 @@ public class ExportJobService : IExportJobService
             {
                 _logger.LogInformation(
                     "[JobId={JobId}] Notified {Count} subscriber channel(s) of terminal state: {Status}",
-                    jobId, _subscribers.TryGetValue(jobId, out channels) ? channels.Count : 0, status);
+                    jobId, subscriberCount, status);
             }
         }
         else
