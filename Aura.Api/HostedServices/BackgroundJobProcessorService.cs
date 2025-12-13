@@ -54,11 +54,22 @@ public class BackgroundJobProcessorService : BackgroundService
 
         _logger.LogInformation("Database schema validated successfully, starting job processing");
 
+        // Track when we last checked for stuck jobs
+        var lastStuckJobCheck = DateTime.UtcNow;
+        var stuckJobCheckInterval = TimeSpan.FromMinutes(1); // Check every minute
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await ProcessNextJobsAsync(stoppingToken).ConfigureAwait(false);
+                
+                // CRITICAL FIX: Periodically check for stuck jobs (every minute)
+                if (DateTime.UtcNow - lastStuckJobCheck >= stuckJobCheckInterval)
+                {
+                    await CheckForStuckJobsAsync(stoppingToken).ConfigureAwait(false);
+                    lastStuckJobCheck = DateTime.UtcNow;
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -210,6 +221,66 @@ public class BackgroundJobProcessorService : BackgroundService
             var message = $"Failed to check database schema: {ex.Message}";
             _logger.LogError(ex, message);
             return new Aura.Core.Services.ServiceHealthCheckResult(false, message, ex);
+        }
+    }
+
+    /// <summary>
+    /// Checks for jobs that have been stuck in "Processing" status for too long and marks them as failed.
+    /// CRITICAL FIX: Prevents jobs from hanging indefinitely at 95% or any other stage.
+    /// </summary>
+    private async Task CheckForStuckJobsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = _serviceScopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<AuraDbContext>();
+
+            // Find jobs that have been processing for more than 10 minutes without progress
+            var stuckThreshold = DateTime.UtcNow.AddMinutes(-10);
+            
+            var stuckJobs = await dbContext.JobQueue
+                .Where(j => j.Status == "Processing" && j.UpdatedAt < stuckThreshold)
+                .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+            if (stuckJobs.Count == 0)
+            {
+                return; // No stuck jobs found
+            }
+
+            _logger.LogWarning("[STUCK-JOB-DETECTION] Found {Count} stuck jobs that haven't updated in over 10 minutes", stuckJobs.Count);
+
+            foreach (var job in stuckJobs)
+            {
+                var stuckDuration = DateTime.UtcNow - job.UpdatedAt;
+                _logger.LogWarning(
+                    "[STUCK-JOB-DETECTION] Job {JobId} stuck at {Stage} ({Progress}%) for {Duration} minutes",
+                    job.JobId, 
+                    job.CurrentStage ?? "Unknown", 
+                    job.ProgressPercent,
+                    Math.Round(stuckDuration.TotalMinutes, 1));
+
+                // Mark job as failed
+                job.Status = "Failed";
+                job.LastError = $"Job timed out - no progress for {Math.Round(stuckDuration.TotalMinutes, 1)} minutes. " +
+                               $"Last stage: {job.CurrentStage ?? "Unknown"}, Last progress: {job.ProgressPercent}%. " +
+                               "This may indicate an issue with FFmpeg, provider timeouts, or system resources.";
+                job.CompletedAt = DateTime.UtcNow;
+                job.UpdatedAt = DateTime.UtcNow;
+                
+                _logger.LogError(
+                    "[STUCK-JOB-DETECTION] Marked job {JobId} as failed due to timeout. Error: {Error}",
+                    job.JobId,
+                    job.LastError);
+            }
+
+            // Save all changes
+            var savedCount = await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("[STUCK-JOB-DETECTION] Updated {Count} stuck jobs to failed status", savedCount);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[STUCK-JOB-DETECTION] Error checking for stuck jobs");
+            // Don't rethrow - this is a background check and shouldn't crash the service
         }
     }
 }

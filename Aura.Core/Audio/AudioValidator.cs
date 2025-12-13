@@ -129,6 +129,10 @@ public class AudioValidator
     /// </summary>
     private async Task<AudioValidationResult> ValidateWithFfprobeAsync(string audioPath, CancellationToken ct)
     {
+        // CRITICAL FIX: Add 30-second timeout for audio validation to prevent indefinite hangs
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
+        
         try
         {
             var startInfo = new ProcessStartInfo
@@ -148,18 +152,19 @@ public class AudioValidator
             process.OutputDataReceived += (s, e) => { if (e.Data != null) stdout.AppendLine(e.Data); };
             process.ErrorDataReceived += (s, e) => { if (e.Data != null) stderr.AppendLine(e.Data); };
 
+            _logger.LogInformation("[AUDIO-VAL] Starting ffprobe validation: {Path}", audioPath);
             process.Start();
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            await process.WaitForExitAsync(ct).ConfigureAwait(false);
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
 
             var stderrText = stderr.ToString();
             var stdoutText = stdout.ToString();
 
             if (process.ExitCode != 0 || !string.IsNullOrEmpty(stderrText))
             {
-                _logger.LogWarning("ffprobe validation failed for {Path}: {Error}", audioPath, stderrText);
+                _logger.LogWarning("[AUDIO-VAL] ffprobe validation failed for {Path}: {Error}", audioPath, stderrText);
                 return new AudioValidationResult
                 {
                     IsValid = false,
@@ -196,8 +201,8 @@ public class AudioValidator
                     }
                 }
 
-                _logger.LogInformation("Audio validation successful: duration={Duration}s, bitrate={BitRate}", 
-                    duration, bitRate);
+                _logger.LogInformation("[AUDIO-VAL] Audio validation passed: {Path}, duration={Duration}s, bitrate={BitRate}", 
+                    audioPath, duration, bitRate);
 
                 return new AudioValidationResult
                 {
@@ -209,7 +214,7 @@ public class AudioValidator
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to parse ffprobe JSON output");
+                _logger.LogWarning(ex, "[AUDIO-VAL] Failed to parse ffprobe JSON output");
                 // Treat as valid if we got no errors, just couldn't parse metadata
                 return new AudioValidationResult
                 {
@@ -218,9 +223,21 @@ public class AudioValidator
                 };
             }
         }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            // Timeout occurred
+            _logger.LogError("[AUDIO-VAL] ffprobe validation timed out after 30 seconds: {Path}", audioPath);
+            
+            return new AudioValidationResult
+            {
+                IsValid = false,
+                ErrorMessage = "Audio validation timed out after 30 seconds",
+                IsCorrupted = false
+            };
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception during ffprobe validation");
+            _logger.LogError(ex, "[AUDIO-VAL] Exception during ffprobe validation");
             return new AudioValidationResult
             {
                 IsValid = false,
@@ -235,6 +252,10 @@ public class AudioValidator
     /// </summary>
     private async Task<AudioValidationResult> ValidateWithFfmpegAsync(string audioPath, CancellationToken ct)
     {
+        // CRITICAL FIX: Add 30-second timeout for audio validation to prevent indefinite hangs
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
+        
         try
         {
             var startInfo = new ProcessStartInfo
@@ -252,16 +273,17 @@ public class AudioValidator
 
             process.ErrorDataReceived += (s, e) => { if (e.Data != null) stderr.AppendLine(e.Data); };
 
+            _logger.LogInformation("[AUDIO-VAL] Starting ffmpeg validation: {Path}", audioPath);
             process.Start();
             process.BeginErrorReadLine();
 
-            await process.WaitForExitAsync(ct).ConfigureAwait(false);
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
 
             var stderrText = stderr.ToString();
 
             if (process.ExitCode != 0 || !string.IsNullOrEmpty(stderrText))
             {
-                _logger.LogWarning("ffmpeg validation failed for {Path}: {Error}", audioPath, stderrText);
+                _logger.LogWarning("[AUDIO-VAL] ffmpeg validation failed for {Path}: {Error}", audioPath, stderrText);
                 return new AudioValidationResult
                 {
                     IsValid = false,
@@ -273,15 +295,27 @@ public class AudioValidator
                 };
             }
 
-            _logger.LogInformation("Audio validation successful (ffmpeg null output test passed)");
+            _logger.LogInformation("[AUDIO-VAL] Audio validation passed: {Path} (ffmpeg null output test)", audioPath);
             return new AudioValidationResult
             {
                 IsValid = true
             };
         }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            // Timeout occurred
+            _logger.LogError("[AUDIO-VAL] ffmpeg validation timed out after 30 seconds: {Path}", audioPath);
+            
+            return new AudioValidationResult
+            {
+                IsValid = false,
+                ErrorMessage = "Audio validation timed out after 30 seconds",
+                IsCorrupted = false
+            };
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception during ffmpeg validation");
+            _logger.LogError(ex, "[AUDIO-VAL] Exception during ffmpeg validation");
             return new AudioValidationResult
             {
                 IsValid = false,
@@ -308,8 +342,12 @@ public class AudioValidator
             return (false, "FFmpeg not available for re-encoding");
         }
 
-        _logger.LogInformation("Attempting to re-encode audio: {Input} -> {Output}", inputPath, outputPath);
+        _logger.LogInformation("[AUDIO-VAL] Attempting to re-encode audio: {Input} -> {Output}", inputPath, outputPath);
 
+        // CRITICAL FIX: Add 60-second timeout for re-encoding to prevent indefinite hangs
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(60));
+        
         try
         {
             // Conservative re-encode command: 48kHz stereo PCM 16-bit WAV
@@ -331,13 +369,13 @@ public class AudioValidator
             process.Start();
             process.BeginErrorReadLine();
 
-            await process.WaitForExitAsync(ct).ConfigureAwait(false);
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
 
             var stderrText = stderr.ToString();
 
             if (process.ExitCode != 0)
             {
-                _logger.LogError("Re-encoding failed with exit code {ExitCode}: {Error}", 
+                _logger.LogError("[AUDIO-VAL] Re-encoding failed with exit code {ExitCode}: {Error}", 
                     process.ExitCode, stderrText);
                 return (false, $"Re-encoding failed: {stderrText}");
             }
@@ -346,16 +384,21 @@ public class AudioValidator
             var validation = await ValidateAsync(outputPath, ct).ConfigureAwait(false);
             if (!validation.IsValid)
             {
-                _logger.LogError("Re-encoded file failed validation: {Error}", validation.ErrorMessage);
+                _logger.LogError("[AUDIO-VAL] Re-encoded file failed validation: {Error}", validation.ErrorMessage);
                 return (false, $"Re-encoded file invalid: {validation.ErrorMessage}");
             }
 
-            _logger.LogInformation("Successfully re-encoded audio to: {Output}", outputPath);
+            _logger.LogInformation("[AUDIO-VAL] Successfully re-encoded audio to: {Output}", outputPath);
             return (true, null);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            _logger.LogError("[AUDIO-VAL] Re-encoding timed out after 60 seconds: {Input}", inputPath);
+            return (false, "Re-encoding timed out after 60 seconds");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception during audio re-encoding");
+            _logger.LogError(ex, "[AUDIO-VAL] Exception during audio re-encoding");
             return (false, $"Re-encoding exception: {ex.Message}");
         }
     }
@@ -377,8 +420,12 @@ public class AudioValidator
             return (false, "FFmpeg not available for silent WAV generation");
         }
 
-        _logger.LogInformation("Generating silent WAV: {Duration}s -> {Output}", durationSeconds, outputPath);
+        _logger.LogInformation("[AUDIO-VAL] Generating silent WAV: {Duration}s -> {Output}", durationSeconds, outputPath);
 
+        // CRITICAL FIX: Add 30-second timeout for silent WAV generation to prevent indefinite hangs
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
+        
         try
         {
             var startInfo = new ProcessStartInfo
@@ -399,21 +446,26 @@ public class AudioValidator
             process.Start();
             process.BeginErrorReadLine();
 
-            await process.WaitForExitAsync(ct).ConfigureAwait(false);
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
 
             if (process.ExitCode != 0)
             {
                 var stderrText = stderr.ToString();
-                _logger.LogError("Silent WAV generation failed: {Error}", stderrText);
+                _logger.LogError("[AUDIO-VAL] Silent WAV generation failed: {Error}", stderrText);
                 return (false, $"Silent WAV generation failed: {stderrText}");
             }
 
-            _logger.LogInformation("Successfully generated silent WAV: {Output}", outputPath);
+            _logger.LogInformation("[AUDIO-VAL] Successfully generated silent WAV: {Output}", outputPath);
             return (true, null);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            _logger.LogError("[AUDIO-VAL] Silent WAV generation timed out after 30 seconds");
+            return (false, "Silent WAV generation timed out after 30 seconds");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception during silent WAV generation");
+            _logger.LogError(ex, "[AUDIO-VAL] Exception during silent WAV generation");
             return (false, $"Silent WAV generation exception: {ex.Message}");
         }
     }

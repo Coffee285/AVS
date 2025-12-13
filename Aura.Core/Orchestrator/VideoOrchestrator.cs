@@ -253,6 +253,98 @@ public class VideoOrchestrator
     }
 
     /// <summary>
+    /// Performs a quick health check of FFmpeg to ensure it's available and responsive.
+    /// Uses a 5-second timeout to prevent indefinite hangs during startup.
+    /// CRITICAL FIX: Added to prevent the 95% freeze issue where FFmpeg validation hangs.
+    /// </summary>
+    private async Task<bool> ValidateFfmpegHealthAsync(CancellationToken ct)
+    {
+        if (_ffmpegResolver == null)
+        {
+            _logger.LogWarning("[FFMPEG-HEALTH] FFmpeg resolver not available, skipping health check");
+            return true; // Continue anyway if resolver not configured
+        }
+
+        try
+        {
+            _logger.LogInformation("[FFMPEG-HEALTH] Starting FFmpeg health check with 5-second timeout");
+            
+            // Create timeout token (5 seconds max for health check)
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
+
+            // Resolve FFmpeg path
+            var resolution = await _ffmpegResolver.ResolveAsync(ct: timeoutCts.Token).ConfigureAwait(false);
+            
+            if (!resolution.Found || !resolution.IsValid || string.IsNullOrEmpty(resolution.Path))
+            {
+                _logger.LogError("[FFMPEG-HEALTH] FFmpeg not found or invalid: {Error}", resolution.Error ?? "Unknown error");
+                return false;
+            }
+
+            // Quick version check using Process with timeout
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = resolution.Path,
+                Arguments = "-version",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = new System.Diagnostics.Process { StartInfo = startInfo };
+            process.Start();
+            
+            // Wait for process to complete with timeout (cancellation token handles the timeout)
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            
+            // If we reach here without exception, process completed within timeout
+            if (!process.HasExited)
+            {
+                // Process didn't exit cleanly - kill it
+                if (!process.HasExited)  // Double-check before killing
+                {
+                    try
+                    {
+                        process.Kill();
+                    }
+                    catch
+                    {
+                        // Ignore kill errors - process may have exited between checks
+                    }
+                }
+                _logger.LogError("[FFMPEG-HEALTH] FFmpeg health check did not complete properly");
+                return false;
+            }
+
+            if (process.ExitCode != 0)
+            {
+                _logger.LogError("[FFMPEG-HEALTH] FFmpeg health check failed with exit code: {ExitCode}", process.ExitCode);
+                return false;
+            }
+
+            _logger.LogInformation("[FFMPEG-HEALTH] FFmpeg health check passed: {Path} (version: {Version})", 
+                resolution.Path, resolution.Version);
+            return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            _logger.LogWarning("[FFMPEG-HEALTH] FFmpeg health check cancelled by user");
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogError("[FFMPEG-HEALTH] FFmpeg health check timed out");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[FFMPEG-HEALTH] FFmpeg health check failed with exception");
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Validates that all required services are available and functional before starting generation.
     /// This prevents wasting time on partial generation that will fail.
     /// </summary>
@@ -851,6 +943,13 @@ public class VideoOrchestrator
 
         try
         {
+            // CRITICAL FIX: Pre-flight FFmpeg health check to prevent 95% freeze
+            progress?.Report("Checking FFmpeg availability...");
+            if (!await ValidateFfmpegHealthAsync(ct).ConfigureAwait(false))
+            {
+                throw new InvalidOperationException("FFmpeg health check failed. FFmpeg is not available or not responding. Please ensure FFmpeg is installed and accessible.");
+            }
+            
             // Pre-generation validation
             progress?.Report("Validating system readiness...");
             var validationResult = await _preGenerationValidator.ValidateSystemReadyAsync(brief, planSpec, progress: null, ct).ConfigureAwait(false);
