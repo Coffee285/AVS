@@ -623,7 +623,18 @@ public class VideoOrchestrator
             // Execute smart orchestration, passing recovery results dictionary for task communication
             var result = await _smartOrchestrator.OrchestrateGenerationAsync(
                 brief, planSpec, systemProfile, taskExecutor, orchestrationProgress, ct,
-                recoveryResultsCallback: (key, value) => executorContext.RecoveryResults[key] = value
+                recoveryResultsCallback: (key, value) =>
+                {
+                    executorContext.RecoveryResults[key] = value;
+
+                    if (key.StartsWith("audio", StringComparison.OrdinalIgnoreCase) && value is string audioPath)
+                    {
+                        executorContext.RecoveryResults["audio"] = audioPath;
+                        executorContext.NarrationPath = audioPath;
+                        _logger.LogWarning("[Recovery] Audio fallback stored: taskId={TaskId}, path={Path}, also stored as 'audio' key",
+                            key, audioPath);
+                    }
+                }
             ).ConfigureAwait(false);
 
             if (!result.Succeeded)
