@@ -631,7 +631,7 @@ public class VideoOrchestrator
                     {
                         executorContext.RecoveryResults["audio"] = audioPath;
                         executorContext.NarrationPath = audioPath;
-                        _logger.LogWarning("[Recovery] Audio fallback stored: taskId={TaskId}, path={Path}, also stored as 'audio' key",
+                        _logger.LogWarning("[Recovery] Audio fallback stored: taskId={RecoveryTaskId}, path={Path}, also stored as 'audio' key",
                             key, audioPath);
                     }
                 }
