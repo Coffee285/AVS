@@ -628,15 +628,11 @@ public class VideoOrchestrator
                     if (key.StartsWith("audio", StringComparison.OrdinalIgnoreCase) && value is string audioPath)
                     {
                         executorContext.RecoveryResults["audio"] = audioPath;
-
-                        if (!key.Equals("audio", StringComparison.OrdinalIgnoreCase))
-                        {
-                            executorContext.RecoveryResults[key] = audioPath;
-                        }
-
                         executorContext.NarrationPath = audioPath;
-                        _logger.LogWarning("[Recovery] Audio fallback stored: taskId={RecoveryTaskId}, path={Path}, also stored as canonical 'audio' key",
-                            key, audioPath);
+                        _logger.LogWarning(
+                            "[Recovery] Audio fallback stored: sourceKey={SourceKey}, path={AudioPath}, using canonical 'audio' key for lookups",
+                            key,
+                            audioPath);
                     }
                     else
                     {
