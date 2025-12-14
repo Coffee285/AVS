@@ -625,14 +625,22 @@ public class VideoOrchestrator
                 brief, planSpec, systemProfile, taskExecutor, orchestrationProgress, ct,
                 recoveryResultsCallback: (key, value) =>
                 {
-                    executorContext.RecoveryResults[key] = value;
-
                     if (key.StartsWith("audio", StringComparison.OrdinalIgnoreCase) && value is string audioPath)
                     {
                         executorContext.RecoveryResults["audio"] = audioPath;
+
+                        if (!key.Equals("audio", StringComparison.OrdinalIgnoreCase))
+                        {
+                            executorContext.RecoveryResults[key] = audioPath;
+                        }
+
                         executorContext.NarrationPath = audioPath;
-                        _logger.LogWarning("[Recovery] Audio fallback stored: taskId={RecoveryTaskId}, path={Path}, also stored as 'audio' key",
+                        _logger.LogWarning("[Recovery] Audio fallback stored: taskId={RecoveryTaskId}, path={Path}, also stored as canonical 'audio' key",
                             key, audioPath);
+                    }
+                    else
+                    {
+                        executorContext.RecoveryResults[key] = value;
                     }
                 }
             ).ConfigureAwait(false);
